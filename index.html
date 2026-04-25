@@ -710,6 +710,49 @@ function localParseAll(memo, existingProjects = []) {
   return { todos, ideas };
 }
 
+// Merge incoming idea drafts into existing ideas. If projectName matches
+// (case-insensitive), append summary/details/tags; otherwise create new.
+function mergeIdeas(existing, incoming) {
+  const result = existing.map(e => ({ ...e, details: [...(e.details||[])], tags: [...(e.tags||[])] }));
+  const todayDate = formatDate(new Date());
+  for (const inc of incoming) {
+    if (!inc || !inc.projectName) continue;
+    const idx = result.findIndex(e =>
+      (e.projectName || '').toLowerCase().trim() === (inc.projectName || '').toLowerCase().trim()
+    );
+    if (idx >= 0) {
+      const cur = result[idx];
+      const newDetails = [...cur.details];
+      // Push incoming summary as a detail if it adds info
+      if (inc.summary && inc.summary !== cur.summary && !newDetails.includes(inc.summary)) {
+        newDetails.push(inc.summary);
+      }
+      for (const d of (inc.details || [])) {
+        if (d && !newDetails.includes(d)) newDetails.push(d);
+      }
+      const newTags = Array.from(new Set([...cur.tags, ...((inc.tags) || [])]));
+      result[idx] = {
+        ...cur,
+        summary: cur.summary || inc.summary || '',
+        details: newDetails,
+        tags: newTags,
+        updatedAt: todayDate,
+      };
+    } else {
+      result.push({
+        id: Date.now() + Math.random(),
+        projectName: inc.projectName,
+        summary: inc.summary || '',
+        details: [...(inc.details || [])],
+        tags: [...((inc.tags) || ['アイデア'])],
+        createdAt: todayDate,
+        updatedAt: todayDate,
+      });
+    }
+  }
+  return result;
+}
+
 async function parseMemoToItems(text, existingProjects = []) {
   const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
   if (claude) {
@@ -1072,7 +1115,7 @@ function ConfirmSheet({ pending, existingProjects, onUpdateTodo, onDeleteTodo, o
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ onAddTodos }) {
+function MemoTab({ existingProjects, onCommit }) {
   const [text,      setText]     = useState('');
   const [loading,   setLoading]  = useState(false);
   const [loadingMsg,setLMsg]     = useState('');
@@ -1123,12 +1166,11 @@ function MemoTab({ onAddTodos }) {
 
   async function reflect() {
     if (!text.trim()) { showToast('メモを入力してください'); return; }
-    setLoading(true); setLMsg('AI がメモを解析中');
+    setLoading(true); setLMsg('メモを解析中');
     try {
-      const items = await parseMemoToTodos(text);
-      if (!items.length) throw new Error('empty');
-      const drafts = items.map((item,i)=>({
-        id: Date.now()+i,
+      const result = await parseMemoToItems(text, existingProjects);
+      const todoDrafts = (result.todos || []).map((item,i) => ({
+        id: `t_${Date.now()}_${i}`,
         title: item.title || 'タスク',
         startDate: item.startDate || '',
         endDate: item.endDate || '',
@@ -1136,14 +1178,23 @@ function MemoTab({ onAddTodos }) {
         tags: item.tags || [],
         done: false,
       }));
-      setPending(drafts);
+      const ideaDrafts = (result.ideas || []).map((item,i) => ({
+        id: `i_${Date.now()}_${i}`,
+        projectName: item.projectName || 'メモ',
+        summary: item.summary || '',
+        details: item.details || [],
+        tags: item.tags || ['アイデア'],
+      }));
+      if (!todoDrafts.length && !ideaDrafts.length) throw new Error('empty');
+      setPending({ todos: todoDrafts, ideas: ideaDrafts });
     } catch { showToast('解析に失敗しました。再試行してください。'); }
     setLoading(false);
   }
 
   function confirmPending() {
-    onAddTodos(pending);
-    showToast(`${pending.length}件のTODOをリストに追加しました`);
+    const total = pending.todos.length + pending.ideas.length;
+    onCommit(pending);
+    showToast(`${total}件を追加しました`);
     setText(''); setImgPrev(null); setPending(null);
   }
 
@@ -1153,9 +1204,12 @@ function MemoTab({ onAddTodos }) {
       {toast && <div className="toast">{toast}</div>}
       {pending && (
         <ConfirmSheet
-          items={pending}
-          onUpdate={u => setPending(p => p.map(t => t.id===u.id ? u : t))}
-          onDelete={id => setPending(p => p.filter(t => t.id !== id))}
+          pending={pending}
+          existingProjects={existingProjects}
+          onUpdateTodo={u => setPending(p => ({ ...p, todos: p.todos.map(t => t.id===u.id ? u : t) }))}
+          onDeleteTodo={id => setPending(p => ({ ...p, todos: p.todos.filter(t => t.id !== id) }))}
+          onUpdateIdea={u => setPending(p => ({ ...p, ideas: p.ideas.map(t => t.id===u.id ? u : t) }))}
+          onDeleteIdea={id => setPending(p => ({ ...p, ideas: p.ideas.filter(t => t.id !== id) }))}
           onConfirm={confirmPending}
           onCancel={() => setPending(null)}
         />
@@ -1182,15 +1236,16 @@ function MemoTab({ onAddTodos }) {
       )}
 
       <button className="reflect-btn" onClick={reflect} disabled={loading}>
-        <IcoStar /> TODO・スケジュールに反映
+        <IcoStar /> TODO・アイデアに反映
       </button>
 
       <div className="hint-card">
         <div className="hint-title">入力のヒント</div>
         <div className="hint-body">
-          「明日から来週水曜まで出張」→ 期間を自動設定<br />
+          「明日から来週水曜まで出張」→ 期間つきTODOに<br />
           「にんじん、じゃがいも、玉ねぎを買う」→ 3つのTODOに分割<br />
-          タグ（買い物・仕事・家事など）は自動で付与されます
+          「新アプリ案: チャット機能を追加」→ プロジェクト『新アプリ案』のアイデア<br />
+          既存プロジェクト名で書くと、そのアイデアに詳細が追記されます
         </div>
       </div>
     </div>
@@ -1233,6 +1288,57 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
           {undated.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} />)}
         </>}
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Ideas Tab
+// ─────────────────────────────────────────────────────────────
+function IdeasTab({ ideas, onUpdate, onDelete }) {
+  const [editing, setEditing] = useState(null);
+  const projectNames = ideas.map(i => i.projectName);
+
+  if (ideas.length === 0) {
+    return (
+      <div className="ideas-tab">
+        <div className="ideas-empty">
+          まだアイデアがありません<br/>
+          メモタブで思いついたことを入力し、<br/>
+          「TODO・アイデアに反映」を押すと蓄積されます
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ideas-tab">
+      {editing && (
+        <IdeaEditModal
+          idea={editing}
+          projects={projectNames.filter(p => p !== editing.projectName)}
+          onSave={u => { onUpdate(u); setEditing(null); }}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      {ideas.map(i => (
+        <div key={i.id} className="idea-card" onClick={() => setEditing(i)}>
+          <div className="idea-card-body">
+            <div className="idea-project">{i.projectName}</div>
+            {i.summary && <div className="idea-summary">{i.summary}</div>}
+            {(i.details || []).length > 0 && (
+              <ul className="idea-details">
+                {i.details.map((d, idx) => <li key={idx} className="idea-detail">{d}</li>)}
+              </ul>
+            )}
+            <div className="idea-meta">
+              {(i.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
+              {i.updatedAt && <span className="idea-updated">{i.updatedAt}</span>}
+            </div>
+          </div>
+          <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -1323,9 +1429,11 @@ function SmartMemoApp() {
     { id:2, title:'牛乳を購入する',     startDate:todayStr, endDate:'', time:'',      tags:['買い物'],done:false },
     { id:3, title:'部屋の片付け',        startDate:'',       endDate:'', time:'',      tags:['家事'], done:false },
   ]));
+  const [ideas, setIdeas] = useState(() => loadStored(LS_IDEAS, []));
   const [settings, setSettings] = useState(() => loadStored(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true }));
 
   useEffect(() => { saveStored(LS_TODOS, todos); }, [todos]);
+  useEffect(() => { saveStored(LS_IDEAS, ideas); }, [ideas]);
   useEffect(() => { saveStored(LS_SETTINGS, settings); }, [settings]);
 
   const color = COLOR_PRESETS[settings.colorIdx];
@@ -1345,10 +1453,28 @@ function SmartMemoApp() {
     '--fs-xs':        font.xs,
   };
 
-  const addTodos  = items => { setTodos(p=>[...p,...items]); setTab('todo'); };
+  const existingProjects = ideas.map(i => i.projectName);
+
+  function commit({ todos: newTodos = [], ideas: newIdeas = [] }) {
+    if (newTodos.length) {
+      setTodos(p => [...p, ...newTodos.map(t => ({
+        ...t, id: typeof t.id === 'string' ? Date.now()+Math.random() : t.id
+      }))]);
+    }
+    if (newIdeas.length) {
+      setIdeas(prev => mergeIdeas(prev, newIdeas));
+    }
+    // Land on the most relevant tab
+    if (newTodos.length && !newIdeas.length) setTab('todo');
+    else if (!newTodos.length && newIdeas.length) setTab('idea');
+    else if (newTodos.length && newIdeas.length) setTab('todo');
+  }
+
   const toggle    = id    => setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const remove    = id    => setTodos(p=>p.filter(t=>t.id!==id));
   const update    = item  => setTodos(p=>p.map(t=>t.id===item.id?item:t));
+  const updateIdea= item  => setIdeas(p=>p.map(i=>i.id===item.id?{...item, updatedAt: formatDate(new Date())}:i));
+  const removeIdea= id    => setIdeas(p=>p.filter(i=>i.id!==id));
   const setSetting= (k,v) => setSettings(p=>({...p,[k]:v}));
 
   return (
@@ -1358,14 +1484,16 @@ function SmartMemoApp() {
         <span className="tagline">AI でタスクを自動整理</span>
       </div>
       <div className="tab-content">
-        {tab==='memo'     && <MemoTab onAddTodos={addTodos} />}
+        {tab==='memo'     && <MemoTab existingProjects={existingProjects} onCommit={commit} />}
         {tab==='todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} />}
+        {tab==='idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} />}
         {tab==='settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav">
         {[
           { key:'memo',     label:'メモ入力', Icon:IcoMemoNav },
           { key:'todo',     label:'TODO',     Icon:IcoTodoNav },
+          { key:'idea',     label:'アイデア', Icon:IcoIdeaNav },
           { key:'settings', label:'設定',     Icon:IcoSettingsNav },
         ].map(({ key, label, Icon }) => (
           <div key={key} className={`nav-tab${tab===key?' active':''}`} onClick={()=>setTab(key)}>
