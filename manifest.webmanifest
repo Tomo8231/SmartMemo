@@ -1,0 +1,15 @@
+{
+  "name": "SmartMemo",
+  "short_name": "SmartMemo",
+  "description": "AI でタスクを自動整理するメモアプリ",
+  "start_url": "./SmartMemo.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fafaf9",
+  "theme_color": "#D4622A",
+  "lang": "ja",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

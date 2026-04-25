@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>SmartMemo</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <meta name="theme-color" content="#D4622A" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="SmartMemo" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin="anonymous"></script>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html, body {
+      height:100%; height:100dvh; background:#111;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Inter',-apple-system,sans-serif;
+      overscroll-behavior:none;
+      -webkit-font-smoothing:antialiased;
+    }
+    #root { display:flex; align-items:center; justify-content:center; width:100%; height:100%; }
+
+    /* Mobile fullscreen (real phone or installed PWA) */
+    @media (max-width:500px), (display-mode:standalone) {
+      html, body { background:#fafaf9; }
+      .app { border-radius:0 !important; }
+      .app-header { padding-top:calc(14px + env(safe-area-inset-top)); }
+      .bottom-nav { padding-bottom:calc(6px + env(safe-area-inset-bottom)); }
+      .toast { top:calc(20px + env(safe-area-inset-top)); }
+      .modal-sheet, .confirm-sheet { padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
+      /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
+      .memo-textarea, .modal-field input, .modal-field select {
+        font-size:max(16px, var(--fs-base));
+      }
+    }
+    /* iOS standalone: home indicator already drawn by OS — no extra padding above what env provides */
+    button { -webkit-appearance:none; appearance:none; }
+
+    /* CSS Variables (theme) */
+    .app {
+      --accent:       #D4622A;
+      --accent-light: rgba(212,98,42,0.10);
+      --accent-text:  #fff;
+      --fs-base:      14px;
+      --fs-sm:        12px;
+      --fs-xs:        11px;
+      --fs-lg:        16px;
+
+      width:100%; height:100%;
+      display:flex; flex-direction:column;
+      background:#fafaf9; color:#1a1a18;
+      overflow:hidden; position:relative;
+      font-size:var(--fs-base);
+    }
+
+    /* Header */
+    .app-header {
+      padding:14px 20px 12px;
+      background:#fafaf9; border-bottom:1px solid #ebebea;
+      display:flex; align-items:baseline; gap:8px; flex-shrink:0;
+    }
+    .app-header h1 { font-size:18px; font-weight:700; letter-spacing:-0.6px; color:#1a1a18; }
+    .app-header .tagline { font-size:var(--fs-xs); color:#a0a09c; }
+
+    /* Tab Content */
+    .tab-content { flex:1; overflow-y:auto; overflow-x:hidden; }
+    .tab-content::-webkit-scrollbar { display:none; }
+
+    /* Bottom Nav */
+    .bottom-nav {
+      display:flex; background:#fafaf9;
+      border-top:1px solid #ebebea;
+      padding:10px 0 6px; flex-shrink:0;
+    }
+    .nav-tab {
+      flex:1; display:flex; flex-direction:column;
+      align-items:center; gap:3px; cursor:pointer;
+    }
+    .nav-tab .nav-icon svg { transition:all 0.2s; }
+    .nav-tab .nav-label { font-size:10px; font-weight:500; color:#c0c0ba; letter-spacing:0.2px; transition:color 0.2s; }
+    .nav-tab.active .nav-label { color:var(--accent); }
+
+    /* Loading */
+    .loading-overlay {
+      position:absolute; inset:0;
+      background:rgba(250,250,249,0.92); backdrop-filter:blur(6px);
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+      z-index:100;
+    }
+    .spinner {
+      width:30px; height:30px;
+      border:2px solid #e0e0de; border-top-color:var(--accent);
+      border-radius:50%; animation:spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loading-text { font-size:var(--fs-base); font-weight:500; color:#1a1a18; }
+    .loading-sub  { font-size:var(--fs-sm); color:#a0a09c; }
+
+    /* Toast */
+    .toast {
+      position:absolute; top:64px; left:16px; right:16px;
+      background:#1a1a18; color:#fafaf9; border-radius:10px;
+      padding:11px 14px; font-size:var(--fs-sm); font-weight:500;
+      z-index:200; animation:toastIn .25s ease, toastOut .25s 2.3s ease forwards;
+    }
+    @keyframes toastIn  { from{transform:translateY(-8px);opacity:0} to{transform:translateY(0);opacity:1} }
+    @keyframes toastOut { to{opacity:0} }
+
+    /* Tag Pill */
+    .tag-pill {
+      display:inline-flex; align-items:center;
+      padding:2px 7px; border-radius:4px;
+      font-size:10px; font-weight:600; letter-spacing:0.2px;
+      background:var(--accent-light); color:var(--accent);
+    }
+
+    /* MEMO TAB */
+    .memo-tab { padding:18px 16px; display:flex; flex-direction:column; gap:12px; }
+    .memo-card { background:#fff; border:1px solid #ebebea; border-radius:12px; overflow:hidden; }
+    .memo-card-top {
+      padding:12px 14px 0;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .memo-card-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; letter-spacing:0.6px; text-transform:uppercase; }
+    .memo-char-count { font-size:var(--fs-xs); color:#c0c0ba; }
+    .memo-textarea {
+      width:100%; padding:10px 14px 12px;
+      border:none; outline:none; resize:none; min-height:148px;
+      font-size:var(--fs-base); font-weight:400; line-height:1.65;
+      color:#1a1a18; background:transparent; font-family:inherit;
+    }
+    .memo-textarea::placeholder { color:#c8c8c4; }
+    .memo-actions {
+      padding:8px 12px 10px; border-top:1px solid #f0f0ee; display:flex; gap:6px;
+    }
+    .action-btn {
+      display:flex; align-items:center; gap:5px;
+      padding:6px 11px; border-radius:7px; border:1px solid #e0e0de;
+      background:#fff; cursor:pointer; font-size:var(--fs-xs); font-weight:500;
+      color:#4a4a48; font-family:inherit; transition:background .12s;
+    }
+    .action-btn:hover { background:#f5f5f3; }
+    .action-btn.recording { background:#1a1a18; border-color:#1a1a18; color:#fff; }
+
+    .img-preview { position:relative; border-radius:10px; overflow:hidden; border:1px solid #ebebea; }
+    .img-preview img { width:100%; max-height:130px; object-fit:cover; display:block; }
+    .img-clear {
+      position:absolute; top:6px; right:6px; width:22px; height:22px;
+      border-radius:50%; background:rgba(0,0,0,.45); border:none; color:#fff;
+      font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+    }
+
+    .reflect-btn {
+      width:100%; padding:15px; border:none; border-radius:12px;
+      background:var(--accent); color:var(--accent-text);
+      font-size:var(--fs-base); font-weight:600; letter-spacing:-0.2px;
+      cursor:pointer; font-family:inherit;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      transition:opacity .15s, transform .1s;
+    }
+    .reflect-btn:hover   { opacity:.88; }
+    .reflect-btn:active  { transform:scale(.98); }
+    .reflect-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+    .hint-card { background:#fff; border:1px solid #ebebea; border-radius:12px; padding:12px 14px; }
+    .hint-title { font-size:var(--fs-xs); font-weight:600; color:#4a4a48; margin-bottom:6px; }
+    .hint-body  { font-size:var(--fs-xs); color:#a0a09c; line-height:1.8; }
+
+    /* TODO TAB */
+    .todo-tab { display:flex; flex-direction:column; }
+
+    .cal-wrapper { background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0; }
+    .cal-head {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px 6px;
+    }
+    .cal-month-label { font-size:var(--fs-base); font-weight:700; letter-spacing:-.3px; }
+    .cal-nav { display:flex; gap:2px; }
+    .cal-nav-btn {
+      width:26px; height:26px; border:1px solid #e0e0de; background:#fff;
+      border-radius:6px; cursor:pointer; font-size:13px; color:#4a4a48;
+      display:flex; align-items:center; justify-content:center; transition:background .12s;
+    }
+    .cal-nav-btn:hover { background:#f5f5f3; }
+    .cal-dow { display:grid; grid-template-columns:repeat(7,1fr); padding:0 10px; }
+    .cal-dow-cell { text-align:center; font-size:10px; font-weight:600; color:#b0b0ac; padding:3px 0; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); padding:2px 10px 10px; gap:1px; }
+    .cal-cell {
+      aspect-ratio:1; display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      cursor:pointer; border-radius:7px; transition:background .1s; position:relative;
+    }
+    .cal-cell:hover { background:#f5f5f3; }
+    .cal-num { font-size:13px; font-weight:400; color:#1a1a18; line-height:1; }
+    .cal-cell.other-month .cal-num { color:#d0d0cc; }
+    .cal-cell.today { background:#f0f0ee; }
+    .cal-cell.today .cal-num { font-weight:700; }
+    .cal-cell.selected { background:var(--accent) !important; }
+    .cal-cell.selected .cal-num { color:#fff !important; font-weight:600; }
+    .cal-dot { width:3px; height:3px; border-radius:50%; background:var(--accent); margin-top:2px; }
+    .cal-cell.selected .cal-dot { background:rgba(255,255,255,.5); }
+
+    .todo-list-area { padding:16px; }
+    .section-head { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
+    .section-head-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; }
+    .section-count { font-size:10px; font-weight:700; background:var(--accent); color:#fff; border-radius:10px; padding:1px 7px; }
+    .todo-empty { text-align:center; padding:28px 0 10px; color:#c0c0ba; font-size:var(--fs-sm); }
+    .divider { height:1px; background:#ebebea; margin:14px 0; }
+
+    /* Todo item */
+    .todo-item {
+      background:#fff; border:1px solid #ebebea; border-radius:10px;
+      padding:11px 12px; margin-bottom:7px;
+      display:flex; align-items:flex-start; gap:10px; transition:opacity .2s;
+    }
+    .todo-item.done { opacity:.45; }
+    .todo-check {
+      width:18px; height:18px; border-radius:50%; border:1.5px solid #c0c0ba;
+      flex-shrink:0; margin-top:2px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:all .15s; background:#fff;
+    }
+    .todo-check.checked { background:var(--accent); border-color:var(--accent); }
+    .todo-body { flex:1; min-width:0; cursor:pointer; }
+    .todo-title { font-size:var(--fs-base); font-weight:500; color:#1a1a18; line-height:1.45; }
+    .todo-item.done .todo-title { text-decoration:line-through; }
+    .todo-meta { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
+    .todo-date-str { font-size:10px; color:#b0b0ac; display:flex; align-items:center; gap:3px; }
+    .todo-del {
+      width:24px; height:24px; border:1px solid #ebebea; background:#fff;
+      border-radius:6px; cursor:pointer; font-size:11px;
+      display:flex; align-items:center; justify-content:center; color:#c0c0ba;
+      flex-shrink:0; transition:background .12s, color .12s;
+    }
+    .todo-del:hover { background:#fdf0f0; color:#c0392b; border-color:#f0d0d0; }
+
+    /* Edit Modal */
+    .modal-backdrop {
+      position:absolute; inset:0; background:rgba(0,0,0,.35);
+      display:flex; align-items:flex-end; z-index:300;
+      animation:bdIn .2s ease;
+    }
+    @keyframes bdIn { from{opacity:0} to{opacity:1} }
+    .modal-sheet {
+      background:#fafaf9; border-radius:18px 18px 0 0;
+      width:100%; padding:20px 18px 32px;
+      animation:sheetUp .25s ease;
+    }
+    @keyframes sheetUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .modal-handle { width:36px; height:4px; border-radius:2px; background:#d0d0cc; margin:0 auto 18px; }
+    .modal-title { font-size:15px; font-weight:700; margin-bottom:16px; letter-spacing:-.3px; }
+    .modal-field { margin-bottom:12px; }
+    .modal-field label { display:block; font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+    .modal-field input, .modal-field select {
+      width:100%; padding:9px 11px; border:1px solid #e0e0de; border-radius:8px;
+      font-size:var(--fs-base); color:#1a1a18; background:#fff; font-family:inherit; outline:none;
+    }
+    .modal-field input:focus, .modal-field select:focus { border-color:var(--accent); }
+    .modal-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .modal-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    .modal-tag {
+      padding:5px 10px; border-radius:6px; border:1px solid #e0e0de;
+      font-size:var(--fs-xs); font-weight:500; cursor:pointer; background:#fff; color:#4a4a48;
+      transition:all .12s;
+    }
+    .modal-tag.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .modal-actions { display:flex; gap:8px; margin-top:18px; }
+    .modal-cancel {
+      flex:1; padding:12px; border:1px solid #e0e0de; border-radius:10px;
+      background:#fff; font-size:var(--fs-base); font-weight:500; cursor:pointer; font-family:inherit;
+    }
+    .modal-save {
+      flex:2; padding:12px; border:none; border-radius:10px;
+      background:var(--accent); color:#fff;
+      font-size:var(--fs-base); font-weight:600; cursor:pointer; font-family:inherit;
+    }
+
+    /* Confirm Sheet */
+    .confirm-sheet {
+      background:#fafaf9; border-radius:18px 18px 0 0;
+      width:100%; max-height:88%; padding:20px 18px 22px;
+      display:flex; flex-direction:column;
+      animation:sheetUp .25s ease;
+    }
+    .confirm-header { margin-bottom:12px; }
+    .confirm-title { font-size:15px; font-weight:700; letter-spacing:-.3px; margin-bottom:4px; }
+    .confirm-sub   { font-size:var(--fs-xs); color:#a0a09c; line-height:1.55; }
+    .confirm-list  { flex:1; overflow-y:auto; min-height:60px; padding:2px 0 6px; }
+    .confirm-list::-webkit-scrollbar { display:none; }
+    .confirm-actions {
+      display:flex; gap:8px; margin-top:12px;
+      border-top:1px solid #ebebea; padding-top:14px;
+    }
+    .modal-save:disabled { opacity:.4; cursor:not-allowed; }
+    .confirm-section-head {
+      font-size:var(--fs-xs); font-weight:600; color:#a0a09c;
+      text-transform:uppercase; letter-spacing:.5px;
+      margin:8px 2px 6px;
+    }
+    .confirm-section-head:first-child { margin-top:0; }
+    .merge-indicator {
+      display:inline-block; font-size:10px; color:var(--accent);
+      font-weight:600; margin-top:3px; margin-right:6px;
+    }
+    .modal-field textarea {
+      width:100%; padding:9px 11px; border:1px solid #e0e0de; border-radius:8px;
+      font-size:var(--fs-base); color:#1a1a18; background:#fff; font-family:inherit;
+      outline:none; resize:vertical; min-height:84px; line-height:1.55;
+    }
+    .modal-field textarea:focus { border-color:var(--accent); }
+
+    /* IDEAS TAB */
+    .ideas-tab { padding:16px; display:flex; flex-direction:column; gap:8px; }
+    .idea-card {
+      background:#fff; border:1px solid #ebebea; border-radius:10px;
+      padding:13px 14px; cursor:pointer; transition:background .12s;
+      display:flex; gap:10px; align-items:flex-start;
+    }
+    .idea-card:hover { background:#fafaf9; }
+    .idea-card-body { flex:1; min-width:0; }
+    .idea-project {
+      font-size:var(--fs-base); font-weight:600; color:#1a1a18;
+      letter-spacing:-.2px; line-height:1.35;
+    }
+    .idea-summary { font-size:var(--fs-sm); color:#4a4a48; line-height:1.55; margin-top:4px; }
+    .idea-details { list-style:none; margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+    .idea-detail {
+      font-size:var(--fs-xs); color:#4a4a48; padding-left:14px;
+      position:relative; line-height:1.55;
+    }
+    .idea-detail::before {
+      content:''; position:absolute; left:4px; top:7px;
+      width:4px; height:4px; border-radius:50%; background:var(--accent);
+    }
+    .idea-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    .idea-updated { font-size:10px; color:#b0b0ac; }
+    .ideas-empty {
+      text-align:center; padding:60px 20px; color:#a0a09c;
+      font-size:var(--fs-sm); line-height:1.7;
+    }
+
+    /* SETTINGS TAB */
+    .settings-tab { padding:18px 16px; display:flex; flex-direction:column; gap:10px; }
+    .settings-section-title {
+      font-size:var(--fs-xs); font-weight:600; color:#a0a09c;
+      text-transform:uppercase; letter-spacing:.6px;
+      padding:0 2px; margin-bottom:2px;
+    }
+    .settings-card { background:#fff; border:1px solid #ebebea; border-radius:12px; overflow:hidden; }
+    .settings-row {
+      padding:13px 16px; display:flex; align-items:center; justify-content:space-between;
+      border-bottom:1px solid #f0f0ee;
+    }
+    .settings-row:last-child { border-bottom:none; }
+    .settings-row-label { font-size:var(--fs-base); font-weight:500; color:#1a1a18; }
+    .settings-row-sub   { font-size:var(--fs-xs); color:#a0a09c; margin-top:1px; }
+
+    /* Color swatches */
+    .color-swatches { display:flex; gap:10px; }
+    .color-swatch {
+      width:28px; height:28px; border-radius:50%; cursor:pointer;
+      border:2px solid transparent; transition:all .15s; position:relative;
+    }
+    .color-swatch.sel { border-color:#1a1a18; transform:scale(1.12); }
+    .color-swatch.sel::after {
+      content:''; position:absolute; inset:3px;
+      border-radius:50%; border:1.5px solid rgba(255,255,255,.8);
+    }
+
+    /* Font size selector */
+    .font-size-opts { display:flex; gap:6px; }
+    .font-size-opt {
+      padding:5px 12px; border-radius:7px; border:1px solid #e0e0de;
+      background:#fff; cursor:pointer; font-family:inherit; color:#4a4a48;
+      font-weight:500; transition:all .12s;
+    }
+    .font-size-opt.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+    /* Toggle */
+    .toggle {
+      width:44px; height:26px; border-radius:13px; border:none; cursor:pointer;
+      position:relative; transition:background .2s;
+    }
+    .toggle::after {
+      content:''; position:absolute; top:3px; left:3px;
+      width:20px; height:20px; border-radius:50%; background:#fff;
+      box-shadow:0 1px 3px rgba(0,0,0,.2); transition:left .2s;
+    }
+    .toggle.on { background:var(--accent); }
+    .toggle.on::after { left:21px; }
+    .toggle.off { background:#d0d0cc; }
+
+    /* About */
+    .about-card {
+      background:#fff; border:1px solid #ebebea; border-radius:12px;
+      padding:16px; text-align:center;
+    }
+    .about-app-name { font-size:17px; font-weight:700; letter-spacing:-.5px; color:#1a1a18; margin-bottom:3px; }
+    .about-version  { font-size:var(--fs-xs); color:#a0a09c; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+// ─────────────────────────────────────────────────────────────
+// iOS device frame (inlined from ios-frame.jsx)
+// ─────────────────────────────────────────────────────────────
+function IOSStatusBar({ dark = false, time = '9:41' }) {
+  const c = dark ? '#fff' : '#000';
+  return (
+    <div style={{
+      display: 'flex', gap: 154, alignItems: 'center', justifyContent: 'center',
+      padding: '21px 24px 19px', boxSizing: 'border-box',
+      position: 'relative', zIndex: 20, width: '100%',
+    }}>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 1.5 }}>
+        <span style={{
+          fontFamily: '-apple-system, "SF Pro", system-ui', fontWeight: 590,
+          fontSize: 17, lineHeight: '22px', color: c,
+        }}>{time}</span>
+      </div>
+      <div style={{ flex: 1, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, paddingTop: 1, paddingRight: 1 }}>
+        <svg width="19" height="12" viewBox="0 0 19 12">
+          <rect x="0" y="7.5" width="3.2" height="4.5" rx="0.7" fill={c}/>
+          <rect x="4.8" y="5" width="3.2" height="7" rx="0.7" fill={c}/>
+          <rect x="9.6" y="2.5" width="3.2" height="9.5" rx="0.7" fill={c}/>
+          <rect x="14.4" y="0" width="3.2" height="12" rx="0.7" fill={c}/>
+        </svg>
+        <svg width="17" height="12" viewBox="0 0 17 12">
+          <path d="M8.5 3.2C10.8 3.2 12.9 4.1 14.4 5.6L15.5 4.5C13.7 2.7 11.2 1.5 8.5 1.5C5.8 1.5 3.3 2.7 1.5 4.5L2.6 5.6C4.1 4.1 6.2 3.2 8.5 3.2Z" fill={c}/>
+          <path d="M8.5 6.8C9.9 6.8 11.1 7.3 12 8.2L13.1 7.1C11.8 5.9 10.2 5.1 8.5 5.1C6.8 5.1 5.2 5.9 3.9 7.1L5 8.2C5.9 7.3 7.1 6.8 8.5 6.8Z" fill={c}/>
+          <circle cx="8.5" cy="10.5" r="1.5" fill={c}/>
+        </svg>
+        <svg width="27" height="13" viewBox="0 0 27 13">
+          <rect x="0.5" y="0.5" width="23" height="12" rx="3.5" stroke={c} strokeOpacity="0.35" fill="none"/>
+          <rect x="2" y="2" width="20" height="9" rx="2" fill={c}/>
+          <path d="M25 4.5V8.5C25.8 8.2 26.5 7.2 26.5 6.5C26.5 5.8 25.8 4.8 25 4.5Z" fill={c} fillOpacity="0.4"/>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function IOSDevice({ children, width = 402, height = 874, dark = false }) {
+  return (
+    <div style={{
+      width, height, borderRadius: 48, overflow: 'hidden',
+      position: 'relative', background: dark ? '#000' : '#F2F2F7',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
+      fontFamily: '-apple-system, system-ui, sans-serif',
+      WebkitFontSmoothing: 'antialiased',
+    }}>
+      {/* dynamic island */}
+      <div style={{
+        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+      }} />
+      {/* status bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 }}>
+        <IOSStatusBar dark={dark} />
+      </div>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', paddingTop: 59 }}>
+        <div style={{ flex: 1, overflow: 'hidden', display: 'flex' }}>{children}</div>
+      </div>
+      {/* home indicator */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+        height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+        paddingBottom: 8, pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 139, height: 5, borderRadius: 100,
+          background: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.25)',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// SmartMemo app
+// ─────────────────────────────────────────────────────────────
+const { useState, useRef, useEffect } = React;
+
+// localStorage helpers
+const LS_TODOS = 'smartmemo:todos';
+const LS_IDEAS = 'smartmemo:ideas';
+const LS_SETTINGS = 'smartmemo:settings';
+function loadStored(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : fallback;
+  } catch { return fallback; }
+}
+function saveStored(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+const pad = n => String(n).padStart(2,'0');
+const today = new Date();
+const formatDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayStr = formatDate(today);
+const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+const DOW = ['日','月','火','水','木','金','土'];
+const ALL_TAGS = ['買い物','仕事','家事','アイデア','健康','勉強','その他'];
+
+const COLOR_PRESETS = [
+  { name:'オレンジ', value:'#D4622A', light:'rgba(212,98,42,.10)',  text:'#fff' },
+  { name:'インディゴ', value:'#4A52C8', light:'rgba(74,82,200,.10)', text:'#fff' },
+  { name:'グリーン', value:'#2A8C5A', light:'rgba(42,140,90,.10)',  text:'#fff' },
+  { name:'ローズ',  value:'#C43660', light:'rgba(196,54,96,.10)',   text:'#fff' },
+  { name:'スレート', value:'#475569', light:'rgba(71,85,105,.10)',   text:'#fff' },
+];
+
+const FONT_SIZE_OPTS = [
+  { label:'小', base:'12px', sm:'11px', xs:'10px' },
+  { label:'中', base:'14px', sm:'12px', xs:'11px' },
+  { label:'大', base:'16px', sm:'14px', xs:'12px' },
+];
+
+// ─────────────────────────────────────────────────────────────
+// Local heuristic parser — used when window.claude.complete is unavailable.
+// Classifies lines into TODOs vs Ideas, splits multi-items, extracts
+// dates/periods/times, auto-tags, and matches ideas against existing
+// projects so additional details merge instead of duplicating.
+// ─────────────────────────────────────────────────────────────
+const TAG_KEYWORDS = {
+  '買い物': ['買う','購入','買い','スーパー','コンビニ','注文'],
+  '仕事':   ['会議','打ち合わせ','プレゼン','資料','メール','送付','クライアント','出張','報告','アポ','商談','提出','業務'],
+  '家事':   ['掃除','洗濯','片付け','料理','ゴミ','炊事','整理'],
+  '健康':   ['運動','ジム','ランニング','病院','診察','薬','歯医者','ヨガ'],
+  '勉強':   ['勉強','学習','読書','講座','英語','復習','予習'],
+  'アイデア': ['アイデア','思いつき','構想','企画','検討','コンセプト'],
+};
+
+const ACTION_VERB_RE = /(買う|購入|やる|行く|来る|帰る|完了|終わ(る|らせる)|確認|チェック|送る|送付|提出|連絡|電話|メール|会う|参加|準備|予約|予定|出発|到着|出張|締切|片付け|掃除|洗濯)/;
+const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
+const TIME_TOKEN_RE  = /\d{1,2}[:時]\d{0,2}分?(に|から|まで)?/;
+const IDEA_HINT_RE   = /(アイデア|構想|企画|思いつき|について|案$|コンセプト)/;
+
+function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate()+n); return d; }
+function nextWeekday(from, target) {
+  const d = new Date(from);
+  const cur = d.getDay();
+  let diff = (target - cur + 7) % 7;
+  if (diff === 0) diff = 7;
+  d.setDate(d.getDate()+diff);
+  return d;
+}
+
+function parseRelative(text) {
+  const dowMap = { '日':0,'月':1,'火':2,'水':3,'木':4,'金':5,'土':6 };
+  const rangeRe = /(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*から\s*(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*まで/;
+  const m = text.match(rangeRe);
+  if (m) return { startDate: formatDate(resolveRel(m[1])), endDate: formatDate(resolveRel(m[4])) };
+  const single = text.match(/(今日|明日|明後日|来週(.)曜?|今週(.)曜?)/);
+  if (single) return { startDate: formatDate(resolveRel(single[1])), endDate: '' };
+  const ymd = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) return { startDate: `${ymd[1]}-${pad(+ymd[2])}-${pad(+ymd[3])}`, endDate: '' };
+  const md = text.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+  if (md) return { startDate: `${today.getFullYear()}-${pad(+md[1])}-${pad(+md[2])}`, endDate: '' };
+  return { startDate: '', endDate: '' };
+
+  function resolveRel(s) {
+    if (s === '今日') return today;
+    if (s === '明日') return addDays(today,1);
+    if (s === '明後日') return addDays(today,2);
+    const wkM = s.match(/^(来週|今週)(.)曜?/);
+    if (wkM) {
+      const w = dowMap[wkM[2]];
+      if (w === undefined) return today;
+      const base = wkM[1] === '来週' ? addDays(today,7) : today;
+      return nextWeekday(base, w);
+    }
+    return today;
+  }
+}
+
+function parseTime(text) {
+  const m = text.match(/(\d{1,2})[:時](\d{1,2})?/);
+  if (!m) return '';
+  return `${pad(+m[1])}:${pad(+(m[2]||0))}`;
+}
+
+// Strip date / time tokens from the line so verb-splitter doesn't treat
+// them as nouns. Fixes "明日、ジャガイモを買う" → ["ジャガイモを買う"].
+function stripDateTimeWords(text) {
+  let t = text;
+  t = t.replace(/(今日|明日|明後日|来週.曜?|今週.曜?)\s*から\s*(今日|明日|明後日|来週.曜?|今週.曜?)\s*まで/g, '');
+  t = t.replace(/(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月)/g, '');
+  t = t.replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, '');
+  t = t.replace(/\d{1,2}[\/月]\d{1,2}日?/g, '');
+  t = t.replace(TIME_TOKEN_RE, '');
+  t = t.replace(/^[、,・\s]+|[、,・\s]+$/g, '').trim();
+  return t;
+}
+
+function inferTags(text) {
+  const tags = [];
+  for (const [tag, kws] of Object.entries(TAG_KEYWORDS)) {
+    if (kws.some(k => text.includes(k))) tags.push(tag);
+  }
+  if (tags.length === 0) tags.push('その他');
+  return tags;
+}
+
+function isTodoLine(line) {
+  if (IDEA_HINT_RE.test(line) && !ACTION_VERB_RE.test(line)) return false;
+  return ACTION_VERB_RE.test(line) || DATE_TOKEN_RE.test(line);
+}
+
+function extractTodosFromLine(line) {
+  const dates = parseRelative(line);
+  const time = parseTime(line);
+  const cleaned = stripDateTimeWords(line);
+  const out = [];
+
+  // Shared-verb pattern: "X、Y、Zを買う"
+  const verbM = cleaned.match(/^(.+?)(?:を)?(買う|購入|チェック|確認|送る|完了|やる|提出|送付)$/);
+  if (verbM && /[、,・]/.test(verbM[1])) {
+    const nouns = verbM[1].split(/[、,・]/).map(s=>s.trim()).filter(Boolean);
+    const verb = verbM[2];
+    const tags = inferTags(line);
+    for (const n of nouns) {
+      out.push({ title:`${n}を${verb}`, startDate:dates.startDate, endDate:dates.endDate, time, tags });
+    }
+    return out;
+  }
+
+  // Otherwise split by 、 if multiple clauses
+  const parts = cleaned.split(/[、,]/).map(s=>s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    for (const p of parts) {
+      out.push({ title:p, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTags(p) });
+    }
+  } else {
+    out.push({ title: cleaned || line, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTags(line) });
+  }
+  return out;
+}
+
+function extractIdeaFromLine(line, existingProjects) {
+  let projectName = '';
+  let summary = line;
+
+  // "X: Y" / "Xについて: Y" / "【X】Y" / "■X Y"
+  const colonM = line.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
+  if (colonM) {
+    projectName = colonM[1].replace(/^[■◆●▼※【\[]+|[】\]]+$/g, '').trim();
+    projectName = projectName.replace(/(について|のアイデア|の話|のメモ|の構想|の企画|案|構想|企画)$/, '').trim();
+    summary = colonM[2].trim();
+  } else {
+    const bracketM = line.match(/^[■◆●▼※【\[]+(.+?)[】\]]+\s*(.*)$/);
+    if (bracketM) {
+      projectName = bracketM[1].trim();
+      summary = bracketM[2].trim() || projectName;
+    }
+  }
+
+  // Match existing projects (substring either way, case-insensitive)
+  const tryMatch = (candidate) => {
+    if (!candidate || !existingProjects.length) return null;
+    const c = candidate.toLowerCase();
+    return existingProjects.find(p => {
+      if (!p) return false;
+      const pl = p.toLowerCase();
+      return pl === c || pl.includes(c) || c.includes(pl);
+    }) || null;
+  };
+  if (projectName) {
+    const matched = tryMatch(projectName);
+    if (matched) projectName = matched;
+  }
+  if (!projectName) {
+    // Try matching whole line against existing project names
+    const matched = existingProjects.find(p => p && line.includes(p));
+    if (matched) projectName = matched;
+  }
+  if (!projectName) {
+    projectName = line.length <= 16 ? line : 'メモ';
+  }
+
+  return {
+    projectName,
+    summary: summary === projectName ? '' : summary,
+    details: [],
+    tags: inferTags(line),
+  };
+}
+
+function localParseAll(memo, existingProjects = []) {
+  const lines = memo.split(/[\n。]/).map(l=>l.trim()).filter(Boolean);
+  const todos = [];
+  const ideas = [];
+  for (const line of lines) {
+    if (isTodoLine(line)) {
+      todos.push(...extractTodosFromLine(line));
+    } else {
+      ideas.push(extractIdeaFromLine(line, existingProjects));
+    }
+  }
+  return { todos, ideas };
+}
+
+async function parseMemoToItems(text, existingProjects = []) {
+  const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
+  if (claude) {
+    try {
+      const prompt =
+        `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「アイデア」に分類し、JSONのみを返してください。\n\n` +
+        `ルール:\n` +
+        `1. TODO: 実行可能なタスク・予定・買い物・連絡など、行動動詞または日付/期限のあるもの\n` +
+        `2. アイデア: 思いつき・構想・企画・コンセプト・将来やりたいこと\n` +
+        `3. 複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」は日付なのでタイトルに含めずstartDateに）\n` +
+        `4. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
+        `5. 時間は HH:MM か ""。tags は: 買い物 / 仕事 / 家事 / アイデア / 健康 / 勉強 / その他\n` +
+        `6. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
+        `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
+        `8. 本日: ${todayStr}\n\n` +
+        `形式（JSONのみ）:\n` +
+        `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[]}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
+        `メモ:\n${text}`;
+      const res = await window.claude.complete(prompt);
+      const match = res.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        return {
+          todos: Array.isArray(parsed.todos) ? parsed.todos : [],
+          ideas: Array.isArray(parsed.ideas) ? parsed.ideas : [],
+        };
+      }
+    } catch (e) {
+      // fall through to local
+    }
+  }
+  return localParseAll(text, existingProjects);
+}
+
+// ─────────────────────────────────────────────────────────────
+// SVG icons
+// ─────────────────────────────────────────────────────────────
+const IcoMic = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+  </svg>
+);
+const IcoImg = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+  </svg>
+);
+const IcoStar = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z"/>
+  </svg>
+);
+const IcoCheck = ({ color='#fff' }) => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+);
+const IcoCalSm = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17 12h-5v5h5v-5zM16 1v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-1V1h-2zm3 18H5V8h14v11z"/>
+  </svg>
+);
+const IcoMemoNav = ({ active }) => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill={active ? 'var(--accent)' : '#c0c0ba'}>
+    <path d="M3 18h12v-2H3v2zm0-5h12v-2H3v2zm0-7v2h12V6H3zm14 9.17V23l5-5-5-.83z"/>
+  </svg>
+);
+const IcoTodoNav = ({ active }) => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill={active ? 'var(--accent)' : '#c0c0ba'}>
+    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+  </svg>
+);
+const IcoIdeaNav = ({ active }) => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill={active ? 'var(--accent)' : '#c0c0ba'}>
+    <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
+  </svg>
+);
+const IcoSettingsNav = ({ active }) => (
+  <svg width="21" height="21" viewBox="0 0 24 24" fill={active ? 'var(--accent)' : '#c0c0ba'}>
+    <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+  </svg>
+);
+
+// ─────────────────────────────────────────────────────────────
+// Calendar
+// ─────────────────────────────────────────────────────────────
+function Calendar({ todos, selectedDate, onSelect }) {
+  const [vy, setVy] = useState(today.getFullYear());
+  const [vm, setVm] = useState(today.getMonth());
+
+  const firstDay = new Date(vy, vm, 1);
+  const lastDay  = new Date(vy, vm+1, 0);
+  const cells = [];
+  for (let i = firstDay.getDay()-1; i >= 0; i--) cells.push({ date:new Date(vy,vm,-i), cur:false });
+  for (let d = 1; d <= lastDay.getDate(); d++) cells.push({ date:new Date(vy,vm,d), cur:true });
+  while (cells.length%7) { const l=cells[cells.length-1].date; cells.push({date:new Date(l.getTime()+86400000),cur:false}); }
+
+  const dotSet = new Set();
+  todos.forEach(t => {
+    if (!t.startDate) return;
+    const s = new Date(t.startDate), e = t.endDate ? new Date(t.endDate) : s;
+    for (let d=new Date(s); d<=e; d.setDate(d.getDate()+1)) dotSet.add(formatDate(new Date(d)));
+  });
+
+  const prev = () => vm===0 ? (setVm(11),setVy(y=>y-1)) : setVm(m=>m-1);
+  const next = () => vm===11 ? (setVm(0),setVy(y=>y+1)) : setVm(m=>m+1);
+
+  return (
+    <div className="cal-wrapper">
+      <div className="cal-head">
+        <span className="cal-month-label">{vy}年 {MONTH_JP[vm]}</span>
+        <div className="cal-nav">
+          <button className="cal-nav-btn" onClick={prev}>‹</button>
+          <button className="cal-nav-btn" onClick={next}>›</button>
+        </div>
+      </div>
+      <div className="cal-dow">{DOW.map(d=><div key={d} className="cal-dow-cell">{d}</div>)}</div>
+      <div className="cal-grid">
+        {cells.map((c,i)=>{
+          const ds=formatDate(c.date), isTd=ds===todayStr, isSel=ds===selectedDate, hasDot=dotSet.has(ds);
+          return (
+            <div key={i} className={`cal-cell${!c.cur?' other-month':''}${isTd&&!isSel?' today':''}${isSel?' selected':''}`} onClick={()=>onSelect(ds)}>
+              <span className="cal-num">{c.date.getDate()}</span>
+              {hasDot && <div className="cal-dot"/>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Edit Modal
+// ─────────────────────────────────────────────────────────────
+function EditModal({ todo, onSave, onClose }) {
+  const [title,    setTitle]    = useState(todo.title);
+  const [startDate,setStartDate]= useState(todo.startDate);
+  const [endDate,  setEndDate]  = useState(todo.endDate);
+  const [time,     setTime]     = useState(todo.time);
+  const [tags,     setTags]     = useState(todo.tags || []);
+
+  function toggleTag(t) {
+    setTags(p => p.includes(t) ? p.filter(x=>x!==t) : [...p,t]);
+  }
+  function handleSave() {
+    if (!title.trim()) return;
+    onSave({ ...todo, title:title.trim(), startDate, endDate, time, tags });
+    onClose();
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-sheet">
+        <div className="modal-handle"/>
+        <div className="modal-title">タスクを編集</div>
+
+        <div className="modal-field">
+          <label>タイトル</label>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="タスク名" />
+        </div>
+        <div className="modal-row">
+          <div className="modal-field">
+            <label>開始日</label>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} />
+          </div>
+          <div className="modal-field">
+            <label>終了日</label>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="modal-field">
+          <label>時間</label>
+          <input type="time" value={time} onChange={e=>setTime(e.target.value)} />
+        </div>
+        <div className="modal-field">
+          <label>タグ</label>
+          <div className="modal-tags">
+            {ALL_TAGS.map(t => (
+              <button key={t} className={`modal-tag${tags.includes(t)?' sel':''}`} onClick={()=>toggleTag(t)}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="modal-cancel" onClick={onClose}>キャンセル</button>
+          <button className="modal-save" onClick={handleSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Idea Edit Modal
+// ─────────────────────────────────────────────────────────────
+function IdeaEditModal({ idea, projects, onSave, onClose }) {
+  const [projectName, setProjectName] = useState(idea.projectName || '');
+  const [summary,     setSummary]     = useState(idea.summary || '');
+  const [details,     setDetails]     = useState((idea.details || []).join('\n'));
+  const [tags,        setTags]        = useState(idea.tags || []);
+
+  function toggleTag(t) {
+    setTags(p => p.includes(t) ? p.filter(x=>x!==t) : [...p,t]);
+  }
+  function handleSave() {
+    if (!projectName.trim()) return;
+    onSave({
+      ...idea,
+      projectName: projectName.trim(),
+      summary: summary.trim(),
+      details: details.split('\n').map(s=>s.trim()).filter(Boolean),
+      tags,
+    });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-sheet">
+        <div className="modal-handle"/>
+        <div className="modal-title">アイデアを編集</div>
+
+        <div className="modal-field">
+          <label>プロジェクト</label>
+          <input list="idea-projects-dl" value={projectName} onChange={e=>setProjectName(e.target.value)} placeholder="プロジェクト名" />
+          <datalist id="idea-projects-dl">
+            {projects.filter(p => p && p !== projectName).map(p => <option key={p} value={p} />)}
+          </datalist>
+        </div>
+        <div className="modal-field">
+          <label>概要</label>
+          <input value={summary} onChange={e=>setSummary(e.target.value)} placeholder="アイデアの概要" />
+        </div>
+        <div className="modal-field">
+          <label>詳細（1行1項目）</label>
+          <textarea value={details} onChange={e=>setDetails(e.target.value)} placeholder="箇条書きで詳細を..." rows="4" />
+        </div>
+        <div className="modal-field">
+          <label>タグ</label>
+          <div className="modal-tags">
+            {ALL_TAGS.map(t => (
+              <button key={t} className={`modal-tag${tags.includes(t)?' sel':''}`} onClick={()=>toggleTag(t)}>{t}</button>
+            ))}
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="modal-cancel" onClick={onClose}>キャンセル</button>
+          <button className="modal-save" onClick={handleSave}>保存</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Todo Item
+// ─────────────────────────────────────────────────────────────
+function TodoItem({ todo, onToggle, onDelete, onEdit }) {
+  return (
+    <div className={`todo-item${todo.done?' done':''}`}>
+      <div className={`todo-check${todo.done?' checked':''}`} onClick={()=>onToggle(todo.id)}>
+        {todo.done && <IcoCheck />}
+      </div>
+      <div className="todo-body" onClick={()=>onEdit(todo)}>
+        <div className="todo-title">{todo.title}</div>
+        <div className="todo-meta">
+          {todo.startDate && (
+            <span className="todo-date-str">
+              <IcoCalSm />
+              {todo.startDate}{todo.endDate ? ` — ${todo.endDate}`:''}{todo.time ? `  ${todo.time}`:''}
+            </span>
+          )}
+          {(todo.tags||[]).map(t=><span key={t} className="tag-pill">{t}</span>)}
+        </div>
+      </div>
+      <button className="todo-del" onClick={()=>onDelete(todo.id)}>✕</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Confirm Sheet — review/edit pending TODOs and Ideas before adding
+// ─────────────────────────────────────────────────────────────
+function ConfirmSheet({ pending, existingProjects, onUpdateTodo, onDeleteTodo, onUpdateIdea, onDeleteIdea, onConfirm, onCancel }) {
+  const [editingTodo, setEditingTodo] = useState(null);
+  const [editingIdea, setEditingIdea] = useState(null);
+  const total = pending.todos.length + pending.ideas.length;
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if(e.target===e.currentTarget) onCancel(); }}>
+      <div className="confirm-sheet">
+        <div className="modal-handle"/>
+        <div className="confirm-header">
+          <div className="confirm-title">追加内容を確認</div>
+          <div className="confirm-sub">
+            TODO {pending.todos.length}件・アイデア {pending.ideas.length}件 を抽出しました。タップで編集、✕で除外できます。
+          </div>
+        </div>
+        <div className="confirm-list">
+          {total === 0 && <div className="todo-empty">追加するアイテムがありません</div>}
+
+          {pending.todos.length > 0 && <div className="confirm-section-head">TODO（{pending.todos.length}）</div>}
+          {pending.todos.map(t => (
+            <div key={t.id} className="todo-item">
+              <div className="todo-body" onClick={()=>setEditingTodo(t)}>
+                <div className="todo-title">{t.title}</div>
+                <div className="todo-meta">
+                  {t.startDate && (
+                    <span className="todo-date-str">
+                      <IcoCalSm />
+                      {t.startDate}{t.endDate ? ` — ${t.endDate}` : ''}{t.time ? `  ${t.time}` : ''}
+                    </span>
+                  )}
+                  {(t.tags||[]).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
+                </div>
+              </div>
+              <button className="todo-del" onClick={()=>onDeleteTodo(t.id)}>✕</button>
+            </div>
+          ))}
+
+          {pending.ideas.length > 0 && <div className="confirm-section-head">アイデア（{pending.ideas.length}）</div>}
+          {pending.ideas.map(i => {
+            const isExisting = existingProjects.includes(i.projectName);
+            return (
+              <div key={i.id} className="todo-item">
+                <div className="todo-body" onClick={()=>setEditingIdea(i)}>
+                  <div className="todo-title">{i.projectName}</div>
+                  {isExisting && <span className="merge-indicator">既存『{i.projectName}』に追記</span>}
+                  <div className="todo-meta">
+                    {i.summary && <span className="todo-date-str" style={{color:'#6a6a68'}}>{i.summary}</span>}
+                    {(i.tags||[]).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
+                  </div>
+                </div>
+                <button className="todo-del" onClick={()=>onDeleteIdea(i.id)}>✕</button>
+              </div>
+            );
+          })}
+        </div>
+        <div className="confirm-actions">
+          <button className="modal-cancel" onClick={onCancel}>キャンセル</button>
+          <button className="modal-save" onClick={onConfirm} disabled={total===0}>
+            {total > 0 ? `${total}件を追加` : '追加'}
+          </button>
+        </div>
+      </div>
+      {editingTodo && (
+        <EditModal todo={editingTodo}
+          onSave={u => { onUpdateTodo(u); setEditingTodo(null); }}
+          onClose={()=>setEditingTodo(null)} />
+      )}
+      {editingIdea && (
+        <IdeaEditModal idea={editingIdea} projects={existingProjects}
+          onSave={u => { onUpdateIdea(u); setEditingIdea(null); }}
+          onClose={()=>setEditingIdea(null)} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Memo Tab
+// ─────────────────────────────────────────────────────────────
+function MemoTab({ onAddTodos }) {
+  const [text,      setText]     = useState('');
+  const [loading,   setLoading]  = useState(false);
+  const [loadingMsg,setLMsg]     = useState('');
+  const [recording, setRec]      = useState(false);
+  const [imgPrev,   setImgPrev]  = useState(null);
+  const [toast,     setToast]    = useState(null);
+  const [pending,   setPending]  = useState(null);
+  const fileRef = useRef(null);
+  const recRef  = useRef(null);
+  const tRef    = useRef(null);
+
+  function showToast(msg) { setToast(msg); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToast(null),2700); }
+
+  function toggleRec() {
+    if (recording) { recRef.current?.stop(); setRec(false); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showToast('このブラウザは音声認識に対応していません'); return; }
+    const r = new SR(); r.lang='ja-JP'; r.interimResults=false;
+    r.onresult = e => setText(p => p ? p+'\n'+e.results[0][0].transcript : e.results[0][0].transcript);
+    r.onerror = () => setRec(false); r.onend = () => setRec(false);
+    r.start(); recRef.current=r; setRec(true);
+  }
+
+  async function handleImg(e) {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async ev => {
+      setImgPrev(ev.target.result);
+      const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
+      if (!claude) {
+        showToast('画像OCRはAI環境でのみ利用可能です');
+        return;
+      }
+      setLoading(true); setLMsg('画像からテキストを抽出中');
+      try {
+        const b64 = ev.target.result.split(',')[1];
+        const result = await window.claude.complete({ messages:[{ role:'user', content:[
+          { type:'image', source:{ type:'base64', media_type:file.type, data:b64 } },
+          { type:'text',  text:'この画像に写っているテキストをすべて抽出してください。テキストのみを返してください。' }
+        ]}]});
+        setText(p => p ? p+'\n'+result : result);
+        showToast('画像からテキストを抽出しました');
+      } catch { showToast('画像解析に失敗しました'); }
+      setLoading(false);
+    };
+    reader.readAsDataURL(file); e.target.value='';
+  }
+
+  async function reflect() {
+    if (!text.trim()) { showToast('メモを入力してください'); return; }
+    setLoading(true); setLMsg('AI がメモを解析中');
+    try {
+      const items = await parseMemoToTodos(text);
+      if (!items.length) throw new Error('empty');
+      const drafts = items.map((item,i)=>({
+        id: Date.now()+i,
+        title: item.title || 'タスク',
+        startDate: item.startDate || '',
+        endDate: item.endDate || '',
+        time: item.time || '',
+        tags: item.tags || [],
+        done: false,
+      }));
+      setPending(drafts);
+    } catch { showToast('解析に失敗しました。再試行してください。'); }
+    setLoading(false);
+  }
+
+  function confirmPending() {
+    onAddTodos(pending);
+    showToast(`${pending.length}件のTODOをリストに追加しました`);
+    setText(''); setImgPrev(null); setPending(null);
+  }
+
+  return (
+    <div className="memo-tab">
+      {loading && <div className="loading-overlay"><div className="spinner"/><div className="loading-text">{loadingMsg}</div><div className="loading-sub">少々お待ちください</div></div>}
+      {toast && <div className="toast">{toast}</div>}
+      {pending && (
+        <ConfirmSheet
+          items={pending}
+          onUpdate={u => setPending(p => p.map(t => t.id===u.id ? u : t))}
+          onDelete={id => setPending(p => p.filter(t => t.id !== id))}
+          onConfirm={confirmPending}
+          onCancel={() => setPending(null)}
+        />
+      )}
+
+      <div className="memo-card">
+        <div className="memo-card-top">
+          <span className="memo-card-label">メモ</span>
+          <span className="memo-char-count">{text.length}</span>
+        </div>
+        <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e=>setText(e.target.value)} />
+        <div className="memo-actions">
+          <button className={`action-btn${recording?' recording':''}`} onClick={toggleRec}><IcoMic />{recording?'録音停止':'音声入力'}</button>
+          <button className="action-btn" onClick={()=>fileRef.current?.click()}><IcoImg />画像から入力</button>
+          <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleImg} />
+        </div>
+      </div>
+
+      {imgPrev && (
+        <div className="img-preview">
+          <img src={imgPrev} alt="" />
+          <button className="img-clear" onClick={()=>setImgPrev(null)}>✕</button>
+        </div>
+      )}
+
+      <button className="reflect-btn" onClick={reflect} disabled={loading}>
+        <IcoStar /> TODO・スケジュールに反映
+      </button>
+
+      <div className="hint-card">
+        <div className="hint-title">入力のヒント</div>
+        <div className="hint-body">
+          「明日から来週水曜まで出張」→ 期間を自動設定<br />
+          「にんじん、じゃがいも、玉ねぎを買う」→ 3つのTODOに分割<br />
+          タグ（買い物・仕事・家事など）は自動で付与されます
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// TODO Tab
+// ─────────────────────────────────────────────────────────────
+function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
+  const [sel,      setSel]      = useState(todayStr);
+  const [editing,  setEditing]  = useState(null);
+
+  const dateTodos = todos.filter(t => {
+    if (!t.startDate) return false;
+    const d=new Date(sel), s=new Date(t.startDate), e=t.endDate?new Date(t.endDate):s;
+    return d>=s && d<=e;
+  });
+  const undated = todos.filter(t => !t.startDate);
+
+  return (
+    <div className="todo-tab">
+      {editing && <EditModal todo={editing} onSave={onUpdate} onClose={()=>setEditing(null)} />}
+      <Calendar todos={todos} selectedDate={sel} onSelect={setSel} />
+      <div className="todo-list-area">
+        <div className="section-head">
+          <span className="section-head-label">{sel.replace(/-/g,'/')}</span>
+          {dateTodos.length>0 && <span className="section-count">{dateTodos.length}</span>}
+        </div>
+        {dateTodos.length===0
+          ? <div className="todo-empty">この日のタスクはありません</div>
+          : dateTodos.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} />)
+        }
+        {undated.length>0 && <>
+          <div className="divider"/>
+          <div className="section-head">
+            <span className="section-head-label">日付未定</span>
+            <span className="section-count">{undated.length}</span>
+          </div>
+          {undated.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} />)}
+        </>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Settings Tab
+// ─────────────────────────────────────────────────────────────
+function SettingsTab({ settings, onChange }) {
+  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate } = settings;
+
+  return (
+    <div className="settings-tab">
+      <div className="settings-section-title">表示</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">ベースカラー</div>
+            <div className="settings-row-sub">{COLOR_PRESETS[colorIdx].name}</div>
+          </div>
+          <div className="color-swatches">
+            {COLOR_PRESETS.map((c,i)=>(
+              <div key={i} className={`color-swatch${colorIdx===i?' sel':''}`}
+                style={{background:c.value}}
+                onClick={()=>onChange('colorIdx',i)} />
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">文字サイズ</div>
+            <div className="settings-row-sub">{FONT_SIZE_OPTS[fontIdx].label}</div>
+          </div>
+          <div className="font-size-opts">
+            {FONT_SIZE_OPTS.map((o,i)=>(
+              <button key={i} className={`font-size-opt${fontIdx===i?' sel':''}`}
+                style={{fontSize: i===0?'11px': i===1?'13px':'15px'}}
+                onClick={()=>onChange('fontIdx',i)}>{o.label}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section-title">通知</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">タスク通知</div>
+            <div className="settings-row-sub">期限前にリマインド</div>
+          </div>
+          <button className={`toggle${notifEnabled?' on':' off'}`} onClick={()=>onChange('notifEnabled',!notifEnabled)} />
+        </div>
+      </div>
+
+      <div className="settings-section-title">AI 設定</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">自動タグ付け</div>
+            <div className="settings-row-sub">タスク解析時に自動でタグを付与</div>
+          </div>
+          <button className={`toggle${autoTag?' on':' off'}`} onClick={()=>onChange('autoTag',!autoTag)} />
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">日付の自動推定</div>
+            <div className="settings-row-sub">「来週」などの相対日付を解析</div>
+          </div>
+          <button className={`toggle${autoDate?' on':' off'}`} onClick={()=>onChange('autoDate',!autoDate)} />
+        </div>
+      </div>
+
+      <div className="settings-section-title">アプリ情報</div>
+      <div className="about-card">
+        <div className="about-app-name">SmartMemo</div>
+        <div className="about-version">Version 1.0.0</div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Root
+// ─────────────────────────────────────────────────────────────
+function SmartMemoApp() {
+  const [tab, setTab] = useState('memo');
+  const [todos, setTodos] = useState(() => loadStored(LS_TODOS, [
+    { id:1, title:'プレゼン資料の作成', startDate:todayStr, endDate:'', time:'10:00', tags:['仕事'], done:false },
+    { id:2, title:'牛乳を購入する',     startDate:todayStr, endDate:'', time:'',      tags:['買い物'],done:false },
+    { id:3, title:'部屋の片付け',        startDate:'',       endDate:'', time:'',      tags:['家事'], done:false },
+  ]));
+  const [settings, setSettings] = useState(() => loadStored(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true }));
+
+  useEffect(() => { saveStored(LS_TODOS, todos); }, [todos]);
+  useEffect(() => { saveStored(LS_SETTINGS, settings); }, [settings]);
+
+  const color = COLOR_PRESETS[settings.colorIdx];
+  const font  = FONT_SIZE_OPTS[settings.fontIdx];
+
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', color.value);
+  }, [color.value]);
+
+  const appStyle = {
+    '--accent':       color.value,
+    '--accent-light': color.light,
+    '--accent-text':  color.text,
+    '--fs-base':      font.base,
+    '--fs-sm':        font.sm,
+    '--fs-xs':        font.xs,
+  };
+
+  const addTodos  = items => { setTodos(p=>[...p,...items]); setTab('todo'); };
+  const toggle    = id    => setTodos(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
+  const remove    = id    => setTodos(p=>p.filter(t=>t.id!==id));
+  const update    = item  => setTodos(p=>p.map(t=>t.id===item.id?item:t));
+  const setSetting= (k,v) => setSettings(p=>({...p,[k]:v}));
+
+  return (
+    <div className="app" style={appStyle}>
+      <div className="app-header">
+        <h1>SmartMemo</h1>
+        <span className="tagline">AI でタスクを自動整理</span>
+      </div>
+      <div className="tab-content">
+        {tab==='memo'     && <MemoTab onAddTodos={addTodos} />}
+        {tab==='todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} />}
+        {tab==='settings' && <SettingsTab settings={settings} onChange={setSetting} />}
+      </div>
+      <div className="bottom-nav">
+        {[
+          { key:'memo',     label:'メモ入力', Icon:IcoMemoNav },
+          { key:'todo',     label:'TODO',     Icon:IcoTodoNav },
+          { key:'settings', label:'設定',     Icon:IcoSettingsNav },
+        ].map(({ key, label, Icon }) => (
+          <div key={key} className={`nav-tab${tab===key?' active':''}`} onClick={()=>setTab(key)}>
+            <span className="nav-icon"><Icon active={tab===key} /></span>
+            <span className="nav-label">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Root() {
+  const detect = () =>
+    typeof window !== 'undefined' && (
+      window.matchMedia('(max-width:500px)').matches ||
+      window.matchMedia('(display-mode:standalone)').matches ||
+      window.navigator.standalone === true
+    );
+  const [fullscreen, setFullscreen] = useState(detect);
+  useEffect(() => {
+    const mq1 = window.matchMedia('(max-width:500px)');
+    const mq2 = window.matchMedia('(display-mode:standalone)');
+    const update = () => setFullscreen(detect());
+    mq1.addEventListener('change', update);
+    mq2.addEventListener('change', update);
+    return () => {
+      mq1.removeEventListener('change', update);
+      mq2.removeEventListener('change', update);
+    };
+  }, []);
+
+  if (fullscreen) return <SmartMemoApp />;
+  return <IOSDevice><SmartMemoApp /></IOSDevice>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+
+<script>
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
