@@ -2,7 +2,7 @@
   "name": "SmartMemo",
   "short_name": "SmartMemo",
   "description": "AI でタスクを自動整理するメモアプリ",
-  "start_url": "./SmartMemo.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",

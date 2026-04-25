@@ -30,7 +30,7 @@ try {
     $res = $ctx.Response
     try {
       $rel = [System.Uri]::UnescapeDataString($req.Url.AbsolutePath.TrimStart('/'))
-      if ($rel -eq '') { $rel = 'SmartMemo.html' }
+      if ($rel -eq '') { $rel = 'index.html' }
       $path = Join-Path $root $rel
       $full = [System.IO.Path]::GetFullPath($path)
       if (-not $full.StartsWith([System.IO.Path]::GetFullPath($root))) {

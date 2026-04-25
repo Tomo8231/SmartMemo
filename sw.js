@@ -1,7 +1,7 @@
-const CACHE = 'smartmemo-v1';
+const CACHE = 'smartmemo-v2';
 const SHELL = [
   './',
-  './SmartMemo.html',
+  './index.html',
   './manifest.webmanifest',
   './icon.svg',
   'https://unpkg.com/react@18.3.1/umd/react.development.js',

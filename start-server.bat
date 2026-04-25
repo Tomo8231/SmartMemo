@@ -14,7 +14,7 @@ echo ============================================================
 echo   SmartMemo local server
 echo ============================================================
 echo   On your phone (same Wi-Fi), open:
-echo     http://%LANIP%:%PORT%/SmartMemo.html
+echo     http://%LANIP%:%PORT%/
 echo.
 echo   Press Ctrl+C to stop.
 echo ============================================================
