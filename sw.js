@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v2';
+const CACHE = 'smartmemo-v3';
 const SHELL = [
   './',
   './index.html',
@@ -29,16 +29,30 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fetchPromise = fetch(e.request).then(res => {
+  e.respondWith((async () => {
+    const cached = await caches.match(e.request);
+    if (cached) {
+      // Stale-while-revalidate: refresh in background
+      fetch(e.request).then(res => {
         if (res && res.status === 200 && res.type !== 'opaque') {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         }
-        return res;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
-  );
+      }).catch(() => {});
+      return cached;
+    }
+    try {
+      const res = await fetch(e.request);
+      if (res && res.status === 200 && res.type !== 'opaque') {
+        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+      }
+      return res;
+    } catch {
+      // Offline navigation fallback to the app shell
+      if (e.request.mode === 'navigate') {
+        const shell = await caches.match('./index.html') || await caches.match('./');
+        if (shell) return shell;
+      }
+      return new Response('Offline', { status: 503, statusText: 'Offline' });
+    }
+  })());
 });

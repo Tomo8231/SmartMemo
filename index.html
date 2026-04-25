@@ -148,6 +148,15 @@
     }
     .action-btn:hover { background:#f5f5f3; }
     .action-btn.recording { background:#1a1a18; border-color:#1a1a18; color:#fff; }
+    .pulse-dot {
+      width:8px; height:8px; border-radius:50%;
+      background:#fff; display:inline-block;
+      animation: rec-pulse 1s ease-in-out infinite;
+    }
+    @keyframes rec-pulse {
+      0%, 100% { opacity:1; transform:scale(1); }
+      50%      { opacity:.45; transform:scale(.78); }
+    }
 
     .img-preview { position:relative; border-radius:10px; overflow:hidden; border:1px solid #ebebea; }
     .img-preview img { width:100%; max-height:130px; object-fit:cover; display:block; }
@@ -1123,20 +1132,98 @@ function MemoTab({ existingProjects, onCommit }) {
   const [imgPrev,   setImgPrev]  = useState(null);
   const [toast,     setToast]    = useState(null);
   const [pending,   setPending]  = useState(null);
-  const fileRef = useRef(null);
-  const recRef  = useRef(null);
-  const tRef    = useRef(null);
+  const fileRef       = useRef(null);
+  const recRef        = useRef(null);
+  const tRef          = useRef(null);
+  const baseTextRef   = useRef('');
+  const finalTextRef  = useRef('');
 
   function showToast(msg) { setToast(msg); clearTimeout(tRef.current); tRef.current=setTimeout(()=>setToast(null),2700); }
 
-  function toggleRec() {
-    if (recording) { recRef.current?.stop(); setRec(false); return; }
+  async function toggleRec() {
+    if (recording) {
+      try { recRef.current?.stop(); } catch {}
+      return; // setRec(false) happens in onend
+    }
+
+    const isSecure =
+      location.protocol === 'https:' ||
+      location.hostname === 'localhost' ||
+      location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      showToast('音声入力にはHTTPS接続が必要です（GitHub Pages等で公開すると使えます）');
+      return;
+    }
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showToast('このブラウザは音声認識に対応していません'); return; }
-    const r = new SR(); r.lang='ja-JP'; r.interimResults=false;
-    r.onresult = e => setText(p => p ? p+'\n'+e.results[0][0].transcript : e.results[0][0].transcript);
-    r.onerror = () => setRec(false); r.onend = () => setRec(false);
-    r.start(); recRef.current=r; setRec(true);
+    if (!SR) {
+      showToast('このブラウザは音声入力に未対応です');
+      return;
+    }
+
+    // Pre-grant mic permission so SR doesn't fail with an opaque error
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(t => t.stop());
+      } catch {
+        showToast('マイクの利用を許可してください');
+        return;
+      }
+    }
+
+    let r;
+    try {
+      r = new SR();
+      r.lang = 'ja-JP';
+      r.interimResults = true;
+      r.continuous = true;
+    } catch {
+      showToast('音声入力の起動に失敗しました');
+      return;
+    }
+
+    baseTextRef.current  = text;
+    finalTextRef.current = '';
+
+    r.onresult = e => {
+      let interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalTextRef.current += t;
+        else interim += t;
+      }
+      const base = baseTextRef.current;
+      const sep  = base && (finalTextRef.current || interim) ? '\n' : '';
+      setText(base + sep + finalTextRef.current + interim);
+    };
+    r.onerror = e => {
+      const map = {
+        'no-speech':           '音声が検出されませんでした',
+        'audio-capture':       'マイクが見つかりません',
+        'not-allowed':         'マイクの利用が拒否されました',
+        'network':             'ネットワーク接続が必要です（音声認識はオンライン必須）',
+        'service-not-allowed': '音声認識サービスが利用できません',
+      };
+      const msg = map[e.error];
+      if (msg) showToast(msg);
+      setRec(false);
+    };
+    r.onend = () => {
+      // Persist final text without lingering interim
+      const base = baseTextRef.current;
+      const sep  = base && finalTextRef.current ? '\n' : '';
+      if (finalTextRef.current) setText(base + sep + finalTextRef.current);
+      setRec(false);
+    };
+
+    try {
+      r.start();
+      recRef.current = r;
+      setRec(true);
+    } catch {
+      showToast('音声入力を開始できませんでした');
+    }
   }
 
   async function handleImg(e) {
@@ -1222,7 +1309,9 @@ function MemoTab({ existingProjects, onCommit }) {
         </div>
         <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e=>setText(e.target.value)} />
         <div className="memo-actions">
-          <button className={`action-btn${recording?' recording':''}`} onClick={toggleRec}><IcoMic />{recording?'録音停止':'音声入力'}</button>
+          <button className={`action-btn${recording?' recording':''}`} onClick={toggleRec}>
+            {recording ? <><span className="pulse-dot"/>録音停止</> : <><IcoMic />音声入力</>}
+          </button>
           <button className="action-btn" onClick={()=>fileRef.current?.click()}><IcoImg />画像から入力</button>
           <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleImg} />
         </div>
