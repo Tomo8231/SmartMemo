@@ -69,9 +69,18 @@
     .app-header h1 { font-size:18px; font-weight:700; letter-spacing:-0.6px; color:#1a1a18; }
     .app-header .tagline { font-size:var(--fs-xs); color:#a0a09c; }
 
-    /* Tab Content */
-    .tab-content { flex:1; overflow-y:auto; overflow-x:hidden; }
-    .tab-content::-webkit-scrollbar { display:none; }
+    /* Tab Content — outer wrapper stays fixed-size; each pane scrolls internally */
+    .tab-content {
+      flex:1; min-height:0;
+      display:flex; flex-direction:column;
+      overflow:hidden;
+    }
+    .tab-pane {
+      flex:1; min-height:0;
+      overflow-y:auto; overflow-x:hidden;
+      -webkit-overflow-scrolling:touch;
+    }
+    .tab-pane::-webkit-scrollbar { display:none; }
 
     /* Bottom Nav */
     .bottom-nav {
@@ -183,7 +192,11 @@
     .hint-body  { font-size:var(--fs-xs); color:#a0a09c; line-height:1.8; }
 
     /* TODO TAB */
-    .todo-tab { display:flex; flex-direction:column; }
+    .todo-tab {
+      display:flex; flex-direction:column;
+      flex:1; min-height:0;
+      overflow:hidden; /* outer doesn't scroll; inner list does */
+    }
 
     .cal-wrapper { background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0; }
     .cal-head {
@@ -216,7 +229,13 @@
     .cal-dot { width:3px; height:3px; border-radius:50%; background:var(--accent); margin-top:2px; }
     .cal-cell.selected .cal-dot { background:rgba(255,255,255,.5); }
 
-    .todo-list-area { padding:16px; }
+    .todo-list-area {
+      padding:16px;
+      flex:1; min-height:0;
+      overflow-y:auto; overflow-x:hidden;
+      -webkit-overflow-scrolling:touch;
+    }
+    .todo-list-area::-webkit-scrollbar { display:none; }
     .section-head { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
     .section-head-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; }
     .section-count { font-size:10px; font-weight:700; background:var(--accent); color:#fff; border-radius:10px; padding:1px 7px; }
@@ -1303,7 +1322,7 @@ function MemoTab({ existingProjects, onCommit }) {
   }
 
   return (
-    <div className="memo-tab">
+    <div className="memo-tab tab-pane">
       {loading && <div className="loading-overlay"><div className="spinner"/><div className="loading-text">{loadingMsg}</div><div className="loading-sub">少々お待ちください</div></div>}
       {toast && <div className="toast">{toast}</div>}
       {pending && (
@@ -1407,7 +1426,7 @@ function IdeasTab({ ideas, onUpdate, onDelete }) {
 
   if (ideas.length === 0) {
     return (
-      <div className="ideas-tab">
+      <div className="ideas-tab tab-pane">
         <div className="ideas-empty">
           まだアイデアがありません<br/>
           メモタブで思いついたことを入力し、<br/>
@@ -1418,7 +1437,7 @@ function IdeasTab({ ideas, onUpdate, onDelete }) {
   }
 
   return (
-    <div className="ideas-tab">
+    <div className="ideas-tab tab-pane">
       {editing && (
         <IdeaEditModal
           idea={editing}
@@ -1456,7 +1475,7 @@ function SettingsTab({ settings, onChange }) {
   const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate } = settings;
 
   return (
-    <div className="settings-tab">
+    <div className="settings-tab tab-pane">
       <div className="settings-section-title">表示</div>
       <div className="settings-card">
         <div className="settings-row">
