@@ -83,6 +83,9 @@
       -webkit-overflow-scrolling:touch;
     }
     .tab-pane::-webkit-scrollbar { display:none; }
+    /* Cards inside any flex-column tab pane must keep their natural height
+       and let the pane scroll when content overflows. */
+    .tab-pane > * { flex-shrink:0; }
 
     /* Bottom Nav — height pinned so it cannot vary between tabs */
     .bottom-nav {
@@ -237,7 +240,12 @@
     .cal-cell.today .cal-num { font-weight:700; }
     .cal-cell.selected { background:var(--accent) !important; }
     .cal-cell.selected .cal-num { color:#fff !important; font-weight:600; }
-    .cal-dot { width:3px; height:3px; border-radius:50%; background:var(--accent); margin-top:2px; }
+    /* Absolute-positioned so the dot never affects cell row height —
+       calendar height stays identical regardless of which days have todos. */
+    .cal-dot {
+      position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+      width:3px; height:3px; border-radius:50%; background:var(--accent);
+    }
     .cal-cell.selected .cal-dot { background:rgba(255,255,255,.5); }
 
     .todo-list-area {
@@ -447,6 +455,32 @@
     .toggle.on::after { left:21px; }
     .toggle.off { background:#d0d0cc; }
 
+    /* Gemini API key field */
+    .api-row { padding:14px 16px; }
+    .api-input-row { display:flex; gap:6px; margin-top:8px; }
+    .api-input-row input {
+      flex:1; padding:8px 11px; border:1px solid #e0e0de; border-radius:7px;
+      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-family:inherit; outline:none;
+      letter-spacing:.5px;
+    }
+    .api-input-row input:focus { border-color:var(--accent); }
+    .api-input-row button {
+      padding:8px 14px; border:none; border-radius:7px;
+      background:var(--accent); color:#fff; cursor:pointer;
+      font-size:var(--fs-sm); font-weight:600; font-family:inherit;
+    }
+    .api-input-row button.secondary {
+      background:#fff; color:#4a4a48; border:1px solid #e0e0de;
+    }
+    .api-status {
+      margin-top:8px; font-size:10px; font-weight:600;
+      letter-spacing:.3px;
+    }
+    .api-status.ok   { color:#2A8C5A; }
+    .api-status.ng   { color:#c0392b; }
+    .api-status.idle { color:#a0a09c; }
+
     /* Tag customization */
     .tag-row { padding:14px 16px; border-bottom:1px solid #f0f0ee; }
     .tag-row:last-child { border-bottom:none; }
@@ -590,6 +624,49 @@ function saveStored(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
     console.error('[SmartMemo] save failed for', key, e);
   }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Gemini API integration — text generation, image OCR, audio transcription.
+// Uses the Generative Language REST API directly so no SDK is needed.
+// API key is stored in localStorage (settings.geminiApiKey).
+// ─────────────────────────────────────────────────────────────
+const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_URL = key =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+
+async function callGemini(apiKey, parts) {
+  if (!apiKey) throw new Error('no_api_key');
+  const res = await fetch(GEMINI_URL(apiKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts }] }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { detail = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`Gemini ${res.status}${detail ? ': ' + detail : ''}`);
+  }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+const callGeminiText   = (key, text) => callGemini(key, [{ text }]);
+const callGeminiVision = (key, prompt, base64, mime) => callGemini(key, [
+  { text: prompt },
+  { inline_data: { mime_type: mime, data: base64 } },
+]);
+const callGeminiAudio  = (key, base64, mime) => callGemini(key, [
+  { text: '以下の音声を日本語で文字起こししてください。テキストのみを返してください。' },
+  { inline_data: { mime_type: mime, data: base64 } },
+]);
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve((r.result || '').split(',')[1] || '');
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
 }
 
 // Two-tone success "ding" via Web Audio API — no asset, no network.
@@ -976,11 +1053,8 @@ function mergeIdeas(existing, incoming) {
   return result;
 }
 
-async function parseMemoToItems(text, existingProjects = []) {
-  const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
-  if (claude) {
-    try {
-      const prompt =
+async function parseMemoToItems(text, existingProjects = [], apiKey = '') {
+  const prompt =
         `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「アイデア」に分類し、JSONのみを返してください。\n\n` +
         `ルール:\n` +
         `1. TODO: 実行可能なタスク・予定・買い物・連絡など、行動動詞または日付/期限のあるもの\n` +
@@ -1000,19 +1074,41 @@ async function parseMemoToItems(text, existingProjects = []) {
         `形式（JSONのみ）:\n` +
         `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[]}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
         `メモ:\n${text}`;
-      const res = await window.claude.complete(prompt);
-      const match = res.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        return {
-          todos: Array.isArray(parsed.todos) ? parsed.todos : [],
-          ideas: Array.isArray(parsed.ideas) ? parsed.ideas : [],
-        };
-      }
+
+  const tryParseJson = res => {
+    const m = (res || '').match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+      const parsed = JSON.parse(m[0]);
+      return {
+        todos: Array.isArray(parsed.todos) ? parsed.todos : [],
+        ideas: Array.isArray(parsed.ideas) ? parsed.ideas : [],
+      };
+    } catch { return null; }
+  };
+
+  // 1. Gemini API (primary if API key configured)
+  if (apiKey) {
+    try {
+      const out = await callGeminiText(apiKey, prompt);
+      const parsed = tryParseJson(out);
+      if (parsed) return parsed;
     } catch (e) {
-      // fall through to local
+      console.warn('[Gemini] memo parse failed:', e);
     }
   }
+
+  // 2. claude.ai/design bridge if running there
+  const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
+  if (claude) {
+    try {
+      const out = await window.claude.complete(prompt);
+      const parsed = tryParseJson(out);
+      if (parsed) return parsed;
+    } catch {}
+  }
+
+  // 3. Local heuristic fallback
   return localParseAll(text, existingProjects);
 }
 
@@ -1386,7 +1482,7 @@ function ConfirmSheet({ pending, existingProjects, customTags, onUpdateTodo, onD
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, onCommit }) {
+function MemoTab({ existingProjects, customTags, geminiApiKey, onCommit }) {
   const [text,      setText]     = useState('');
   const [loading,   setLoading]  = useState(false);
   const [loadingMsg,setLMsg]     = useState('');
@@ -1404,8 +1500,11 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
 
   async function toggleRec() {
     if (recording) {
-      try { recRef.current?.stop(); } catch {}
-      return; // setRec(false) happens in onend
+      try {
+        if (recRef.current?.kind === 'mediarecorder') recRef.current.recorder.stop();
+        else recRef.current?.stop?.();
+      } catch {}
+      return;
     }
 
     const isSecure =
@@ -1417,13 +1516,73 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
       return;
     }
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      showToast('このブラウザは音声入力に未対応です');
+    // Path A — Gemini transcription (preferred when API key is configured;
+    // works fully offline-of-Apple-cloud since transcription is cloud-side
+    // Gemini and the recording itself is local).
+    if (geminiApiKey) {
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch {
+        showToast('マイクの利用を許可してください');
+        return;
+      }
+
+      const candidates = ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/webm'];
+      const mime = candidates.find(m =>
+        typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
+      ) || '';
+      let recorder;
+      try {
+        recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      } catch {
+        stream.getTracks().forEach(t => t.stop());
+        showToast('録音を開始できませんでした');
+        return;
+      }
+
+      const chunks = [];
+      const captureMime = recorder.mimeType || mime || 'audio/webm';
+      recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRec(false);
+        const blob = new Blob(chunks, { type: captureMime });
+        if (blob.size === 0) { showToast('音声が録音されませんでした'); return; }
+        setLoading(true); setLMsg('Gemini で文字起こし中');
+        try {
+          const base64 = await blobToBase64(blob);
+          const transcript = await callGeminiAudio(geminiApiKey, base64, captureMime);
+          if (transcript) {
+            setText(p => p ? p + '\n' + transcript : transcript);
+            showToast('音声を文字起こししました');
+          } else {
+            showToast('文字起こし結果が空でした');
+          }
+        } catch (err) {
+          console.error('[Gemini audio]', err);
+          showToast('文字起こしに失敗しました');
+        }
+        setLoading(false);
+      };
+
+      try {
+        recorder.start();
+        recRef.current = { kind: 'mediarecorder', recorder, stream };
+        setRec(true);
+      } catch {
+        stream.getTracks().forEach(t => t.stop());
+        showToast('録音を開始できませんでした');
+      }
       return;
     }
 
-    // Pre-grant mic permission so SR doesn't fail with an opaque error
+    // Path B — Web Speech API (no API key, browser-native cloud STT)
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      showToast('このブラウザは音声入力に未対応です（設定でGemini APIキーを登録すると利用可能）');
+      return;
+    }
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1433,7 +1592,6 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
         return;
       }
     }
-
     let r;
     try {
       r = new SR();
@@ -1444,10 +1602,8 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
       showToast('音声入力の起動に失敗しました');
       return;
     }
-
     baseTextRef.current  = text;
     finalTextRef.current = '';
-
     r.onresult = e => {
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -1472,13 +1628,11 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
       setRec(false);
     };
     r.onend = () => {
-      // Persist final text without lingering interim
       const base = baseTextRef.current;
       const sep  = base && finalTextRef.current ? '\n' : '';
       if (finalTextRef.current) setText(base + sep + finalTextRef.current);
       setRec(false);
     };
-
     try {
       r.start();
       recRef.current = r;
@@ -1494,20 +1648,38 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
     reader.onload = async ev => {
       setImgPrev(ev.target.result);
       const claude = typeof window !== 'undefined' && window.claude && window.claude.complete;
-      if (!claude) {
-        showToast('画像OCRはAI環境でのみ利用可能です');
+      if (!geminiApiKey && !claude) {
+        showToast('画像OCRには Gemini APIキー（設定）が必要です');
         return;
       }
-      setLoading(true); setLMsg('画像からテキストを抽出中');
+      setLoading(true);
+      setLMsg(geminiApiKey ? 'Gemini で画像から文字を抽出中' : '画像からテキストを抽出中');
       try {
         const b64 = ev.target.result.split(',')[1];
-        const result = await window.claude.complete({ messages:[{ role:'user', content:[
-          { type:'image', source:{ type:'base64', media_type:file.type, data:b64 } },
-          { type:'text',  text:'この画像に写っているテキストをすべて抽出してください。テキストのみを返してください。' }
-        ]}]});
-        setText(p => p ? p+'\n'+result : result);
-        showToast('画像からテキストを抽出しました');
-      } catch { showToast('画像解析に失敗しました'); }
+        let result = '';
+        if (geminiApiKey) {
+          result = await callGeminiVision(
+            geminiApiKey,
+            'この画像に写っているテキストをすべて抽出してください。テキストのみを返してください。',
+            b64,
+            file.type
+          );
+        } else if (claude) {
+          result = await window.claude.complete({ messages:[{ role:'user', content:[
+            { type:'image', source:{ type:'base64', media_type:file.type, data:b64 } },
+            { type:'text',  text:'この画像に写っているテキストをすべて抽出してください。テキストのみを返してください。' }
+          ]}]});
+        }
+        if (result) {
+          setText(p => p ? p+'\n'+result : result);
+          showToast('画像からテキストを抽出しました');
+        } else {
+          showToast('テキストを抽出できませんでした');
+        }
+      } catch (err) {
+        console.error('[OCR]', err);
+        showToast('画像解析に失敗しました');
+      }
       setLoading(false);
     };
     reader.readAsDataURL(file); e.target.value='';
@@ -1518,7 +1690,7 @@ function MemoTab({ existingProjects, customTags, onCommit }) {
     setLoading(true);
     setLMsg(mode === 'idea' ? 'アイデアとして解析中' : 'TODOとして解析中');
     try {
-      const result = await parseMemoToItems(text, existingProjects);
+      const result = await parseMemoToItems(text, existingProjects, geminiApiKey);
       const todos = result.todos || [];
       const ideas = result.ideas || [];
       let todoDrafts, ideaDrafts;
@@ -1736,9 +1908,31 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags }) {
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
 function SettingsTab({ settings, onChange }) {
-  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound } = settings;
+  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey } = settings;
   const soundOn = completeSound !== false;
   const [newTag, setNewTag] = useState('');
+  const [keyInput, setKeyInput] = useState(geminiApiKey || '');
+  const [keyVisible, setKeyVisible] = useState(false);
+  const [apiStatus, setApiStatus] = useState({ kind:'idle', msg:'' });
+  useEffect(() => { setKeyInput(geminiApiKey || ''); }, [geminiApiKey]);
+  function saveKey() {
+    onChange('geminiApiKey', keyInput.trim());
+    setApiStatus({ kind:'ok', msg:'保存しました' });
+    setTimeout(() => setApiStatus({ kind:'idle', msg:'' }), 2200);
+  }
+  async function testKey() {
+    if (!keyInput.trim()) {
+      setApiStatus({ kind:'ng', msg:'APIキーを入力してください' }); return;
+    }
+    setApiStatus({ kind:'idle', msg:'接続テスト中...' });
+    try {
+      const out = await callGeminiText(keyInput.trim(), 'Reply with the single word: OK');
+      if (out) setApiStatus({ kind:'ok', msg:`接続成功（${GEMINI_MODEL}）` });
+      else     setApiStatus({ kind:'ng', msg:'応答が空でした' });
+    } catch (e) {
+      setApiStatus({ kind:'ng', msg:String(e.message || e).slice(0, 80) });
+    }
+  }
   const trimmed = newTag.trim();
   const canAdd =
     trimmed.length > 0 &&
@@ -1797,6 +1991,39 @@ function SettingsTab({ settings, onChange }) {
             <div className="settings-row-sub">TODOにチェックを入れた時に音とアニメーション</div>
           </div>
           <button className={`toggle${soundOn?' on':' off'}`} onClick={()=>onChange('completeSound',!soundOn)} />
+        </div>
+      </div>
+
+      <div className="settings-section-title">AI 連携（Gemini）</div>
+      <div className="settings-card">
+        <div className="api-row">
+          <div className="settings-row-label">Gemini APIキー</div>
+          <div className="settings-row-sub">
+            設定すると音声・画像・メモ解析に Gemini を使用します。
+            未設定時はローカル解析にフォールバック。
+            <br/>取得: aistudio.google.com → Get API key
+          </div>
+          <div className="api-input-row">
+            <input
+              type={keyVisible ? 'text' : 'password'}
+              value={keyInput}
+              onChange={e=>setKeyInput(e.target.value)}
+              placeholder="AIza..."
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button className="secondary" onClick={()=>setKeyVisible(v=>!v)}>{keyVisible?'隠':'表'}</button>
+          </div>
+          <div className="api-input-row">
+            <button onClick={saveKey} disabled={keyInput.trim() === (geminiApiKey || '')}>保存</button>
+            <button className="secondary" onClick={testKey} disabled={!keyInput.trim()}>接続テスト</button>
+            {geminiApiKey && (
+              <button className="secondary" onClick={()=>{ setKeyInput(''); onChange('geminiApiKey',''); setApiStatus({ kind:'ok', msg:'削除しました' }); }}>削除</button>
+            )}
+          </div>
+          {apiStatus.msg && (
+            <div className={`api-status ${apiStatus.kind}`}>{apiStatus.msg}</div>
+          )}
         </div>
       </div>
 
@@ -1872,7 +2099,7 @@ function SmartMemoApp() {
     { id:3, title:'部屋の片付け',        startDate:'',       endDate:'', time:'',      tags:['家事'], done:false },
   ]);
   const [ideas, setIdeas] = usePersistedState(LS_IDEAS, []);
-  const [settings, setSettings] = usePersistedState(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true, completeSound:true, customTags:[] });
+  const [settings, setSettings] = usePersistedState(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true, completeSound:true, customTags:[], geminiApiKey:'' });
 
   // Ask the browser to keep our data even under storage pressure (iOS ITP, etc.)
   useEffect(() => {
@@ -1945,7 +2172,7 @@ function SmartMemoApp() {
         <span className="tagline">AI でタスクを自動整理</span>
       </div>
       <div className="tab-content">
-        {tab==='memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags||[]} onCommit={commit} />}
+        {tab==='memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags||[]} geminiApiKey={settings.geminiApiKey||''} onCommit={commit} />}
         {tab==='todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} customTags={settings.customTags||[]} />}
         {tab==='idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags||[]} />}
         {tab==='settings' && <SettingsTab settings={settings} onChange={setSetting} />}
