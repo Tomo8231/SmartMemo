@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /c/WorkSpace/05_ToDoList/ToDoList add index.html sw.js)",
+      "Bash(git -C /c/WorkSpace/05_ToDoList/ToDoList commit -m ' *)"
+    ]
+  }
+}
