@@ -186,6 +186,13 @@
     .reflect-btn:hover   { opacity:.88; }
     .reflect-btn:active  { transform:scale(.98); }
     .reflect-btn:disabled { opacity:.4; cursor:not-allowed; }
+    .reflect-actions { display:flex; flex-direction:column; gap:8px; }
+    .reflect-btn-secondary {
+      background:#fff;
+      color:var(--accent);
+      border:1.5px solid var(--accent);
+    }
+    .reflect-btn-secondary:hover { background:var(--accent-light); opacity:1; }
 
     .hint-card { background:#fff; border:1px solid #ebebea; border-radius:12px; padding:12px 14px; }
     .hint-title { font-size:var(--fs-xs); font-weight:600; color:#4a4a48; margin-bottom:6px; }
@@ -587,9 +594,17 @@ const TAG_KEYWORDS = {
 };
 
 const ACTION_VERB_RE = /(買う|購入|やる|行く|来る|帰る|完了|終わ(る|らせる)|確認|チェック|送る|送付|提出|連絡|電話|メール|会う|参加|準備|予約|予定|出発|到着|出張|締切|片付け|掃除|洗濯)/;
-const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
+const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
 const TIME_TOKEN_RE  = /\d{1,2}[:時]\d{0,2}分?(に|から|まで)?/;
 const IDEA_HINT_RE   = /(アイデア|構想|企画|思いつき|について|案$|コンセプト)/;
+
+// Convert full-width digits and tilde to half-width so the regexes below
+// catch "７月１日〜１５日" and "8月1日～15日" the same way.
+function normalizeDateChars(text) {
+  return text
+    .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[～〜]/g, '~');
+}
 
 function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate()+n); return d; }
 function nextWeekday(from, target) {
@@ -600,18 +615,72 @@ function nextWeekday(from, target) {
   d.setDate(d.getDate()+diff);
   return d;
 }
+function lastDayOfMonth(year, month1) { return new Date(year, month1, 0).getDate(); }
 
-function parseRelative(text) {
+function parseRelative(rawText) {
+  const text = normalizeDateChars(rawText);
   const dowMap = { '日':0,'月':1,'火':2,'水':3,'木':4,'金':5,'土':6 };
-  const rangeRe = /(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*から\s*(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*まで/;
-  const m = text.match(rangeRe);
-  if (m) return { startDate: formatDate(resolveRel(m[1])), endDate: formatDate(resolveRel(m[4])) };
+  const yy = today.getFullYear();
+
+  // 1. Cross-month range: "8月1日〜9月15日" / "8/1〜9/15" / "8月1日から9月15日まで"
+  const xmr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/);
+  if (xmr) {
+    return {
+      startDate: `${yy}-${pad(+xmr[1])}-${pad(+xmr[2])}`,
+      endDate:   `${yy}-${pad(+xmr[3])}-${pad(+xmr[4])}`,
+    };
+  }
+
+  // 2. Single-month range: "7月1日〜15日" / "7/1〜15" / "7月1日から15日まで"
+  const smr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/);
+  if (smr) {
+    return {
+      startDate: `${yy}-${pad(+smr[1])}-${pad(+smr[2])}`,
+      endDate:   `${yy}-${pad(+smr[1])}-${pad(+smr[3])}`,
+    };
+  }
+
+  // 3. Whole month: "8月中" / "今月中" / "来月中"
+  const mc = text.match(/(\d{1,2})月中/);
+  if (mc) {
+    const m = +mc[1];
+    return {
+      startDate: `${yy}-${pad(m)}-01`,
+      endDate:   `${yy}-${pad(m)}-${pad(lastDayOfMonth(yy, m))}`,
+    };
+  }
+  if (/今月中/.test(text)) {
+    const m = today.getMonth() + 1;
+    return {
+      startDate: `${yy}-${pad(m)}-01`,
+      endDate:   `${yy}-${pad(m)}-${pad(lastDayOfMonth(yy, m))}`,
+    };
+  }
+  if (/来月中/.test(text)) {
+    let m = today.getMonth() + 2, y = yy;
+    if (m > 12) { m -= 12; y += 1; }
+    return {
+      startDate: `${y}-${pad(m)}-01`,
+      endDate:   `${y}-${pad(m)}-${pad(lastDayOfMonth(y, m))}`,
+    };
+  }
+
+  // 4. Relative range: "明日から来週水曜まで"
+  const rr = text.match(/(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*から\s*(今日|明日|明後日|来週(.)曜?|今週(.)曜?)\s*まで/);
+  if (rr) return { startDate: formatDate(resolveRel(rr[1])), endDate: formatDate(resolveRel(rr[4])) };
+
+  // 5. Single relative
   const single = text.match(/(今日|明日|明後日|来週(.)曜?|今週(.)曜?)/);
   if (single) return { startDate: formatDate(resolveRel(single[1])), endDate: '' };
+
+  // 6. Explicit YYYY-MM-DD
   const ymd = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (ymd) return { startDate: `${ymd[1]}-${pad(+ymd[2])}-${pad(+ymd[3])}`, endDate: '' };
+
+  // 7. Single month/day: "7月1日" / "7/1"
   const md = text.match(/(\d{1,2})[\/月](\d{1,2})日?/);
-  if (md) return { startDate: `${today.getFullYear()}-${pad(+md[1])}-${pad(+md[2])}`, endDate: '' };
+  if (md) return { startDate: `${yy}-${pad(+md[1])}-${pad(+md[2])}`, endDate: '' };
+
   return { startDate: '', endDate: '' };
 
   function resolveRel(s) {
@@ -629,21 +698,38 @@ function parseRelative(text) {
   }
 }
 
-function parseTime(text) {
+function parseTime(rawText) {
+  const text = normalizeDateChars(rawText);
   const m = text.match(/(\d{1,2})[:時](\d{1,2})?/);
   if (!m) return '';
   return `${pad(+m[1])}:${pad(+(m[2]||0))}`;
 }
 
-// Strip date / time tokens from the line so verb-splitter doesn't treat
-// them as nouns. Fixes "明日、ジャガイモを買う" → ["ジャガイモを買う"].
-function stripDateTimeWords(text) {
-  let t = text;
+// Strip date / time tokens from the line so verb-splitter doesn't treat them
+// as nouns. Patterns are ordered most-specific first so ranges win over
+// single-day matches. Trailing/leading particles (に/は/から/まで…) left
+// behind by stripped tokens are also cleaned.
+function stripDateTimeWords(rawText) {
+  let t = normalizeDateChars(rawText);
+  // Cross-month range
+  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/g, '');
+  // Single-month range
+  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/g, '');
+  // Whole month
+  t = t.replace(/(\d{1,2}|今|来)月中/g, '');
+  // Relative range
   t = t.replace(/(今日|明日|明後日|来週.曜?|今週.曜?)\s*から\s*(今日|明日|明後日|来週.曜?|今週.曜?)\s*まで/g, '');
+  // Single relatives
   t = t.replace(/(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月)/g, '');
+  // YYYY-MM-DD
   t = t.replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, '');
+  // Month/day single
   t = t.replace(/\d{1,2}[\/月]\d{1,2}日?/g, '');
+  // Time
   t = t.replace(TIME_TOKEN_RE, '');
+  // Drop dangling particles left at the start ("に/から/まで/は/の/へ")
+  t = t.replace(/^(に|から|まで|は|の|へ)\s*/, '');
+  // Trim leading/trailing punctuation
   t = t.replace(/^[、,・\s]+|[、,・\s]+$/g, '').trim();
   return t;
 }
@@ -809,10 +895,14 @@ async function parseMemoToItems(text, existingProjects = []) {
         `2. アイデア: 思いつき・構想・企画・コンセプト・将来やりたいこと\n` +
         `3. 複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」は日付なのでタイトルに含めずstartDateに）\n` +
         `4. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
+        `   - 「8月中」      → startDate=yyyy-08-01, endDate=yyyy-08-31\n` +
+        `   - 「7月1日〜15日」 → startDate=yyyy-07-01, endDate=yyyy-07-15\n` +
+        `   - 「7月1日〜8月15日」→ startDate=yyyy-07-01, endDate=yyyy-08-15\n` +
+        `   - 「明日から来週水曜まで」→ 期間で記述\n` +
         `5. 時間は HH:MM か ""。tags は: 買い物 / 仕事 / 家事 / アイデア / 健康 / 勉強 / その他\n` +
         `6. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
         `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
-        `8. 本日: ${todayStr}\n\n` +
+        `8. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n\n` +
         `形式（JSONのみ）:\n` +
         `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[]}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
         `メモ:\n${text}`;
@@ -849,6 +939,11 @@ const IcoImg = () => (
 const IcoStar = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2L9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z"/>
+  </svg>
+);
+const IcoBulb = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/>
   </svg>
 );
 const IcoCheck = ({ color='#fff' }) => (
@@ -1287,27 +1382,58 @@ function MemoTab({ existingProjects, onCommit }) {
     reader.readAsDataURL(file); e.target.value='';
   }
 
-  async function reflect() {
+  async function reflect(mode) {
     if (!text.trim()) { showToast('メモを入力してください'); return; }
-    setLoading(true); setLMsg('メモを解析中');
+    setLoading(true);
+    setLMsg(mode === 'idea' ? 'アイデアとして解析中' : 'TODOとして解析中');
     try {
       const result = await parseMemoToItems(text, existingProjects);
-      const todoDrafts = (result.todos || []).map((item,i) => ({
-        id: `t_${Date.now()}_${i}`,
-        title: item.title || 'タスク',
-        startDate: item.startDate || '',
-        endDate: item.endDate || '',
-        time: item.time || '',
-        tags: item.tags || [],
-        done: false,
-      }));
-      const ideaDrafts = (result.ideas || []).map((item,i) => ({
-        id: `i_${Date.now()}_${i}`,
-        projectName: item.projectName || 'メモ',
-        summary: item.summary || '',
-        details: item.details || [],
-        tags: item.tags || ['アイデア'],
-      }));
+      const todos = result.todos || [];
+      const ideas = result.ideas || [];
+      let todoDrafts, ideaDrafts;
+
+      if (mode === 'idea') {
+        // Treat everything as ideas. TODOs are flattened into idea entries
+        // (using their title as projectName/summary).
+        todoDrafts = [];
+        ideaDrafts = [
+          ...ideas.map(i => ({
+            projectName: i.projectName || 'メモ',
+            summary: i.summary || '',
+            details: i.details || [],
+            tags: i.tags || ['アイデア'],
+          })),
+          ...todos.map(t => ({
+            projectName: t.title || 'メモ',
+            summary: '',
+            details: [],
+            tags: (t.tags && t.tags.length ? t.tags : ['アイデア']),
+          })),
+        ];
+      } else {
+        // mode === 'todo' (default): treat everything as TODOs.
+        ideaDrafts = [];
+        todoDrafts = [
+          ...todos.map(t => ({
+            title: t.title || 'タスク',
+            startDate: t.startDate || '',
+            endDate: t.endDate || '',
+            time: t.time || '',
+            tags: t.tags || [],
+          })),
+          ...ideas.map(i => ({
+            title: i.summary || i.projectName || 'タスク',
+            startDate: '',
+            endDate: '',
+            time: '',
+            tags: (i.tags && i.tags.length ? i.tags : ['その他']),
+          })),
+        ];
+      }
+
+      const ts = Date.now();
+      todoDrafts = todoDrafts.map((t, i) => ({ ...t, id: `t_${ts}_${i}`, done: false }));
+      ideaDrafts = ideaDrafts.map((i, idx) => ({ ...i, id: `i_${ts}_${idx}` }));
       if (!todoDrafts.length && !ideaDrafts.length) throw new Error('empty');
       setPending({ todos: todoDrafts, ideas: ideaDrafts });
     } catch { showToast('解析に失敗しました。再試行してください。'); }
@@ -1360,14 +1486,19 @@ function MemoTab({ existingProjects, onCommit }) {
         </div>
       )}
 
-      <button className="reflect-btn" onClick={reflect} disabled={loading}>
-        <IcoStar /> TODO・アイデアに反映
-      </button>
+      <div className="reflect-actions">
+        <button className="reflect-btn" onClick={() => reflect('todo')} disabled={loading}>
+          <IcoStar /> TODOに反映
+        </button>
+        <button className="reflect-btn reflect-btn-secondary" onClick={() => reflect('idea')} disabled={loading}>
+          <IcoBulb /> アイデアに反映
+        </button>
+      </div>
 
       <div className="hint-card">
         <div className="hint-title">入力のヒント</div>
         <div className="hint-body">
-          「明日から来週水曜まで出張」→ 期間つきTODOに<br />
+          「明日から来週水曜まで出張」「8月中」「7月1日〜15日」→ 期間つきTODO<br />
           「にんじん、じゃがいも、玉ねぎを買う」→ 3つのTODOに分割<br />
           「新アプリ案: チャット機能を追加」→ プロジェクト『新アプリ案』のアイデア<br />
           既存プロジェクト名で書くと、そのアイデアに詳細が追記されます
