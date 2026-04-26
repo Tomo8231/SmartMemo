@@ -510,7 +510,24 @@ function loadStored(key, fallback) {
   } catch { return fallback; }
 }
 function saveStored(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
+    console.error('[SmartMemo] save failed for', key, e);
+  }
+}
+
+// Synchronous persisted state — writes to localStorage inside the setter so
+// data is committed before the next paint, even if the OS terminates the
+// tab right after a tap.
+function usePersistedState(key, defaultValue) {
+  const [state, setState] = useState(() => loadStored(key, defaultValue));
+  const set = updater => {
+    setState(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveStored(key, next);
+      return next;
+    });
+  };
+  return [state, set];
 }
 
 const pad = n => String(n).padStart(2,'0');
@@ -1513,17 +1530,36 @@ function SettingsTab({ settings, onChange }) {
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
   const [tab, setTab] = useState('memo');
-  const [todos, setTodos] = useState(() => loadStored(LS_TODOS, [
+  const [todos, setTodos] = usePersistedState(LS_TODOS, [
     { id:1, title:'プレゼン資料の作成', startDate:todayStr, endDate:'', time:'10:00', tags:['仕事'], done:false },
     { id:2, title:'牛乳を購入する',     startDate:todayStr, endDate:'', time:'',      tags:['買い物'],done:false },
     { id:3, title:'部屋の片付け',        startDate:'',       endDate:'', time:'',      tags:['家事'], done:false },
-  ]));
-  const [ideas, setIdeas] = useState(() => loadStored(LS_IDEAS, []));
-  const [settings, setSettings] = useState(() => loadStored(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true }));
+  ]);
+  const [ideas, setIdeas] = usePersistedState(LS_IDEAS, []);
+  const [settings, setSettings] = usePersistedState(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true });
 
-  useEffect(() => { saveStored(LS_TODOS, todos); }, [todos]);
-  useEffect(() => { saveStored(LS_IDEAS, ideas); }, [ideas]);
-  useEffect(() => { saveStored(LS_SETTINGS, settings); }, [settings]);
+  // Ask the browser to keep our data even under storage pressure (iOS ITP, etc.)
+  useEffect(() => {
+    if (navigator.storage && navigator.storage.persist) {
+      navigator.storage.persist().catch(() => {});
+    }
+  }, []);
+
+  // Final-resort flush when the page is hidden or backgrounded
+  useEffect(() => {
+    const flush = () => {
+      saveStored(LS_TODOS, todos);
+      saveStored(LS_IDEAS, ideas);
+      saveStored(LS_SETTINGS, settings);
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [todos, ideas, settings]);
 
   const color = COLOR_PRESETS[settings.colorIdx];
   const font  = FONT_SIZE_OPTS[settings.fontIdx];
@@ -1625,7 +1661,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 <script>
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        // Check for updates each load so a stale cached app shell doesn't get
+        // stuck on an old version (e.g. one without persistence).
+        reg.update().catch(() => {});
+      }).catch(() => {});
+    });
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
     });
   }
 </script>
