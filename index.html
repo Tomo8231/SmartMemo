@@ -60,11 +60,13 @@
       font-size:var(--fs-base);
     }
 
-    /* Header */
+    /* Header — height pinned so it cannot vary between tabs */
     .app-header {
       padding:14px 20px 12px;
       background:#fafaf9; border-bottom:1px solid #ebebea;
-      display:flex; align-items:baseline; gap:8px; flex-shrink:0;
+      display:flex; align-items:baseline; gap:8px;
+      flex:0 0 auto;
+      min-height:50px;
     }
     .app-header h1 { font-size:18px; font-weight:700; letter-spacing:-0.6px; color:#1a1a18; }
     .app-header .tagline { font-size:var(--fs-xs); color:#a0a09c; }
@@ -82,11 +84,13 @@
     }
     .tab-pane::-webkit-scrollbar { display:none; }
 
-    /* Bottom Nav */
+    /* Bottom Nav — height pinned so it cannot vary between tabs */
     .bottom-nav {
       display:flex; background:#fafaf9;
       border-top:1px solid #ebebea;
-      padding:10px 0 6px; flex-shrink:0;
+      padding:10px 0 6px;
+      flex:0 0 auto;
+      min-height:54px;
     }
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
@@ -263,6 +267,17 @@
       transition:all .15s; background:#fff;
     }
     .todo-check.checked { background:var(--accent); border-color:var(--accent); }
+    .todo-check.animate-pop { animation: complete-pop .42s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes complete-pop {
+      0%   { transform:scale(1); box-shadow:0 0 0 0 var(--accent-light); }
+      40%  { transform:scale(1.45); box-shadow:0 0 0 10px var(--accent-light); }
+      100% { transform:scale(1); box-shadow:0 0 0 0 rgba(0,0,0,0); }
+    }
+    .todo-item.animate-fade { animation: complete-fade .55s ease; }
+    @keyframes complete-fade {
+      0%   { background:var(--accent-light); }
+      100% { background:#fff; }
+    }
     .todo-body { flex:1; min-width:0; cursor:pointer; }
     .todo-title { font-size:var(--fs-base); font-weight:500; color:#1a1a18; line-height:1.45; }
     .todo-item.done .todo-title { text-decoration:line-through; }
@@ -432,6 +447,42 @@
     .toggle.on::after { left:21px; }
     .toggle.off { background:#d0d0cc; }
 
+    /* Tag customization */
+    .tag-row { padding:14px 16px; border-bottom:1px solid #f0f0ee; }
+    .tag-row:last-child { border-bottom:none; }
+    .tag-row .settings-row-label { margin-bottom:8px; }
+    .tag-chip-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .tag-chip {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:4px 4px 4px 10px; border-radius:6px;
+      background:var(--accent-light); color:var(--accent);
+      font-size:var(--fs-xs); font-weight:600;
+    }
+    .tag-chip-builtin {
+      background:#f0f0ee; color:#6a6a68;
+      padding:4px 10px;
+    }
+    .tag-chip button {
+      width:18px; height:18px; border:none; border-radius:50%;
+      background:transparent; color:var(--accent); cursor:pointer;
+      font-size:14px; line-height:1; padding:0;
+      display:inline-flex; align-items:center; justify-content:center;
+    }
+    .tag-chip button:hover { background:rgba(0,0,0,.08); }
+    .tag-add-row { display:flex; gap:6px; margin-top:10px; }
+    .tag-add-row input {
+      flex:1; padding:8px 11px; border:1px solid #e0e0de; border-radius:7px;
+      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-family:inherit; outline:none;
+    }
+    .tag-add-row input:focus { border-color:var(--accent); }
+    .tag-add-row button {
+      padding:8px 14px; border:none; border-radius:7px;
+      background:var(--accent); color:#fff; cursor:pointer;
+      font-size:var(--fs-sm); font-weight:600; font-family:inherit;
+    }
+    .tag-add-row button:disabled { opacity:.4; cursor:not-allowed; }
+
     /* About */
     .about-card {
       background:#fff; border:1px solid #ebebea; border-radius:12px;
@@ -541,6 +592,30 @@ function saveStored(key, value) {
   }
 }
 
+// Two-tone success "ding" via Web Audio API — no asset, no network.
+// Triggered from a user tap, so iOS auto-resumes the audio context.
+let _audioCtx;
+function playCompleteSound() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    const now = _audioCtx.currentTime;
+    [659.25, 987.77].forEach((freq, i) => {
+      const osc = _audioCtx.createOscillator();
+      const gain = _audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const t = now + i * 0.07;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+      osc.connect(gain).connect(_audioCtx.destination);
+      osc.start(t);
+      osc.stop(t + 0.27);
+    });
+  } catch {}
+}
+
 // Synchronous persisted state — writes to localStorage inside the setter so
 // data is committed before the next paint, even if the OS terminates the
 // tab right after a tap.
@@ -562,7 +637,15 @@ const formatDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDa
 const todayStr = formatDate(today);
 const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const DOW = ['日','月','火','水','木','金','土'];
-const ALL_TAGS = ['買い物','仕事','家事','アイデア','健康','勉強','その他'];
+// Built-in tags. アイデア is reserved for the Ideas tab and never auto-tagged
+// onto TODOs.
+const BUILTIN_TODO_TAGS = ['買い物','仕事','家事','健康','勉強','その他'];
+const BUILTIN_IDEA_TAGS = ['アイデア','買い物','仕事','家事','健康','勉強','その他'];
+const IDEA_TAG = 'アイデア';
+// Backwards compat — some older code paths still refer to ALL_TAGS.
+const ALL_TAGS = BUILTIN_IDEA_TAGS;
+const getTodoTagOptions = customTags => [...BUILTIN_TODO_TAGS, ...((customTags||[]).filter(t => !BUILTIN_IDEA_TAGS.includes(t)))];
+const getIdeaTagOptions = customTags => [...BUILTIN_IDEA_TAGS, ...((customTags||[]).filter(t => !BUILTIN_IDEA_TAGS.includes(t)))];
 
 const COLOR_PRESETS = [
   { name:'オレンジ', value:'#D4622A', light:'rgba(212,98,42,.10)',  text:'#fff' },
@@ -742,6 +825,15 @@ function inferTags(text) {
   if (tags.length === 0) tags.push('その他');
   return tags;
 }
+// TODO tagger — never returns 'アイデア'.
+function inferTagsForTodo(text) {
+  return inferTags(text).filter(t => t !== IDEA_TAG);
+}
+// Idea tagger — defaults to 'アイデア' if nothing else matches.
+function inferTagsForIdea(text) {
+  const t = inferTags(text).filter(x => x !== 'その他');
+  return t.length ? t : [IDEA_TAG];
+}
 
 function isTodoLine(line) {
   if (IDEA_HINT_RE.test(line) && !ACTION_VERB_RE.test(line)) return false;
@@ -759,7 +851,7 @@ function extractTodosFromLine(line) {
   if (verbM && /[、,・]/.test(verbM[1])) {
     const nouns = verbM[1].split(/[、,・]/).map(s=>s.trim()).filter(Boolean);
     const verb = verbM[2];
-    const tags = inferTags(line);
+    const tags = inferTagsForTodo(line);
     for (const n of nouns) {
       out.push({ title:`${n}を${verb}`, startDate:dates.startDate, endDate:dates.endDate, time, tags });
     }
@@ -770,10 +862,10 @@ function extractTodosFromLine(line) {
   const parts = cleaned.split(/[、,]/).map(s=>s.trim()).filter(Boolean);
   if (parts.length > 1) {
     for (const p of parts) {
-      out.push({ title:p, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTags(p) });
+      out.push({ title:p, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTagsForTodo(p) });
     }
   } else {
-    out.push({ title: cleaned || line, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTags(line) });
+    out.push({ title: cleaned || line, startDate:dates.startDate, endDate:dates.endDate, time, tags:inferTagsForTodo(line) });
   }
   return out;
 }
@@ -823,7 +915,7 @@ function extractIdeaFromLine(line, existingProjects) {
     projectName,
     summary: summary === projectName ? '' : summary,
     details: [],
-    tags: inferTags(line),
+    tags: inferTagsForIdea(line),
   };
 }
 
@@ -899,7 +991,9 @@ async function parseMemoToItems(text, existingProjects = []) {
         `   - 「7月1日〜15日」 → startDate=yyyy-07-01, endDate=yyyy-07-15\n` +
         `   - 「7月1日〜8月15日」→ startDate=yyyy-07-01, endDate=yyyy-08-15\n` +
         `   - 「明日から来週水曜まで」→ 期間で記述\n` +
-        `5. 時間は HH:MM か ""。tags は: 買い物 / 仕事 / 家事 / アイデア / 健康 / 勉強 / その他\n` +
+        `5. 時間は HH:MM か ""。\n` +
+        `   - TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」は使わない）\n` +
+        `   - アイデアのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
         `6. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
         `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
         `8. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n\n` +
@@ -983,13 +1077,19 @@ const IcoSettingsNav = ({ active }) => (
 function Calendar({ todos, selectedDate, onSelect }) {
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
+  const swipeRef = useRef(null);
 
   const firstDay = new Date(vy, vm, 1);
   const lastDay  = new Date(vy, vm+1, 0);
   const cells = [];
   for (let i = firstDay.getDay()-1; i >= 0; i--) cells.push({ date:new Date(vy,vm,-i), cur:false });
   for (let d = 1; d <= lastDay.getDate(); d++) cells.push({ date:new Date(vy,vm,d), cur:true });
-  while (cells.length%7) { const l=cells[cells.length-1].date; cells.push({date:new Date(l.getTime()+86400000),cur:false}); }
+  // Always pad to 6 rows (42 cells) so the calendar height is constant
+  // regardless of which month is displayed.
+  while (cells.length < 42) {
+    const l = cells[cells.length-1].date;
+    cells.push({ date:new Date(l.getTime()+86400000), cur:false });
+  }
 
   const dotSet = new Set();
   todos.forEach(t => {
@@ -1001,8 +1101,26 @@ function Calendar({ todos, selectedDate, onSelect }) {
   const prev = () => vm===0 ? (setVm(11),setVy(y=>y-1)) : setVm(m=>m-1);
   const next = () => vm===11 ? (setVm(0),setVy(y=>y+1)) : setVm(m=>m+1);
 
+  // Horizontal swipe → change month
+  function onTouchStart(e) {
+    const t = e.touches[0];
+    swipeRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
+  }
+  function onTouchEnd(e) {
+    if (!swipeRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - swipeRef.current.x;
+    const dy = t.clientY - swipeRef.current.y;
+    const dt = Date.now() - swipeRef.current.time;
+    swipeRef.current = null;
+    if (dt > 600) return;                       // too slow — likely scroll
+    if (Math.abs(dx) < 50) return;              // too short
+    if (Math.abs(dy) > Math.abs(dx) * 0.6) return; // too vertical
+    if (dx < 0) next(); else prev();
+  }
+
   return (
-    <div className="cal-wrapper">
+    <div className="cal-wrapper" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
       <div className="cal-head">
         <span className="cal-month-label">{vy}年 {MONTH_JP[vm]}</span>
         <div className="cal-nav">
@@ -1029,7 +1147,8 @@ function Calendar({ todos, selectedDate, onSelect }) {
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, onSave, onClose }) {
+function EditModal({ todo, onSave, onClose, customTags = [] }) {
+  const tagOptions = getTodoTagOptions(customTags);
   const [title,    setTitle]    = useState(todo.title);
   const [startDate,setStartDate]= useState(todo.startDate);
   const [endDate,  setEndDate]  = useState(todo.endDate);
@@ -1072,7 +1191,7 @@ function EditModal({ todo, onSave, onClose }) {
         <div className="modal-field">
           <label>タグ</label>
           <div className="modal-tags">
-            {ALL_TAGS.map(t => (
+            {tagOptions.map(t => (
               <button key={t} className={`modal-tag${tags.includes(t)?' sel':''}`} onClick={()=>toggleTag(t)}>{t}</button>
             ))}
           </div>
@@ -1089,7 +1208,8 @@ function EditModal({ todo, onSave, onClose }) {
 // ─────────────────────────────────────────────────────────────
 // Idea Edit Modal
 // ─────────────────────────────────────────────────────────────
-function IdeaEditModal({ idea, projects, onSave, onClose }) {
+function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [] }) {
+  const tagOptions = getIdeaTagOptions(customTags);
   const [projectName, setProjectName] = useState(idea.projectName || '');
   const [summary,     setSummary]     = useState(idea.summary || '');
   const [details,     setDetails]     = useState((idea.details || []).join('\n'));
@@ -1133,7 +1253,7 @@ function IdeaEditModal({ idea, projects, onSave, onClose }) {
         <div className="modal-field">
           <label>タグ</label>
           <div className="modal-tags">
-            {ALL_TAGS.map(t => (
+            {tagOptions.map(t => (
               <button key={t} className={`modal-tag${tags.includes(t)?' sel':''}`} onClick={()=>toggleTag(t)}>{t}</button>
             ))}
           </div>
@@ -1150,10 +1270,19 @@ function IdeaEditModal({ idea, projects, onSave, onClose }) {
 // ─────────────────────────────────────────────────────────────
 // Todo Item
 // ─────────────────────────────────────────────────────────────
-function TodoItem({ todo, onToggle, onDelete, onEdit }) {
+function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled }) {
+  const [animating, setAnimating] = useState(false);
+  function handleToggle() {
+    if (!todo.done) {
+      setAnimating(true);
+      if (soundEnabled) playCompleteSound();
+      setTimeout(() => setAnimating(false), 600);
+    }
+    onToggle(todo.id);
+  }
   return (
-    <div className={`todo-item${todo.done?' done':''}`}>
-      <div className={`todo-check${todo.done?' checked':''}`} onClick={()=>onToggle(todo.id)}>
+    <div className={`todo-item${todo.done?' done':''}${animating?' animate-fade':''}`}>
+      <div className={`todo-check${todo.done?' checked':''}${animating?' animate-pop':''}`} onClick={handleToggle}>
         {todo.done && <IcoCheck />}
       </div>
       <div className="todo-body" onClick={()=>onEdit(todo)}>
@@ -1176,7 +1305,7 @@ function TodoItem({ todo, onToggle, onDelete, onEdit }) {
 // ─────────────────────────────────────────────────────────────
 // Confirm Sheet — review/edit pending TODOs and Ideas before adding
 // ─────────────────────────────────────────────────────────────
-function ConfirmSheet({ pending, existingProjects, onUpdateTodo, onDeleteTodo, onUpdateIdea, onDeleteIdea, onConfirm, onCancel }) {
+function ConfirmSheet({ pending, existingProjects, customTags, onUpdateTodo, onDeleteTodo, onUpdateIdea, onDeleteIdea, onConfirm, onCancel }) {
   const [editingTodo, setEditingTodo] = useState(null);
   const [editingIdea, setEditingIdea] = useState(null);
   const total = pending.todos.length + pending.ideas.length;
@@ -1241,12 +1370,14 @@ function ConfirmSheet({ pending, existingProjects, onUpdateTodo, onDeleteTodo, o
       {editingTodo && (
         <EditModal todo={editingTodo}
           onSave={u => { onUpdateTodo(u); setEditingTodo(null); }}
-          onClose={()=>setEditingTodo(null)} />
+          onClose={()=>setEditingTodo(null)}
+          customTags={customTags} />
       )}
       {editingIdea && (
         <IdeaEditModal idea={editingIdea} projects={existingProjects}
           onSave={u => { onUpdateIdea(u); setEditingIdea(null); }}
-          onClose={()=>setEditingIdea(null)} />
+          onClose={()=>setEditingIdea(null)}
+          customTags={customTags} />
       )}
     </div>
   );
@@ -1255,7 +1386,7 @@ function ConfirmSheet({ pending, existingProjects, onUpdateTodo, onDeleteTodo, o
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, onCommit }) {
+function MemoTab({ existingProjects, customTags, onCommit }) {
   const [text,      setText]     = useState('');
   const [loading,   setLoading]  = useState(false);
   const [loadingMsg,setLMsg]     = useState('');
@@ -1455,6 +1586,7 @@ function MemoTab({ existingProjects, onCommit }) {
         <ConfirmSheet
           pending={pending}
           existingProjects={existingProjects}
+          customTags={customTags}
           onUpdateTodo={u => setPending(p => ({ ...p, todos: p.todos.map(t => t.id===u.id ? u : t) }))}
           onDeleteTodo={id => setPending(p => ({ ...p, todos: p.todos.filter(t => t.id !== id) }))}
           onUpdateIdea={u => setPending(p => ({ ...p, ideas: p.ideas.map(t => t.id===u.id ? u : t) }))}
@@ -1511,7 +1643,7 @@ function MemoTab({ existingProjects, onCommit }) {
 // ─────────────────────────────────────────────────────────────
 // TODO Tab
 // ─────────────────────────────────────────────────────────────
-function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
+function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags }) {
   const [sel,      setSel]      = useState(todayStr);
   const [editing,  setEditing]  = useState(null);
 
@@ -1524,7 +1656,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
 
   return (
     <div className="todo-tab">
-      {editing && <EditModal todo={editing} onSave={onUpdate} onClose={()=>setEditing(null)} />}
+      {editing && <EditModal todo={editing} onSave={onUpdate} onClose={()=>setEditing(null)} customTags={customTags} />}
       <Calendar todos={todos} selectedDate={sel} onSelect={setSel} />
       <div className="todo-list-area">
         <div className="section-head">
@@ -1533,7 +1665,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
         </div>
         {dateTodos.length===0
           ? <div className="todo-empty">この日のタスクはありません</div>
-          : dateTodos.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} />)
+          : dateTodos.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)
         }
         {undated.length>0 && <>
           <div className="divider"/>
@@ -1541,7 +1673,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
             <span className="section-head-label">日付未定</span>
             <span className="section-count">{undated.length}</span>
           </div>
-          {undated.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} />)}
+          {undated.map(t=><TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)}
         </>}
       </div>
     </div>
@@ -1551,7 +1683,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate }) {
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete }) {
+function IdeasTab({ ideas, onUpdate, onDelete, customTags }) {
   const [editing, setEditing] = useState(null);
   const projectNames = ideas.map(i => i.projectName);
 
@@ -1575,6 +1707,7 @@ function IdeasTab({ ideas, onUpdate, onDelete }) {
           projects={projectNames.filter(p => p !== editing.projectName)}
           onSave={u => { onUpdate(u); setEditing(null); }}
           onClose={() => setEditing(null)}
+          customTags={customTags}
         />
       )}
       {ideas.map(i => (
@@ -1603,7 +1736,19 @@ function IdeasTab({ ideas, onUpdate, onDelete }) {
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
 function SettingsTab({ settings, onChange }) {
-  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate } = settings;
+  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound } = settings;
+  const soundOn = completeSound !== false;
+  const [newTag, setNewTag] = useState('');
+  const trimmed = newTag.trim();
+  const canAdd =
+    trimmed.length > 0 &&
+    !BUILTIN_IDEA_TAGS.includes(trimmed) &&
+    !(settings.customTags||[]).includes(trimmed);
+  const addTag = () => {
+    if (!canAdd) return;
+    onChange('customTags', [...(settings.customTags||[]), trimmed]);
+    setNewTag('');
+  };
 
   return (
     <div className="settings-tab tab-pane">
@@ -1637,7 +1782,7 @@ function SettingsTab({ settings, onChange }) {
         </div>
       </div>
 
-      <div className="settings-section-title">通知</div>
+      <div className="settings-section-title">通知・サウンド</div>
       <div className="settings-card">
         <div className="settings-row">
           <div>
@@ -1645,6 +1790,13 @@ function SettingsTab({ settings, onChange }) {
             <div className="settings-row-sub">期限前にリマインド</div>
           </div>
           <button className={`toggle${notifEnabled?' on':' off'}`} onClick={()=>onChange('notifEnabled',!notifEnabled)} />
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">完了サウンド</div>
+            <div className="settings-row-sub">TODOにチェックを入れた時に音とアニメーション</div>
+          </div>
+          <button className={`toggle${soundOn?' on':' off'}`} onClick={()=>onChange('completeSound',!soundOn)} />
         </div>
       </div>
 
@@ -1663,6 +1815,40 @@ function SettingsTab({ settings, onChange }) {
             <div className="settings-row-sub">「来週」などの相対日付を解析</div>
           </div>
           <button className={`toggle${autoDate?' on':' off'}`} onClick={()=>onChange('autoDate',!autoDate)} />
+        </div>
+      </div>
+
+      <div className="settings-section-title">タグ</div>
+      <div className="settings-card">
+        <div className="tag-row">
+          <div className="settings-row-label">既定タグ</div>
+          <div className="settings-row-sub">削除はできません。アイデア用は「アイデア」のみ</div>
+          <div className="tag-chip-list">
+            {BUILTIN_IDEA_TAGS.map(t => (
+              <span key={t} className="tag-chip tag-chip-builtin">{t}</span>
+            ))}
+          </div>
+        </div>
+        <div className="tag-row">
+          <div className="settings-row-label">カスタムタグ</div>
+          <div className="settings-row-sub">独自のタグを追加・削除できます（TODO・アイデア両方で使用可能）</div>
+          {(settings.customTags||[]).length > 0 && (
+            <div className="tag-chip-list">
+              {(settings.customTags||[]).map(t => (
+                <span key={t} className="tag-chip">
+                  {t}
+                  <button onClick={() => onChange('customTags', (settings.customTags||[]).filter(x => x !== t))}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="tag-add-row">
+            <input value={newTag} onChange={e=>setNewTag(e.target.value)}
+              placeholder="新しいタグ名（例: 副業）"
+              onKeyDown={e=>{ if (e.key==='Enter') addTag(); }}
+              maxLength="12" />
+            <button disabled={!canAdd} onClick={addTag}>追加</button>
+          </div>
         </div>
       </div>
 
@@ -1686,7 +1872,7 @@ function SmartMemoApp() {
     { id:3, title:'部屋の片付け',        startDate:'',       endDate:'', time:'',      tags:['家事'], done:false },
   ]);
   const [ideas, setIdeas] = usePersistedState(LS_IDEAS, []);
-  const [settings, setSettings] = usePersistedState(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true });
+  const [settings, setSettings] = usePersistedState(LS_SETTINGS, { colorIdx:0, fontIdx:1, notifEnabled:true, autoTag:true, autoDate:true, completeSound:true, customTags:[] });
 
   // Ask the browser to keep our data even under storage pressure (iOS ITP, etc.)
   useEffect(() => {
@@ -1759,9 +1945,9 @@ function SmartMemoApp() {
         <span className="tagline">AI でタスクを自動整理</span>
       </div>
       <div className="tab-content">
-        {tab==='memo'     && <MemoTab existingProjects={existingProjects} onCommit={commit} />}
-        {tab==='todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} />}
-        {tab==='idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} />}
+        {tab==='memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags||[]} onCommit={commit} />}
+        {tab==='todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} customTags={settings.customTags||[]} />}
+        {tab==='idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags||[]} />}
         {tab==='settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav">
