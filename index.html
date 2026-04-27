@@ -2196,28 +2196,37 @@ function SmartMemoApp() {
   );
 }
 
+const FRAME_W = 402;
+const FRAME_H = 874;
+
 function Root() {
-  // Render fullscreen (no design-tool device frame) for ANY touch device,
-  // narrow viewport, or installed PWA. `pointer:coarse` catches iPads and
-  // iPhones with "Request Desktop Site" turned on (where layout viewport
-  // becomes ~980px and max-width:500 stops matching).
-  const detect = () =>
-    typeof window !== 'undefined' && (
-      window.matchMedia('(max-width:500px)').matches ||
+  // Show fullscreen (no device frame) when:
+  // - window is too small to comfortably show the frame, OR
+  // - device is touch-based (real phone/tablet), OR
+  // - running as installed PWA
+  const detect = () => {
+    if (typeof window === 'undefined') return true;
+    return (
+      window.innerWidth  < FRAME_W + 60 ||
+      window.innerHeight < FRAME_H + 40 ||
       window.matchMedia('(pointer:coarse)').matches ||
       window.matchMedia('(display-mode:standalone)').matches ||
       window.navigator.standalone === true
     );
+  };
   const [fullscreen, setFullscreen] = useState(detect);
   useEffect(() => {
+    const update = () => setFullscreen(detect());
     const mqs = [
-      window.matchMedia('(max-width:500px)'),
       window.matchMedia('(pointer:coarse)'),
       window.matchMedia('(display-mode:standalone)'),
     ];
-    const update = () => setFullscreen(detect());
     mqs.forEach(mq => mq.addEventListener('change', update));
-    return () => mqs.forEach(mq => mq.removeEventListener('change', update));
+    window.addEventListener('resize', update);
+    return () => {
+      mqs.forEach(mq => mq.removeEventListener('change', update));
+      window.removeEventListener('resize', update);
+    };
   }, []);
 
   if (fullscreen) return <SmartMemoApp />;
