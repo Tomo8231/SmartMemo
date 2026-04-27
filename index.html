@@ -24,6 +24,7 @@
       font-family:'Inter',-apple-system,sans-serif;
       overscroll-behavior:none;
       -webkit-font-smoothing:antialiased;
+      overflow-x:hidden;  /* belt-and-suspenders against any horizontal escape */
     }
     #root { display:flex; align-items:center; justify-content:center; width:100%; height:100%; }
 
@@ -304,6 +305,7 @@
       position:absolute; inset:0; background:rgba(0,0,0,.35);
       display:flex; align-items:flex-end; z-index:300;
       animation:bdIn .2s ease;
+      max-width:100%; max-height:100%; /* never escape parent .app */
     }
     @keyframes bdIn { from{opacity:0} to{opacity:1} }
     .modal-sheet {
@@ -2195,23 +2197,27 @@ function SmartMemoApp() {
 }
 
 function Root() {
+  // Render fullscreen (no design-tool device frame) for ANY touch device,
+  // narrow viewport, or installed PWA. `pointer:coarse` catches iPads and
+  // iPhones with "Request Desktop Site" turned on (where layout viewport
+  // becomes ~980px and max-width:500 stops matching).
   const detect = () =>
     typeof window !== 'undefined' && (
       window.matchMedia('(max-width:500px)').matches ||
+      window.matchMedia('(pointer:coarse)').matches ||
       window.matchMedia('(display-mode:standalone)').matches ||
       window.navigator.standalone === true
     );
   const [fullscreen, setFullscreen] = useState(detect);
   useEffect(() => {
-    const mq1 = window.matchMedia('(max-width:500px)');
-    const mq2 = window.matchMedia('(display-mode:standalone)');
+    const mqs = [
+      window.matchMedia('(max-width:500px)'),
+      window.matchMedia('(pointer:coarse)'),
+      window.matchMedia('(display-mode:standalone)'),
+    ];
     const update = () => setFullscreen(detect());
-    mq1.addEventListener('change', update);
-    mq2.addEventListener('change', update);
-    return () => {
-      mq1.removeEventListener('change', update);
-      mq2.removeEventListener('change', update);
-    };
+    mqs.forEach(mq => mq.addEventListener('change', update));
+    return () => mqs.forEach(mq => mq.removeEventListener('change', update));
   }, []);
 
   if (fullscreen) return <SmartMemoApp />;
