@@ -5,6 +5,8 @@ $root = $PSScriptRoot
 $mime = @{
   '.html' = 'text/html; charset=utf-8'
   '.js'   = 'application/javascript; charset=utf-8'
+  '.tsx'  = 'application/javascript; charset=utf-8'
+  '.ts'   = 'application/javascript; charset=utf-8'
   '.css'  = 'text/css; charset=utf-8'
   '.json' = 'application/json; charset=utf-8'
   '.webmanifest' = 'application/manifest+json; charset=utf-8'
