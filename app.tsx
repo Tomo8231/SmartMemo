@@ -564,6 +564,7 @@ const IcoSettingsNav = ({ active }: { active: boolean }) => (
 function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void }) {
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
+  const [direction, setDirection] = useState<'prev' | 'next' | null>(null);
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const firstDay = new Date(vy, vm, 1);
@@ -583,8 +584,20 @@ function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDa
     for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) dotSet.add(formatDate(new Date(d)));
   });
 
-  const prev = () => vm === 0 ? (setVm(11), setVy(y => y - 1)) : setVm(m => m - 1);
-  const next = () => vm === 11 ? (setVm(0),  setVy(y => y + 1)) : setVm(m => m + 1);
+  const prev = () => {
+    setDirection('prev');
+    setTimeout(() => {
+      vm === 0 ? (setVm(11), setVy(y => y - 1)) : setVm(m => m - 1);
+      setDirection(null);
+    }, 200);
+  };
+  const next = () => {
+    setDirection('next');
+    setTimeout(() => {
+      vm === 11 ? (setVm(0),  setVy(y => y + 1)) : setVm(m => m + 1);
+      setDirection(null);
+    }, 200);
+  };
 
   function onTouchStart(e: React.TouchEvent) {
     const t = e.touches[0];
@@ -613,13 +626,27 @@ function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDa
         </div>
       </div>
       <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
-      <div className="cal-grid">
+      <div className={`cal-grid${direction ? ` cal-slide-${direction}` : ''}`}>
         {cells.map((c, i) => {
           const ds = formatDate(c.date), isTd = ds === todayStr, isSel = ds === selectedDate, hasDot = dotSet.has(ds);
+          const cellTodos = todos.filter(t => {
+            if (!t.startDate) return false;
+            return ds >= t.startDate && ds <= (t.endDate || t.startDate);
+          });
           return (
             <div key={i} className={`cal-cell${!c.cur ? ' other-month' : ''}${isTd && !isSel ? ' today' : ''}${isSel ? ' selected' : ''}`} onClick={() => onSelect(ds)}>
               <span className="cal-num">{c.date.getDate()}</span>
-              {hasDot && <div className="cal-dot"/>}
+              {cellTodos.length > 0 && (
+                <div className="cal-todos">
+                  {cellTodos.slice(0, 2).map((t, idx) => (
+                    <div key={idx} className="cal-todo-item" title={t.title}>
+                      {t.title.length > 12 ? t.title.substring(0, 12) + '...' : t.title}
+                    </div>
+                  ))}
+                  {cellTodos.length > 2 && <div className="cal-more">+{cellTodos.length - 2}</div>}
+                </div>
+              )}
+              {hasDot && cellTodos.length === 0 && <div className="cal-dot"/>}
             </div>
           );
         })}
@@ -1291,34 +1318,50 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
 }) {
   const [sel,     setSel]     = useState(todayStr);
   const [editing, setEditing] = useState<Todo | null>(null);
+  const [showCalendar, setShowCalendar] = useState(true);
 
   const dateTodos = todos.filter(t => {
     if (!t.startDate) return false;
     const d = new Date(sel), s = new Date(t.startDate), e = t.endDate ? new Date(t.endDate) : s;
     return d >= s && d <= e;
   });
+  
+  // Sort: incomplete first, then done
+  const activeTodos = dateTodos.filter(t => !t.done);
+  const doneTodos = dateTodos.filter(t => t.done);
+  const sortedDateTodos = [...activeTodos, ...doneTodos];
+  
   const undated = todos.filter(t => !t.startDate);
+  const activeUndated = undated.filter(t => !t.done);
+  const doneUndated = undated.filter(t => t.done);
+  const sortedUndated = [...activeUndated, ...doneUndated];
 
   return (
     <div className="todo-tab">
       {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
-      <Calendar todos={todos} selectedDate={sel} onSelect={setSel} />
+      {showCalendar && <Calendar todos={todos} selectedDate={sel} onSelect={setSel} />}
+      <div className="todo-list-header">
+        <button className="cal-toggle" onClick={() => setShowCalendar(!showCalendar)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
+          <span className="cal-toggle-label">スケジュール</span>
+          <span className="cal-toggle-icon">{showCalendar ? '↑' : '↓'}</span>
+        </button>
+      </div>
       <div className="todo-list-area">
         <div className="section-head">
           <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
-          {dateTodos.length > 0 && <span className="section-count">{dateTodos.length}</span>}
+          {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
         </div>
-        {dateTodos.length === 0
+        {sortedDateTodos.length === 0
           ? <div className="todo-empty">この日のタスクはありません</div>
-          : dateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)
+          : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)
         }
-        {undated.length > 0 && <>
+        {sortedUndated.length > 0 && <>
           <div className="divider"/>
           <div className="section-head">
             <span className="section-head-label">日付未定</span>
-            <span className="section-count">{undated.length}</span>
+            <span className="section-count">{sortedUndated.length}</span>
           </div>
-          {undated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)}
+          {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)}
         </>}
       </div>
     </div>
