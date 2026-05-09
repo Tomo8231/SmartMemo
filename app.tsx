@@ -37,7 +37,7 @@ type Settings = {
   geminiApiKey: string;
   soundType?: string;
   ideaTabs?: string[];
-  xp?: number;
+  coins?: number;
 };
 type TodoDraft = {
   id?: number | string;
@@ -228,22 +228,83 @@ const FONT_SIZE_OPTS = [
   { label:'大', base:'16px', sm:'14px', xs:'12px' },
 ];
 
-function xpToLevel(xp: number): { level: number; current: number; needed: number } {
-  let level = 1;
-  while (xp >= (level * (level + 1) / 2) * 10) level++;
-  const prevXp = ((level - 1) * level / 2) * 10;
-  const nextXp  = (level * (level + 1) / 2) * 10;
-  return { level, current: xp - prevXp, needed: nextXp - prevXp };
+const GACHA_COST = 50;
+const GACHA_ITEMS = [
+  { label: 'ハズレ',      coins: 0,   rarity: 'common', stars: '★',     color: '#aaa' },
+  { label: 'コイン +5',   coins: 5,   rarity: 'common', stars: '★★',    color: '#888' },
+  { label: 'コイン +20',  coins: 20,  rarity: 'rare',   stars: '★★★',   color: '#2e7bef' },
+  { label: 'コイン +50',  coins: 50,  rarity: 'super',  stars: '★★★★',  color: '#9c27b0' },
+  { label: 'コイン +100', coins: 100, rarity: 'ultra',  stars: '★★★★★', color: '#e91e63' },
+];
+const GACHA_WEIGHTS = [35, 30, 20, 12, 3];
+function pickGacha() {
+  const r = Math.random() * 100;
+  let cum = 0;
+  for (let i = 0; i < GACHA_ITEMS.length; i++) {
+    cum += GACHA_WEIGHTS[i];
+    if (r < cum) return GACHA_ITEMS[i];
+  }
+  return GACHA_ITEMS[0];
 }
 
-function LevelBadge({ xp }: { xp: number }) {
-  const { level, current, needed } = xpToLevel(xp);
-  const pct = needed > 0 ? Math.round((current / needed) * 100) : 0;
+const IcoCoin = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)">
+    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+  </svg>
+);
+
+function CoinBadge({ coins, onGacha }: { coins: number; onGacha: () => void }) {
   return (
-    <div className="level-badge" title={`${xp} XP`}>
-      <div className="level-badge-main">Lv.{level}</div>
-      <div className="level-badge-bar">
-        <div className="level-badge-fill" style={{ width: `${pct}%` }} />
+    <button className="coin-badge" onClick={onGacha} title="ガチャを引く">
+      <IcoCoin />
+      <span className="coin-badge-count">{coins}</span>
+      <span className="coin-badge-gacha">ガチャ</span>
+    </button>
+  );
+}
+
+function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () => void; onResult: (netDelta: number) => void }) {
+  const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
+  const [result, setResult] = useState<typeof GACHA_ITEMS[0] | null>(null);
+  const [localCoins, setLocalCoins] = useState(coins);
+  const canAfford = localCoins >= GACHA_COST;
+
+  function pull() {
+    if (!canAfford || phase === 'spinning') return;
+    setLocalCoins(c => c - GACHA_COST);
+    setPhase('spinning');
+    setTimeout(() => {
+      const r = pickGacha();
+      setResult(r);
+      setLocalCoins(c => c + r.coins);
+      onResult(r.coins - GACHA_COST);
+      setPhase('result');
+    }, 1300);
+  }
+
+  function again() { setPhase('idle'); setResult(null); }
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="gacha-modal">
+        <button className="gacha-close-btn" onClick={onClose}>✕</button>
+        <div className="gacha-title">ガチャ</div>
+        <div className="gacha-cost-info"><IcoCoin />&nbsp;{GACHA_COST}コインで1回</div>
+        <div className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}>
+          {phase !== 'result'
+            ? <div className="gacha-capsule-inner" />
+            : <div className="gacha-result" style={{ color: result!.color }}>
+                <div className="gacha-result-rarity">{result!.stars}</div>
+                <div className="gacha-result-label">{result!.label}</div>
+              </div>
+          }
+        </div>
+        <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{localCoins}</div>
+        {phase !== 'spinning' && (
+          <button className="gacha-pull-btn" onClick={phase === 'result' ? again : pull} disabled={phase === 'idle' && !canAfford}>
+            {phase === 'result' ? 'もう一度' : canAfford ? 'ガチャを引く！' : 'コインが足りません'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -745,7 +806,16 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
           <button className={`mode-btn${mode === 'month' ? ' active' : ''}`} onClick={() => onModeChange?.('month')}>月</button>
           <button className={`mode-btn${mode === 'week' ? ' active' : ''}`} onClick={() => onModeChange?.('week')}>週</button>
         </div>
-        <span className="cal-month-label">{mode === 'month' ? `${MONTH_JP[vm]} ${vy}` : '週間'}</span>
+        <span className="cal-month-label">{mode === 'month'
+          ? `${String(vy)}/${String(vm + 1).padStart(2, '0')}`
+          : (() => {
+              const sd = new Date(selectedDate + 'T00:00:00');
+              const ws = new Date(sd); ws.setDate(sd.getDate() - sd.getDay());
+              const we = new Date(ws); we.setDate(ws.getDate() + 6);
+              const f = (d: Date) => `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+              return `${f(ws)}〜${f(we)}`;
+            })()
+        }</span>
         <div className="cal-nav">
           <button className="cal-nav-btn" onClick={prev}>‹</button>
           <button className="cal-nav-btn" onClick={next}>›</button>
@@ -926,6 +996,17 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [], ideaT
 // ─────────────────────────────────────────────────────────────
 // Todo Item
 // ─────────────────────────────────────────────────────────────
+const SPARK_POS = [
+  { dx: 30, dy: 0, bg: 'var(--accent)' },
+  { dx: 21, dy: -21, bg: '#FFD700' },
+  { dx: 0, dy: -30, bg: 'var(--accent)' },
+  { dx: -21, dy: -21, bg: '#FF69B4' },
+  { dx: -30, dy: 0, bg: 'var(--accent)' },
+  { dx: -21, dy: 21, bg: '#FFD700' },
+  { dx: 0, dy: 30, bg: '#FF69B4' },
+  { dx: 21, dy: 21, bg: 'var(--accent)' },
+];
+
 function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi' }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
@@ -935,18 +1016,28 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
   soundType?: string;
 }) {
   const [animating, setAnimating] = useState(false);
+  const [sparkling, setSparkling] = useState(false);
   const justAdded = !!todo.addedAt && (Date.now() - todo.addedAt) < 800;
 
   function handleToggle() {
     if (!todo.done) {
       setAnimating(true);
+      setSparkling(true);
       if (soundEnabled) playSound(soundType);
       setTimeout(() => setAnimating(false), 600);
+      setTimeout(() => setSparkling(false), 700);
     }
     onToggle(todo.id);
   }
   return (
     <div className={`todo-item${todo.done ? ' done' : ''}${animating ? ' animate-fade' : ''}${justAdded ? ' just-added' : ''}`}>
+      {sparkling && (
+        <div className="todo-sparkle">
+          {SPARK_POS.map(({ dx, dy, bg }, i) => (
+            <span key={i} style={{ '--dx': `${dx}px`, '--dy': `${dy}px`, background: bg, animationDelay: `${i * 20}ms` } as any} />
+          ))}
+        </div>
+      )}
       <div className={`todo-check${todo.done ? ' checked' : ''}${animating ? ' animate-pop' : ''}`} onClick={handleToggle}>
         {todo.done && <IcoCheck />}
       </div>
@@ -1935,6 +2026,7 @@ function SmartMemoApp() {
   const [tab, setTab] = useState<Tab>('memo');
   const [pulseTabs, setPulseTabs] = useState<Set<Tab>>(new Set());
   const [micTrigger, setMicTrigger] = useState(0);
+  const [showGacha, setShowGacha] = useState(false);
   const [todos, setTodos] = usePersistedState<Todo[]>(LS_TODOS, [
     { id: 1, title: 'プレゼン資料の作成', startDate: todayStr, endDate: '', time: '10:00', tags: ['仕事'],   done: false },
     { id: 2, title: '牛乳を購入する',     startDate: todayStr, endDate: '', time: '',      tags: ['買い物'], done: false },
@@ -1943,7 +2035,7 @@ function SmartMemoApp() {
   const [ideas, setIdeas] = usePersistedState<Idea[]>(LS_IDEAS, []);
   const [settings, setSettings] = usePersistedState<Settings>(LS_SETTINGS, {
     colorIdx: 0, fontIdx: 1, notifEnabled: true, autoTag: true, autoDate: true,
-    completeSound: true, customTags: [], geminiApiKey: '',
+    completeSound: true, customTags: [], geminiApiKey: '', coins: 0,
   });
 
   useEffect(() => {
@@ -2007,7 +2099,10 @@ function SmartMemoApp() {
 
   const toggle = (id: number | string) => {
     const todo = todos.find(t => t.id === id);
-    if (todo && !todo.done) setSettings(p => ({ ...p, xp: (p.xp || 0) + 10 }));
+    if (todo) {
+      const delta = todo.done ? -10 : 10;
+      setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
+    }
     setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
   };
   const remove     = (id: number | string) => setTodos(p => p.filter(t => t.id !== id));
@@ -2032,7 +2127,7 @@ function SmartMemoApp() {
           <h1>SmartMemo</h1>
           <span className="tagline">AI でタスクを自動整理</span>
         </div>
-        <LevelBadge xp={settings.xp || 0} />
+        <CoinBadge coins={settings.coins || 0} onGacha={() => setShowGacha(true)} />
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
@@ -2059,6 +2154,13 @@ function SmartMemoApp() {
           </div>
         ))}
       </div>
+      {showGacha && (
+        <GachaModal
+          coins={settings.coins || 0}
+          onClose={() => setShowGacha(false)}
+          onResult={delta => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }))}
+        />
+      )}
     </div>
   );
 }
