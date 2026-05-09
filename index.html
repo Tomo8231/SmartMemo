@@ -30,7 +30,7 @@
     /* Mobile / installed PWA — safe-area inserts */
     @media (max-width:500px), (display-mode:standalone) {
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
-      .bottom-nav   { padding-bottom:calc(8px  + env(safe-area-inset-bottom)); }
+      .bottom-nav   { padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
       .modal-sheet, .confirm-sheet { padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
@@ -132,30 +132,43 @@
 
     /* Bottom nav */
     .bottom-nav {
-      display:flex; background:#fafaf9;
-      border-top:1px solid #ebebea;
-      padding:4px 0 8px;
+      display:flex; background:#fff;
+      border-top:none;
+      box-shadow:0 -4px 24px rgba(0,0,0,.10);
+      border-radius:28px 28px 0 0;
+      padding:4px 8px 10px;
       flex:0 0 auto;
-      min-height:70px;
-      align-items:flex-end;
+      min-height:72px;
+      align-items:stretch;
       overflow:visible;
       position:relative;
+      z-index:5;
     }
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
-      align-items:center; gap:4px; cursor:pointer; padding-bottom:4px;
+      align-items:center; justify-content:flex-end;
+      gap:4px; cursor:pointer; padding-bottom:6px;
     }
     .nav-fab-wrap {
       flex:1; display:flex; align-items:flex-end; justify-content:center;
+      position:relative;
+    }
+    .nav-fab-wrap::before {
+      content:''; position:absolute;
+      top:0; left:50%; transform:translateX(-50%);
+      width:92px; height:32px;
+      background:#fafaf9;
+      border-radius:0 0 46px 46px;
+      z-index:0;
     }
     .nav-fab-mic {
       width:62px; height:62px; border-radius:50%; border:none;
       background:var(--accent); color:#fff;
       display:flex; align-items:center; justify-content:center;
-      cursor:pointer; box-shadow:0 4px 18px rgba(0,0,0,.30);
+      cursor:pointer; box-shadow:0 4px 20px rgba(0,0,0,.28);
       transition:transform .15s, box-shadow .15s;
-      margin-bottom:22px;
-      position:relative; z-index:10;
+      margin-bottom:26px;
+      position:relative; z-index:2;
     }
     .nav-fab-mic:active { transform:scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.16); }
     .nav-tab .nav-icon svg { transition:all 0.2s; width:24px; height:24px; }
