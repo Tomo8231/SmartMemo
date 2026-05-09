@@ -561,20 +561,36 @@ const IcoSettingsNav = ({ active }: { active: boolean }) => (
 // ─────────────────────────────────────────────────────────────
 // Calendar
 // ─────────────────────────────────────────────────────────────
-function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void }) {
+function Calendar({ todos, selectedDate, onSelect, mode = 'month' }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week' }) {
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
   const [direction, setDirection] = useState<'prev' | 'next' | null>(null);
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
-  const firstDay = new Date(vy, vm, 1);
-  const lastDay  = new Date(vy, vm + 1, 0);
   const cells: { date: Date; cur: boolean }[] = [];
-  for (let i = firstDay.getDay() - 1; i >= 0; i--) cells.push({ date: new Date(vy, vm, -i), cur: false });
-  for (let d = 1; d <= lastDay.getDate(); d++) cells.push({ date: new Date(vy, vm, d), cur: true });
-  while (cells.length < 42) {
-    const l = cells[cells.length - 1].date;
-    cells.push({ date: new Date(l.getTime() + 86400000), cur: false });
+  
+  if (mode === 'week') {
+    // 週表示：選択日付を基準に日～土曜日を表示
+    const selectedDateObj = new Date(selectedDate + 'T00:00:00');
+    const dayOfWeek = selectedDateObj.getDay();
+    const weekStartDate = new Date(selectedDateObj);
+    weekStartDate.setDate(selectedDateObj.getDate() - dayOfWeek);
+    
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStartDate);
+      d.setDate(weekStartDate.getDate() + i);
+      cells.push({ date: d, cur: true });
+    }
+  } else {
+    // 月表示：従来の42日グリッド
+    const firstDay = new Date(vy, vm, 1);
+    const lastDay  = new Date(vy, vm + 1, 0);
+    for (let i = firstDay.getDay() - 1; i >= 0; i--) cells.push({ date: new Date(vy, vm, -i), cur: false });
+    for (let d = 1; d <= lastDay.getDate(); d++) cells.push({ date: new Date(vy, vm, d), cur: true });
+    while (cells.length < 42) {
+      const l = cells[cells.length - 1].date;
+      cells.push({ date: new Date(l.getTime() + 86400000), cur: false });
+    }
   }
 
   const dotSet = new Set<string>();
@@ -585,18 +601,34 @@ function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDa
   });
 
   const prev = () => {
-    setDirection('prev');
-    setTimeout(() => {
-      vm === 0 ? (setVm(11), setVy(y => y - 1)) : setVm(m => m - 1);
-      setDirection(null);
-    }, 200);
+    if (mode === 'week') {
+      // 週表示：7日前にジャンプ
+      const prevDate = new Date(selectedDate + 'T00:00:00');
+      prevDate.setDate(prevDate.getDate() - 7);
+      onSelect(formatDate(prevDate));
+    } else {
+      // 月表示：前月に移動
+      setDirection('prev');
+      setTimeout(() => {
+        vm === 0 ? (setVm(11), setVy(y => y - 1)) : setVm(m => m - 1);
+        setDirection(null);
+      }, 200);
+    }
   };
   const next = () => {
-    setDirection('next');
-    setTimeout(() => {
-      vm === 11 ? (setVm(0),  setVy(y => y + 1)) : setVm(m => m + 1);
-      setDirection(null);
-    }, 200);
+    if (mode === 'week') {
+      // 週表示：7日後にジャンプ
+      const nextDate = new Date(selectedDate + 'T00:00:00');
+      nextDate.setDate(nextDate.getDate() + 7);
+      onSelect(formatDate(nextDate));
+    } else {
+      // 月表示：翌月に移動
+      setDirection('next');
+      setTimeout(() => {
+        vm === 11 ? (setVm(0),  setVy(y => y + 1)) : setVm(m => m + 1);
+        setDirection(null);
+      }, 200);
+    }
   };
 
   function onTouchStart(e: React.TouchEvent) {
@@ -618,13 +650,6 @@ function Calendar({ todos, selectedDate, onSelect }: { todos: Todo[]; selectedDa
 
   return (
     <div className="cal-wrapper" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-      <div className="cal-head">
-        <span className="cal-month-label">{vy}年 {MONTH_JP[vm]}</span>
-        <div className="cal-nav">
-          <button className="cal-nav-btn" onClick={prev}>‹</button>
-          <button className="cal-nav-btn" onClick={next}>›</button>
-        </div>
-      </div>
       <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
       <div className={`cal-grid${direction ? ` cal-slide-${direction}` : ''}`}>
         {cells.map((c, i) => {
@@ -1319,11 +1344,22 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
   const [sel,     setSel]     = useState(todayStr);
   const [editing, setEditing] = useState<Todo | null>(null);
   const [showCalendar, setShowCalendar] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
 
-  const dateTodos = todos.filter(t => {
+  const tagOptions = getTodoTagOptions(customTags);
+
+  // Filter by search and tags
+  const filteredTodos = todos.filter(t => {
+    const matchesSearch = searchQuery === '' || t.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesTags = selectedTags.size === 0 || (t.tags || []).some(tag => selectedTags.has(tag));
+    return matchesSearch && matchesTags;
+  });
+
+  const dateTodos = filteredTodos.filter(t => {
     if (!t.startDate) return false;
-    const d = new Date(sel), s = new Date(t.startDate), e = t.endDate ? new Date(t.endDate) : s;
-    return d >= s && d <= e;
+    return sel >= t.startDate && sel <= (t.endDate || t.startDate);
   });
   
   // Sort: incomplete first, then done
@@ -1331,19 +1367,66 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
   const doneTodos = dateTodos.filter(t => t.done);
   const sortedDateTodos = [...activeTodos, ...doneTodos];
   
-  const undated = todos.filter(t => !t.startDate);
+  const undated = filteredTodos.filter(t => !t.startDate);
   const activeUndated = undated.filter(t => !t.done);
   const doneUndated = undated.filter(t => t.done);
   const sortedUndated = [...activeUndated, ...doneUndated];
 
+  const toggleTag = (tag: string) => {
+    const newTags = new Set(selectedTags);
+    if (newTags.has(tag)) newTags.delete(tag);
+    else newTags.add(tag);
+    setSelectedTags(newTags);
+  };
+
   return (
     <div className="todo-tab">
       {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
-      {showCalendar && <Calendar todos={todos} selectedDate={sel} onSelect={setSel} />}
+      <div className="todo-controls">
+        <div className="search-box">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="TODOを検索..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="filter-tags">
+          {tagOptions.map(tag => (
+            <button
+              key={tag}
+              className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`}
+              onClick={() => toggleTag(tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={`calendar-section${showCalendar ? ' show' : ' hide'}`}>
+        {showCalendar && <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} />}
+      </div>
       <div className="todo-list-header">
+        <div className="calendar-mode-toggle">
+          <button
+            className={`mode-btn${calendarMode === 'month' ? ' active' : ''}`}
+            onClick={() => setCalendarMode('month')}
+            title="1ヶ月表示"
+          >
+            月
+          </button>
+          <button
+            className={`mode-btn${calendarMode === 'week' ? ' active' : ''}`}
+            onClick={() => setCalendarMode('week')}
+            title="1週間表示"
+          >
+            週
+          </button>
+        </div>
         <button className="cal-toggle" onClick={() => setShowCalendar(!showCalendar)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
-          <span className="cal-toggle-label">スケジュール</span>
-          <span className="cal-toggle-icon">{showCalendar ? '↑' : '↓'}</span>
+          <span className="cal-toggle-icon-schedule">≡</span>
+          <span className="cal-toggle-icon-arrow">{showCalendar ? '∧' : '∨'}</span>
         </button>
       </div>
       <div className="todo-list-area">

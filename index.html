@@ -217,6 +217,45 @@
       overflow:hidden;
     }
 
+    .todo-controls {
+      padding:12px 16px; background:#fff; border-bottom:1px solid #ebebea;
+      flex-shrink:0;
+    }
+    .search-box {
+      margin-bottom:8px;
+    }
+    .search-input {
+      width:100%; padding:9px 12px; border:1px solid #e0e0de;
+      border-radius:8px; font-size:var(--fs-base); font-family:inherit;
+      outline:none; color:#1a1a18; background:#fafaf9;
+    }
+    .search-input:focus { border-color:var(--accent); background:#fff; }
+    .filter-tags {
+      display:flex; gap:6px; flex-wrap:wrap;
+    }
+    .filter-tag {
+      padding:6px 11px; border-radius:6px; border:1px solid #e0e0de;
+      background:#fff; cursor:pointer; font-size:var(--fs-xs);
+      font-weight:500; color:#4a4a48; transition:all .12s; font-family:inherit;
+    }
+    .filter-tag:hover { background:#f5f5f3; }
+    .filter-tag.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+    .calendar-section {
+      background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0;
+      overflow:hidden;
+    }
+    .calendar-section.hide {
+      display:none;
+    }
+    .calendar-section.show {
+      animation: cal-slide-down .35s ease forwards;
+    }
+    @keyframes cal-slide-down {
+      from { transform:translateY(-100%); opacity:0; }
+      to { transform:translateY(0); opacity:1; }
+    }
+
     .cal-wrapper { background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0; }
     .cal-head {
       display:flex; align-items:center; justify-content:space-between;
@@ -295,18 +334,29 @@
       -webkit-overflow-scrolling:touch;
     }
     .todo-list-header {
-      display:flex; justify-content:flex-end; padding:8px 16px 0;
-      flex-shrink:0;
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 16px 0; flex-shrink:0; gap:8px;
     }
+    .calendar-mode-toggle {
+      display:flex; gap:4px;
+    }
+    .mode-btn {
+      padding:6px 10px; border-radius:6px; border:1px solid #e0e0de;
+      background:#fff; cursor:pointer; font-size:var(--fs-sm); font-weight:500;
+      color:#4a4a48; transition:all .12s; font-family:inherit;
+    }
+    .mode-btn:hover { background:#f5f5f3; }
+    .mode-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
     .cal-toggle {
-      display:flex; align-items:center; gap:6px;
-      padding:8px 12px; border-radius:8px; border:1px solid #ebebea;
-      background:#fff; cursor:pointer; font-size:var(--fs-base);
-      transition:background .12s; font-family:inherit; font-weight:500; color:#1a1a18;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+      width:44px; height:44px; border-radius:8px; border:1px solid #ebebea;
+      background:#fff; cursor:pointer; font-size:16px; transition:background .12s;
+      font-family:inherit; font-weight:600; color:#1a1a18;
     }
     .cal-toggle:hover { background:#f5f5f3; }
-    .cal-toggle-label { font-weight:500; }
-    .cal-toggle-icon { font-weight:700; font-size:16px; }
+    .cal-toggle-icon-schedule { font-size:18px; font-weight:700; }
+    .cal-toggle-icon-arrow { font-size:14px; }
     .todo-list-area::-webkit-scrollbar { display:none; }
     .section-head { display:flex; align-items:center; gap:7px; margin-bottom:10px; }
     .section-head-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; }
