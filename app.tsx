@@ -625,10 +625,33 @@ const IcoSettingsNav = ({ active }: { active: boolean }) => (
   </svg>
 );
 
+const IcoChevronDown = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+const IcoChevronUp = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="18 15 12 9 6 15"/>
+  </svg>
+);
+const IcoCalendar = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
+    <path d="M7 10h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2zm-8 4h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/>
+  </svg>
+);
+const IcoMicFab = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+  </svg>
+);
+
 // ─────────────────────────────────────────────────────────────
 // Calendar
 // ─────────────────────────────────────────────────────────────
-function Calendar({ todos, selectedDate, onSelect, mode = 'month' }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week' }) {
+function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week'; onModeChange?: (m: 'month' | 'week') => void }) {
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
   const [direction, setDirection] = useState<'prev' | 'next' | null>(null);
@@ -717,6 +740,17 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month' }: { todos: To
 
   return (
     <div className="cal-wrapper" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+      <div className="cal-head">
+        <div className="calendar-mode-toggle">
+          <button className={`mode-btn${mode === 'month' ? ' active' : ''}`} onClick={() => onModeChange?.('month')}>月</button>
+          <button className={`mode-btn${mode === 'week' ? ' active' : ''}`} onClick={() => onModeChange?.('week')}>週</button>
+        </div>
+        <span className="cal-month-label">{mode === 'month' ? `${MONTH_JP[vm]} ${vy}` : '週間'}</span>
+        <div className="cal-nav">
+          <button className="cal-nav-btn" onClick={prev}>‹</button>
+          <button className="cal-nav-btn" onClick={next}>›</button>
+        </div>
+      </div>
       <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
       <div className={`cal-grid${direction ? ` cal-slide-${direction}` : ''}`}>
         {cells.map((c, i) => {
@@ -1063,11 +1097,12 @@ function SparkleBurst({ x, y }: { x: number; y: number }) {
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], onCommit }: {
+function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], micTrigger = 0, onCommit }: {
   existingProjects: string[];
   customTags: string[];
   geminiApiKey: string;
   ideaTabs?: string[];
+  micTrigger?: number;
   onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[] }) => void;
 }) {
   const [text,       setText]       = useState('');
@@ -1079,11 +1114,18 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], on
   const [pending,    setPending]    = useState<Pending | null>(null);
   const [swooshing,  setSwooshing]  = useState(false);
   const [burst,      setBurst]      = useState<{ x: number; y: number; key: number } | null>(null);
-  const fileRef       = useRef<HTMLInputElement | null>(null);
-  const recRef        = useRef<any>(null);
-  const tRef          = useRef<number | undefined>(undefined);
-  const baseTextRef   = useRef('');
-  const finalTextRef  = useRef('');
+  const fileRef         = useRef<HTMLInputElement | null>(null);
+  const recRef          = useRef<any>(null);
+  const tRef            = useRef<number | undefined>(undefined);
+  const baseTextRef     = useRef('');
+  const finalTextRef    = useRef('');
+  const prevMicTriggerRef = useRef(micTrigger);
+  useEffect(() => {
+    if (micTrigger !== prevMicTriggerRef.current) {
+      prevMicTriggerRef.current = micTrigger;
+      toggleRec();
+    }
+  }, [micTrigger]);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -1429,97 +1471,57 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType 
   const [sel,          setSel]          = useState(todayStr);
   const [editing,      setEditing]      = useState<Todo | null>(null);
   const [showCalendar, setShowCalendar] = useState(true);
-  const [searchQuery,  setSearchQuery]  = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
   const [undatedOpen,  setUndatedOpen]  = useState(true);
 
   const tagOptions = getTodoTagOptions(customTags);
 
-  // Filter by search and tags
-  const filteredTodos = todos.filter(t => {
-    const matchesSearch = searchQuery === '' || t.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTags = selectedTags.size === 0 || (t.tags || []).some(tag => selectedTags.has(tag));
-    return matchesSearch && matchesTags;
-  });
+  const filteredTodos = todos.filter(t =>
+    selectedTags.size === 0 || (t.tags || []).some(tag => selectedTags.has(tag))
+  );
 
   const dateTodos = filteredTodos.filter(t => {
     if (!t.startDate) return false;
     return sel >= t.startDate && sel <= (t.endDate || t.startDate);
   });
-  
-  // Sort: incomplete first, then done
-  const activeTodos = dateTodos.filter(t => !t.done);
-  const doneTodos = dateTodos.filter(t => t.done);
-  const sortedDateTodos = [...activeTodos, ...doneTodos];
-  
-  const undated = filteredTodos.filter(t => !t.startDate);
-  const activeUndated = undated.filter(t => !t.done);
-  const doneUndated = undated.filter(t => t.done);
-  const sortedUndated = [...activeUndated, ...doneUndated];
+  const sortedDateTodos = [...dateTodos.filter(t => !t.done), ...dateTodos.filter(t => t.done)];
+
+  const undated       = filteredTodos.filter(t => !t.startDate);
+  const sortedUndated = [...undated.filter(t => !t.done), ...undated.filter(t => t.done)];
 
   const toggleTag = (tag: string) => {
-    const newTags = new Set(selectedTags);
-    if (newTags.has(tag)) newTags.delete(tag);
-    else newTags.add(tag);
-    setSelectedTags(newTags);
+    const s = new Set(selectedTags);
+    if (s.has(tag)) s.delete(tag); else s.add(tag);
+    setSelectedTags(s);
   };
 
   return (
     <div className="todo-tab">
       {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
       <div className="todo-controls">
-        <div className="search-box">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="TODOを検索..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-          />
-        </div>
         <div className="filter-tags">
           {tagOptions.map(tag => (
-            <button
-              key={tag}
-              className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`}
-              onClick={() => toggleTag(tag)}
-            >
+            <button key={tag} className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`} onClick={() => toggleTag(tag)}>
               {tag}
             </button>
           ))}
         </div>
       </div>
-      <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
-        <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} />
-      </div>
       <div className="todo-list-header">
-        <div className="calendar-mode-toggle">
-          <button
-            className={`mode-btn${calendarMode === 'month' ? ' active' : ''}`}
-            onClick={() => setCalendarMode('month')}
-            title="1ヶ月表示"
-          >
-            月
-          </button>
-          <button
-            className={`mode-btn${calendarMode === 'week' ? ' active' : ''}`}
-            onClick={() => setCalendarMode('week')}
-            title="1週間表示"
-          >
-            週
-          </button>
-        </div>
-        <button className="cal-toggle" onClick={() => setShowCalendar(!showCalendar)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
-          <span className="cal-toggle-icon-schedule">≡</span>
-          <span className="cal-toggle-icon-arrow">{showCalendar ? '∧' : '∨'}</span>
-        </button>
-      </div>
-      <div className="todo-list-area">
-        <div className="section-head">
+        <div style={{ display:'flex', alignItems:'center', gap:'7px', flex:1, minWidth:0 }}>
           <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
           {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
         </div>
+        <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
+          <IcoCalendar />
+          {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
+        </button>
+      </div>
+      <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
+        <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} />
+      </div>
+      <div className="todo-list-area">
         {sortedDateTodos.length === 0
           ? <div className="todo-empty">この日のタスクはありません</div>
           : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
@@ -1529,7 +1531,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType 
           <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
             <span className="section-head-label">日付未定</span>
             <span className="section-count">{sortedUndated.length}</span>
-            <span className="undated-arrow">{undatedOpen ? '∧' : '∨'}</span>
+            <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
           </div>
           <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
             {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
@@ -1551,10 +1553,14 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpda
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
 }) {
-  const [editing,      setEditing]      = useState<Idea | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<string>('all');
-  const [addingTab,    setAddingTab]    = useState(false);
-  const [newTabName,   setNewTabName]   = useState('');
+  const [editing,        setEditing]        = useState<Idea | null>(null);
+  const [activeSubTab,   setActiveSubTab]   = useState<string>('all');
+  const [addingTab,      setAddingTab]      = useState(false);
+  const [newTabName,     setNewTabName]     = useState('');
+  const [dragTabIdx,     setDragTabIdx]     = useState<number | null>(null);
+  const [dragOverTabIdx, setDragOverTabIdx] = useState<number | null>(null);
+  const [dragIdeaId,     setDragIdeaId]     = useState<number | string | null>(null);
+  const [dropTabTarget,  setDropTabTarget]  = useState<string | null>(null);
   const projectNames = ideas.map(i => i.projectName);
 
   const filteredIdeas = activeSubTab === 'all'
@@ -1571,16 +1577,73 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpda
   }
   function deleteTab(tab: string) {
     if (!onUpdateIdeaTabs) return;
+    if (!window.confirm(`「${tab}」タブを削除しますか？\nこのタブのアイデアは未分類になります。`)) return;
     onUpdateIdeaTabs(ideaTabs.filter(t => t !== tab));
     if (activeSubTab === tab) setActiveSubTab('all');
     ideas.forEach(i => { if (i.subTab === tab) onUpdate({ ...i, subTab: undefined }); });
   }
 
+  function onTabDragStart(e: React.DragEvent, idx: number) {
+    e.dataTransfer.effectAllowed = 'move';
+    setDragTabIdx(idx);
+  }
+  function onTabDragOver(e: React.DragEvent, idx: number) {
+    if (dragTabIdx === null) return;
+    e.preventDefault();
+    setDragOverTabIdx(idx);
+  }
+  function onTabDrop(idx: number) {
+    if (dragTabIdx === null || dragTabIdx === idx || !onUpdateIdeaTabs) { setDragTabIdx(null); setDragOverTabIdx(null); return; }
+    const arr = [...ideaTabs];
+    const [moved] = arr.splice(dragTabIdx, 1);
+    arr.splice(idx, 0, moved);
+    onUpdateIdeaTabs(arr);
+    setDragTabIdx(null);
+    setDragOverTabIdx(null);
+  }
+  function onTabDragEnd() { setDragTabIdx(null); setDragOverTabIdx(null); }
+
+  function onIdeaDragStart(e: React.DragEvent, id: number | string) {
+    e.dataTransfer.effectAllowed = 'move';
+    setDragIdeaId(id);
+  }
+  function onIdeaDragEnd() { setDragIdeaId(null); setDropTabTarget(null); }
+  function dropIdeaOnTab(e: React.DragEvent, target: string) {
+    e.preventDefault();
+    if (dragIdeaId == null) return;
+    const idea = ideas.find(i => i.id === dragIdeaId);
+    if (idea) onUpdate({ ...idea, subTab: target === 'all' ? undefined : target });
+    setDragIdeaId(null);
+    setDropTabTarget(null);
+  }
+
   const subtabBar = (
     <div className="ideas-subtabs">
-      <span className={`ideas-subtab${activeSubTab === 'all' ? ' active' : ''}`} onClick={() => setActiveSubTab('all')}>すべて</span>
-      {ideaTabs.map(t => (
-        <span key={t} className={`ideas-subtab${activeSubTab === t ? ' active' : ''}`} onClick={() => setActiveSubTab(t)}>
+      <span
+        className={`ideas-subtab${activeSubTab === 'all' ? ' active' : ''}${dropTabTarget === 'all' ? ' drop-target' : ''}`}
+        onClick={() => setActiveSubTab('all')}
+        onDragOver={e => { if (dragIdeaId != null) { e.preventDefault(); setDropTabTarget('all'); } }}
+        onDragLeave={() => setDropTabTarget(null)}
+        onDrop={e => dropIdeaOnTab(e, 'all')}
+      >すべて</span>
+      {ideaTabs.map((t, idx) => (
+        <span
+          key={t}
+          draggable
+          className={[
+            'ideas-subtab',
+            activeSubTab === t ? 'active' : '',
+            dragTabIdx === idx ? 'dragging' : '',
+            dragOverTabIdx === idx && dragTabIdx !== null && dragTabIdx !== idx ? 'drag-over' : '',
+            dropTabTarget === t ? 'drop-target' : '',
+          ].filter(Boolean).join(' ')}
+          onClick={() => setActiveSubTab(t)}
+          onDragStart={e => onTabDragStart(e, idx)}
+          onDragOver={e => { onTabDragOver(e, idx); if (dragIdeaId != null) { e.preventDefault(); setDropTabTarget(t); } }}
+          onDragLeave={() => { setDragOverTabIdx(null); setDropTabTarget(null); }}
+          onDrop={e => { if (dragIdeaId != null) { dropIdeaOnTab(e, t); } else { onTabDrop(idx); } }}
+          onDragEnd={onTabDragEnd}
+        >
           {t}
           <button className="ideas-subtab-del" onClick={e => { e.stopPropagation(); deleteTab(t); }}>×</button>
         </span>
@@ -1607,7 +1670,14 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpda
   const ideaCards = filteredIdeas.map(i => {
     const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
     return (
-      <div key={i.id} className={`idea-card${justAdded ? ' just-added' : ''}`} onClick={() => setEditing(i)}>
+      <div
+        key={i.id}
+        draggable
+        className={`idea-card${justAdded ? ' just-added' : ''}${dragIdeaId === i.id ? ' dragging' : ''}`}
+        onDragStart={e => onIdeaDragStart(e, i.id)}
+        onDragEnd={onIdeaDragEnd}
+        onClick={() => setEditing(i)}
+      >
         <div className="idea-card-body">
           <div className="idea-project">{i.projectName}</div>
           {i.summary && <div className="idea-summary">{i.summary}</div>}
@@ -1864,6 +1934,7 @@ function SettingsTab({ settings, onChange }: {
 function SmartMemoApp() {
   const [tab, setTab] = useState<Tab>('memo');
   const [pulseTabs, setPulseTabs] = useState<Set<Tab>>(new Set());
+  const [micTrigger, setMicTrigger] = useState(0);
   const [todos, setTodos] = usePersistedState<Todo[]>(LS_TODOS, [
     { id: 1, title: 'プレゼン資料の作成', startDate: todayStr, endDate: '', time: '10:00', tags: ['仕事'],   done: false },
     { id: 2, title: '牛乳を購入する',     startDate: todayStr, endDate: '', time: '',      tags: ['買い物'], done: false },
@@ -1945,6 +2016,8 @@ function SmartMemoApp() {
   const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
   const setSetting = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings(p => ({ ...p, [k]: v }));
 
+  const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
+
   const navItems: { key: Tab; label: string; Icon: React.FC<{ active: boolean }> }[] = [
     { key: 'memo',     label: 'メモ入力', Icon: IcoMemoNav     },
     { key: 'todo',     label: 'TODO',     Icon: IcoTodoNav     },
@@ -1962,13 +2035,24 @@ function SmartMemoApp() {
         <LevelBadge xp={settings.xp || 0} />
       </div>
       <div className="tab-content">
-        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} onCommit={commit} />}
+        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav">
-        {navItems.map(({ key, label, Icon }) => (
+        {navItems.slice(0, 2).map(({ key, label, Icon }) => (
+          <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
+            <span className="nav-icon"><Icon active={tab === key} /></span>
+            <span className="nav-label">{label}</span>
+          </div>
+        ))}
+        <div className="nav-fab-wrap">
+          <button className="nav-fab-mic" onClick={handleFabMic} title="音声入力">
+            <IcoMicFab />
+          </button>
+        </div>
+        {navItems.slice(2).map(({ key, label, Icon }) => (
           <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
             <span className="nav-icon"><Icon active={tab === key} /></span>
             <span className="nav-label">{label}</span>
