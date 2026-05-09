@@ -24,6 +24,7 @@ type Idea = {
   createdAt?: string;
   updatedAt?: string;
   addedAt?: number;
+  subTab?: string;
 };
 type Settings = {
   colorIdx: number;
@@ -34,6 +35,9 @@ type Settings = {
   completeSound: boolean;
   customTags: string[];
   geminiApiKey: string;
+  soundType?: string;
+  ideaTabs?: string[];
+  xp?: number;
 };
 type TodoDraft = {
   id?: number | string;
@@ -50,6 +54,7 @@ type IdeaDraft = {
   summary: string;
   details: string[];
   tags: string[];
+  subTab?: string;
 };
 type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
@@ -118,27 +123,68 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-// Two-tone success "ding" via Web Audio API.
+// Sound types for task completion.
+const SOUND_TYPES = [
+  { key: 'doremi', label: 'ドレミ' },
+  { key: 'pop',    label: 'ポップ' },
+  { key: 'chime',  label: 'チャイム' },
+  { key: 'coin',   label: 'コイン' },
+];
 let _audioCtx: AudioContext | undefined;
-function playCompleteSound() {
+function _getAudioCtx(): AudioContext {
+  const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+  if (!_audioCtx) _audioCtx = new Ctx();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+function playSound(type: string) {
   try {
-    const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-    if (!_audioCtx) _audioCtx = new Ctx();
-    if (_audioCtx.state === 'suspended') _audioCtx.resume();
-    const now = _audioCtx.currentTime;
-    [659.25, 987.77].forEach((freq, i) => {
-      const osc = _audioCtx!.createOscillator();
-      const gain = _audioCtx!.createGain();
+    const ctx = _getAudioCtx();
+    const now = ctx.currentTime;
+    if (type === 'pop') {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.value = freq;
-      const t = now + i * 0.07;
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.18, t + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
-      osc.connect(gain).connect(_audioCtx!.destination);
-      osc.start(t);
-      osc.stop(t + 0.27);
-    });
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(440, now + 0.1);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'chime') {
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        const t = now + i * 0.12;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.45);
+      });
+    } else if (type === 'coin') {
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(988, now);
+      osc.frequency.exponentialRampToValueAtTime(1319, now + 0.06);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.07, now + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.16);
+    } else {
+      // doremi (default)
+      [659.25, 987.77].forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        const t = now + i * 0.07;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.27);
+      });
+    }
   } catch {}
 }
 
@@ -181,6 +227,27 @@ const FONT_SIZE_OPTS = [
   { label:'中', base:'14px', sm:'12px', xs:'11px' },
   { label:'大', base:'16px', sm:'14px', xs:'12px' },
 ];
+
+function xpToLevel(xp: number): { level: number; current: number; needed: number } {
+  let level = 1;
+  while (xp >= (level * (level + 1) / 2) * 10) level++;
+  const prevXp = ((level - 1) * level / 2) * 10;
+  const nextXp  = (level * (level + 1) / 2) * 10;
+  return { level, current: xp - prevXp, needed: nextXp - prevXp };
+}
+
+function LevelBadge({ xp }: { xp: number }) {
+  const { level, current, needed } = xpToLevel(xp);
+  const pct = needed > 0 ? Math.round((current / needed) * 100) : 0;
+  return (
+    <div className="level-badge" title={`${xp} XP`}>
+      <div className="level-badge-main">Lv.{level}</div>
+      <div className="level-badge-bar">
+        <div className="level-badge-fill" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // Local heuristic parser
@@ -747,18 +814,20 @@ function EditModal({ todo, onSave, onClose, customTags = [] }: {
 // ─────────────────────────────────────────────────────────────
 // Idea Edit Modal
 // ─────────────────────────────────────────────────────────────
-function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [] }: {
+function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [], ideaTabs = [] }: {
   idea: Idea | (IdeaDraft & { id: string });
   projects: string[];
   onSave: (i: any) => void;
   onClose: () => void;
   customTags?: string[];
+  ideaTabs?: string[];
 }) {
   const tagOptions = getIdeaTagOptions(customTags);
   const [projectName, setProjectName] = useState(idea.projectName || '');
   const [summary,     setSummary]     = useState(idea.summary || '');
   const [details,     setDetails]     = useState((idea.details || []).join('\n'));
   const [tags,        setTags]        = useState<string[]>(idea.tags || []);
+  const [subTab,      setSubTab]      = useState((idea as any).subTab || '');
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   function handleSave() {
@@ -769,6 +838,7 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [] }: {
       summary: summary.trim(),
       details: details.split('\n').map(s => s.trim()).filter(Boolean),
       tags,
+      subTab: subTab || undefined,
     });
   }
 
@@ -801,6 +871,15 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [] }: {
             ))}
           </div>
         </div>
+        {ideaTabs.length > 0 && (
+          <div className="modal-field">
+            <label>サブタブ</label>
+            <select value={subTab} onChange={e => setSubTab(e.target.value)}>
+              <option value="">（未分類）</option>
+              {ideaTabs.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
           <button className="modal-save" onClick={handleSave}>保存</button>
@@ -813,12 +892,13 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [] }: {
 // ─────────────────────────────────────────────────────────────
 // Todo Item
 // ─────────────────────────────────────────────────────────────
-function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled }: {
+function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi' }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onEdit: (t: Todo) => void;
   soundEnabled: boolean;
+  soundType?: string;
 }) {
   const [animating, setAnimating] = useState(false);
   const justAdded = !!todo.addedAt && (Date.now() - todo.addedAt) < 800;
@@ -826,7 +906,7 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled }: {
   function handleToggle() {
     if (!todo.done) {
       setAnimating(true);
-      if (soundEnabled) playCompleteSound();
+      if (soundEnabled) playSound(soundType);
       setTimeout(() => setAnimating(false), 600);
     }
     onToggle(todo.id);
@@ -857,12 +937,13 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled }: {
 // Confirm Sheet
 // ─────────────────────────────────────────────────────────────
 function ConfirmSheet({
-  pending, existingProjects, customTags, swooshing,
+  pending, existingProjects, customTags, ideaTabs = [], swooshing,
   onUpdateTodo, onDeleteTodo, onUpdateIdea, onDeleteIdea, onConfirm, onCancel,
 }: {
   pending: Pending;
   existingProjects: string[];
   customTags: string[];
+  ideaTabs?: string[];
   swooshing: boolean;
   onUpdateTodo: (u: any) => void;
   onDeleteTodo: (id: string) => void;
@@ -947,6 +1028,7 @@ function ConfirmSheet({
           onSave={u => { onUpdateIdea(u); setEditingIdea(null); }}
           onClose={() => setEditingIdea(null)}
           customTags={customTags}
+          ideaTabs={ideaTabs}
         />
       )}
     </div>
@@ -981,10 +1063,11 @@ function SparkleBurst({ x, y }: { x: number; y: number }) {
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, geminiApiKey, onCommit }: {
+function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], onCommit }: {
   existingProjects: string[];
   customTags: string[];
   geminiApiKey: string;
+  ideaTabs?: string[];
   onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[] }) => void;
 }) {
   const [text,       setText]       = useState('');
@@ -1268,6 +1351,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, onCommit }: {
           pending={pending}
           existingProjects={existingProjects}
           customTags={customTags}
+          ideaTabs={ideaTabs}
           swooshing={swooshing}
           onUpdateTodo={u => setPending(p => p && ({ ...p, todos: p.todos.map(t => t.id === u.id ? u : t) }))}
           onDeleteTodo={id => setPending(p => p && ({ ...p, todos: p.todos.filter(t => t.id !== id) }))}
@@ -1333,20 +1417,22 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, onCommit }: {
 // ─────────────────────────────────────────────────────────────
 // TODO Tab
 // ─────────────────────────────────────────────────────────────
-function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags }: {
+function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType = 'doremi', customTags }: {
   todos: Todo[];
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onUpdate: (t: Todo) => void;
   soundEnabled: boolean;
+  soundType?: string;
   customTags: string[];
 }) {
-  const [sel,     setSel]     = useState(todayStr);
-  const [editing, setEditing] = useState<Todo | null>(null);
+  const [sel,          setSel]          = useState(todayStr);
+  const [editing,      setEditing]      = useState<Todo | null>(null);
   const [showCalendar, setShowCalendar] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery,  setSearchQuery]  = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
+  const [undatedOpen,  setUndatedOpen]  = useState(true);
 
   const tagOptions = getTodoTagOptions(customTags);
 
@@ -1404,8 +1490,8 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
           ))}
         </div>
       </div>
-      <div className={`calendar-section${showCalendar ? ' show' : ' hide'}`}>
-        {showCalendar && <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} />}
+      <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
+        <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} />
       </div>
       <div className="todo-list-header">
         <div className="calendar-mode-toggle">
@@ -1436,15 +1522,18 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
         </div>
         {sortedDateTodos.length === 0
           ? <div className="todo-empty">この日のタスクはありません</div>
-          : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)
+          : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
         }
         {sortedUndated.length > 0 && <>
           <div className="divider"/>
-          <div className="section-head">
+          <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
             <span className="section-head-label">日付未定</span>
             <span className="section-count">{sortedUndated.length}</span>
+            <span className="undated-arrow">{undatedOpen ? '∧' : '∨'}</span>
           </div>
-          {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} />)}
+          <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
+            {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
+          </div>
         </>}
       </div>
     </div>
@@ -1454,29 +1543,91 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, customTags
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete, customTags }: {
+function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
   ideas: Idea[];
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
   customTags: string[];
+  ideaTabs?: string[];
+  onUpdateIdeaTabs?: (tabs: string[]) => void;
 }) {
-  const [editing, setEditing] = useState<Idea | null>(null);
+  const [editing,      setEditing]      = useState<Idea | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<string>('all');
+  const [addingTab,    setAddingTab]    = useState(false);
+  const [newTabName,   setNewTabName]   = useState('');
   const projectNames = ideas.map(i => i.projectName);
 
-  if (ideas.length === 0) {
-    return (
-      <div className="ideas-tab tab-pane">
-        <div className="ideas-empty">
-          まだアイデアがありません<br/>
-          メモタブで思いついたことを入力し、<br/>
-          「AI で反映」を押すと蓄積されます
-        </div>
-      </div>
-    );
+  const filteredIdeas = activeSubTab === 'all'
+    ? ideas
+    : ideas.filter(i => i.subTab === activeSubTab);
+
+  function addTab() {
+    const name = newTabName.trim();
+    if (!name || ideaTabs.includes(name) || !onUpdateIdeaTabs) return;
+    onUpdateIdeaTabs([...ideaTabs, name]);
+    setActiveSubTab(name);
+    setNewTabName('');
+    setAddingTab(false);
+  }
+  function deleteTab(tab: string) {
+    if (!onUpdateIdeaTabs) return;
+    onUpdateIdeaTabs(ideaTabs.filter(t => t !== tab));
+    if (activeSubTab === tab) setActiveSubTab('all');
+    ideas.forEach(i => { if (i.subTab === tab) onUpdate({ ...i, subTab: undefined }); });
   }
 
+  const subtabBar = (
+    <div className="ideas-subtabs">
+      <span className={`ideas-subtab${activeSubTab === 'all' ? ' active' : ''}`} onClick={() => setActiveSubTab('all')}>すべて</span>
+      {ideaTabs.map(t => (
+        <span key={t} className={`ideas-subtab${activeSubTab === t ? ' active' : ''}`} onClick={() => setActiveSubTab(t)}>
+          {t}
+          <button className="ideas-subtab-del" onClick={e => { e.stopPropagation(); deleteTab(t); }}>×</button>
+        </span>
+      ))}
+      <span className="ideas-subtab-add" title="タブを追加" onClick={() => setAddingTab(true)}>＋</span>
+    </div>
+  );
+
+  const subtabInput = addingTab ? (
+    <div className="ideas-subtab-input">
+      <input
+        autoFocus
+        value={newTabName}
+        onChange={e => setNewTabName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') addTab(); if (e.key === 'Escape') { setAddingTab(false); setNewTabName(''); } }}
+        placeholder="タブ名を入力"
+        maxLength={16}
+      />
+      <button onClick={addTab} disabled={!newTabName.trim()}>追加</button>
+      <button className="cancel-btn" onClick={() => { setAddingTab(false); setNewTabName(''); }}>取消</button>
+    </div>
+  ) : null;
+
+  const ideaCards = filteredIdeas.map(i => {
+    const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
+    return (
+      <div key={i.id} className={`idea-card${justAdded ? ' just-added' : ''}`} onClick={() => setEditing(i)}>
+        <div className="idea-card-body">
+          <div className="idea-project">{i.projectName}</div>
+          {i.summary && <div className="idea-summary">{i.summary}</div>}
+          {(i.details || []).length > 0 && (
+            <ul className="idea-details">
+              {i.details.map((d, idx) => <li key={idx} className="idea-detail">{d}</li>)}
+            </ul>
+          )}
+          <div className="idea-meta">
+            {(i.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
+            {i.updatedAt && <span className="idea-updated">{i.updatedAt}</span>}
+          </div>
+        </div>
+        <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
+      </div>
+    );
+  });
+
   return (
-    <div className="ideas-tab tab-pane">
+    <div className="ideas-wrapper">
       {editing && (
         <IdeaEditModal
           idea={editing}
@@ -1484,29 +1635,19 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags }: {
           onSave={u => { onUpdate(u); setEditing(null); }}
           onClose={() => setEditing(null)}
           customTags={customTags}
+          ideaTabs={ideaTabs}
         />
       )}
-      {ideas.map(i => {
-        const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
-        return (
-          <div key={i.id} className={`idea-card${justAdded ? ' just-added' : ''}`} onClick={() => setEditing(i)}>
-            <div className="idea-card-body">
-              <div className="idea-project">{i.projectName}</div>
-              {i.summary && <div className="idea-summary">{i.summary}</div>}
-              {(i.details || []).length > 0 && (
-                <ul className="idea-details">
-                  {i.details.map((d, idx) => <li key={idx} className="idea-detail">{d}</li>)}
-                </ul>
-              )}
-              <div className="idea-meta">
-                {(i.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
-                {i.updatedAt && <span className="idea-updated">{i.updatedAt}</span>}
-              </div>
-            </div>
-            <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
-          </div>
-        );
-      })}
+      {subtabBar}
+      {subtabInput}
+      <div className="ideas-tab tab-pane">
+        {ideas.length === 0
+          ? <div className="ideas-empty">まだアイデアがありません<br/>メモタブで思いついたことを入力し、<br/>「AI で反映」を押すと蓄積されます</div>
+          : filteredIdeas.length === 0
+            ? <div className="ideas-empty">このタブにはまだアイデアがありません</div>
+            : ideaCards
+        }
+      </div>
     </div>
   );
 }
@@ -1604,6 +1745,23 @@ function SettingsTab({ settings, onChange }: {
           </div>
           <button className={`toggle${soundOn ? ' on' : ' off'}`} onClick={() => onChange('completeSound', !soundOn)} />
         </div>
+        {soundOn && (
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">サウンドの種類</div>
+              <div className="settings-row-sub">タップして試聴</div>
+            </div>
+            <div className="sound-type-opts">
+              {SOUND_TYPES.map(s => (
+                <button
+                  key={s.key}
+                  className={`sound-type-btn${(settings.soundType || 'doremi') === s.key ? ' sel' : ''}`}
+                  onClick={() => { onChange('soundType', s.key); playSound(s.key); }}
+                >{s.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="settings-section-title">AI 連携（Gemini）</div>
@@ -1776,7 +1934,11 @@ function SmartMemoApp() {
     else if (newTodos.length && newIdeas.length) setTab('todo');
   }
 
-  const toggle     = (id: number | string) => setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const toggle = (id: number | string) => {
+    const todo = todos.find(t => t.id === id);
+    if (todo && !todo.done) setSettings(p => ({ ...p, xp: (p.xp || 0) + 10 }));
+    setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  };
   const remove     = (id: number | string) => setTodos(p => p.filter(t => t.id !== id));
   const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? item : t));
   const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
@@ -1793,13 +1955,16 @@ function SmartMemoApp() {
   return (
     <div className="app" style={appStyle}>
       <div className="app-header">
-        <h1>SmartMemo</h1>
-        <span className="tagline">AI でタスクを自動整理</span>
+        <div className="header-left">
+          <h1>SmartMemo</h1>
+          <span className="tagline">AI でタスクを自動整理</span>
+        </div>
+        <LevelBadge xp={settings.xp || 0} />
       </div>
       <div className="tab-content">
-        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} customTags={settings.customTags || []} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags || []} />}
+        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} onCommit={commit} />}
+        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav">
