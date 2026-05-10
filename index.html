@@ -32,7 +32,7 @@
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
       .bottom-nav   { padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
-      .modal-sheet, .confirm-sheet { padding-bottom:calc(80px + env(safe-area-inset-bottom)); }
+      .modal-sheet, .confirm-sheet { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
       .memo-textarea, .modal-field input, .modal-field select {
         font-size:max(16px, var(--fs-base));
@@ -134,14 +134,12 @@
     .bottom-nav {
       display:flex; background:#fff;
       border-top:none;
-      box-shadow:0 -4px 24px rgba(0,0,0,.10);
-      border-radius:24px 24px 0 0;
-      padding:6px 4px 8px;
+      box-shadow:0 -3px 16px rgba(0,0,0,.08);
+      border-radius:20px 20px 0 0;
+      padding:4px 0 6px;
       flex:0 0 auto;
       align-items:stretch;
       overflow:visible;
-      position:relative;
-      z-index:5;
     }
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
@@ -493,7 +491,7 @@
     /* Edit Modal */
     .modal-backdrop {
       position:fixed; inset:0; background:rgba(0,0,0,.35);
-      display:flex; align-items:flex-end; z-index:500;
+      display:flex; align-items:flex-end; z-index:1000;
       animation:bdIn .2s ease;
     }
     @keyframes bdIn { from{opacity:0} to{opacity:1} }
@@ -534,7 +532,7 @@
     /* Confirm Sheet */
     .confirm-sheet {
       background:#fafaf9; border-radius:18px 18px 0 0;
-      width:100%; max-height:88%; padding:20px 18px 80px;
+      width:100%; max-height:88%; padding:20px 18px 96px;
       display:flex; flex-direction:column;
       animation:sheetUp .25s ease;
     }
