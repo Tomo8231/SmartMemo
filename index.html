@@ -30,9 +30,9 @@
     /* Mobile / installed PWA — safe-area inserts */
     @media (max-width:500px), (display-mode:standalone) {
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
-      .bottom-nav   { padding-bottom:calc(10px + env(safe-area-inset-bottom)); }
+      .bottom-nav-wrapper { margin-bottom:calc(12px + env(safe-area-inset-bottom)); }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
-      .modal-sheet, .confirm-sheet { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+      .modal-sheet, .confirm-sheet { padding-bottom:calc(32px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
       .memo-textarea, .modal-field input, .modal-field select {
         font-size:max(16px, var(--fs-base));
@@ -131,44 +131,35 @@
     .tab-pane > * { flex-shrink:0; }
 
     /* Bottom nav */
+    .bottom-nav-wrapper {
+      position:relative; flex:0 0 auto;
+      isolation:isolate;    /* contain FAB z-index so modals (z-index:1000) stay on top */
+      align-self:center;    /* don't stretch to full width */
+      margin-bottom:12px;
+    }
     .bottom-nav {
       display:flex; background:#fff;
-      border-top:none;
-      box-shadow:0 -3px 16px rgba(0,0,0,.08);
-      border-radius:20px 20px 0 0;
-      padding:4px 0 6px;
-      flex:0 0 auto;
-      align-items:stretch;
-      overflow:visible;
+      box-shadow:0 4px 24px rgba(0,0,0,.13);
+      border-radius:20px;
+      padding:4px 8px 6px;
+      align-items:center;
     }
     .nav-tab {
-      flex:1; display:flex; flex-direction:column;
-      align-items:center; justify-content:flex-end;
-      gap:3px; cursor:pointer; padding-bottom:5px;
-    }
-    .nav-fab-wrap {
-      flex:1; display:flex; align-items:flex-end; justify-content:center;
-      position:relative;
-    }
-    /* Concave notch: page-bg semicircle peeks above nav bar top */
-    .nav-fab-wrap::before {
-      content:''; position:absolute;
-      top:0; left:50%; transform:translateX(-50%);
-      width:76px; height:28px;
-      background:#fafaf9;
-      border-radius:0 0 38px 38px;
-      z-index:0;
+      width:72px; display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:3px; cursor:pointer; padding:5px 0;
     }
     .nav-fab-mic {
-      width:58px; height:58px; border-radius:50%; border:none;
+      position:absolute; bottom:calc(100% + 8px);
+      left:50%; transform:translateX(-50%);
+      width:56px; height:56px; border-radius:50%; border:none;
       background:var(--accent); color:#fff;
       display:flex; align-items:center; justify-content:center;
       cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.26);
       transition:transform .15s, box-shadow .15s;
-      margin-bottom:28px;
-      position:relative; z-index:2;
+      z-index:10;
     }
-    .nav-fab-mic:active { transform:scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
+    .nav-fab-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     .nav-tab .nav-icon svg { transition:all 0.2s; width:24px; height:24px; }
     .nav-tab .nav-label { font-size:11px; font-weight:500; color:#c0c0ba; letter-spacing:0.2px; transition:color 0.2s; }
     .nav-tab.active .nav-label { color:var(--accent); }
