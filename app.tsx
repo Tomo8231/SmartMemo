@@ -38,6 +38,13 @@ type Settings = {
   soundType?: string;
   ideaTabs?: string[];
   coins?: number;
+  darkMode?: boolean;
+  bgIdx?: number;
+};
+type GachaPrize = {
+  type: 'miss' | 'sound' | 'bg';
+  label: string; rarity: string; stars: string; color: string;
+  soundType?: string; bgIdx?: number;
 };
 type TodoDraft = {
   id?: number | string;
@@ -172,6 +179,17 @@ function playSound(type: string) {
       gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
       osc.connect(gain).connect(ctx.destination);
       osc.start(now); osc.stop(now + 0.16);
+    } else if (type === 'fanfare') {
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'triangle'; osc.frequency.value = freq;
+        const t = now + i * 0.09;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.16, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.4);
+      });
     } else {
       // doremi (default)
       [659.25, 987.77].forEach((freq, i) => {
@@ -229,20 +247,29 @@ const FONT_SIZE_OPTS = [
 ];
 
 const GACHA_COST = 50;
-const GACHA_ITEMS = [
-  { label: 'ハズレ',      coins: 0,   rarity: 'common', stars: '★',     color: '#aaa' },
-  { label: 'コイン +5',   coins: 5,   rarity: 'common', stars: '★★',    color: '#888' },
-  { label: 'コイン +20',  coins: 20,  rarity: 'rare',   stars: '★★★',   color: '#2e7bef' },
-  { label: 'コイン +50',  coins: 50,  rarity: 'super',  stars: '★★★★',  color: '#9c27b0' },
-  { label: 'コイン +100', coins: 100, rarity: 'ultra',  stars: '★★★★★', color: '#e91e63' },
+const BG_PRESETS = [
+  { name: 'デフォルト', bg: '#fafaf9' },
+  { name: 'クリーム',   bg: '#fdf8f0' },
+  { name: 'ミント',     bg: '#f0faf5' },
+  { name: 'ラベンダー', bg: '#f5f0ff' },
+  { name: 'スカイ',     bg: '#f0f7ff' },
 ];
-const GACHA_WEIGHTS = [35, 30, 20, 12, 3];
-function pickGacha() {
-  const r = Math.random() * 100;
+const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
+  { type: 'miss',  label: 'ハズレ',           rarity: 'common', stars: '★',     color: '#aaa',    weight: 30 },
+  { type: 'sound', label: '🔔 チャイム',       rarity: 'common', stars: '★★',    color: '#888',    soundType: 'chime',   weight: 22 },
+  { type: 'sound', label: '🎹 ドレミ',         rarity: 'common', stars: '★★',    color: '#888',    soundType: 'doremi',  weight: 18 },
+  { type: 'bg',    label: '🎨 クリーム背景',   rarity: 'rare',   stars: '★★★',   color: '#e8a020', bgIdx: 1,             weight: 14 },
+  { type: 'bg',    label: '🌿 ミント背景',     rarity: 'super',  stars: '★★★★',  color: '#27ae60', bgIdx: 2,             weight: 8  },
+  { type: 'sound', label: '🎺 ファンファーレ', rarity: 'super',  stars: '★★★★',  color: '#9c27b0', soundType: 'fanfare', weight: 6  },
+  { type: 'bg',    label: '💜 ラベンダー背景', rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', bgIdx: 3,             weight: 2  },
+];
+function pickGacha(): GachaPrize {
+  const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
+  const r = Math.random() * total;
   let cum = 0;
-  for (let i = 0; i < GACHA_ITEMS.length; i++) {
-    cum += GACHA_WEIGHTS[i];
-    if (r < cum) return GACHA_ITEMS[i];
+  for (const item of GACHA_ITEMS) {
+    cum += item.weight;
+    if (r < cum) return item;
   }
   return GACHA_ITEMS[0];
 }
@@ -263,9 +290,9 @@ function CoinBadge({ coins, onGacha }: { coins: number; onGacha: () => void }) {
   );
 }
 
-function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () => void; onResult: (netDelta: number) => void }) {
+function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () => void; onResult: (prize: GachaPrize) => void }) {
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
-  const [result, setResult] = useState<typeof GACHA_ITEMS[0] | null>(null);
+  const [result, setResult] = useState<GachaPrize | null>(null);
   const [localCoins, setLocalCoins] = useState(coins);
   const canAfford = localCoins >= GACHA_COST;
 
@@ -276,13 +303,18 @@ function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () =
     setTimeout(() => {
       const r = pickGacha();
       setResult(r);
-      setLocalCoins(c => c + r.coins);
-      onResult(r.coins - GACHA_COST);
+      onResult(r);
       setPhase('result');
     }, 1300);
   }
 
   function again() { setPhase('idle'); setResult(null); }
+
+  const resultDesc = result
+    ? result.type === 'sound' ? `サウンド「${result.label}」をゲット！`
+    : result.type === 'bg'    ? `背景「${result.label}」をゲット！`
+    : 'またチャレンジしよう！'
+    : '';
 
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -299,6 +331,7 @@ function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () =
               </div>
           }
         </div>
+        {phase === 'result' && <div className="gacha-result-desc">{resultDesc}</div>}
         <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{localCoins}</div>
         {phase !== 'spinning' && (
           <button className="gacha-pull-btn" onClick={phase === 'result' ? again : pull} disabled={phase === 'idle' && !canAfford}>
@@ -1842,7 +1875,7 @@ function SettingsTab({ settings, onChange }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 }) {
-  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey } = settings;
+  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
   const [newTag, setNewTag]         = useState('');
   const [keyInput, setKeyInput]     = useState(geminiApiKey || '');
@@ -1886,6 +1919,13 @@ function SettingsTab({ settings, onChange }: {
       <div className="settings-card">
         <div className="settings-row">
           <div>
+            <div className="settings-row-label">ダークモード</div>
+            <div className="settings-row-sub">画面を暗くする</div>
+          </div>
+          <button className={`toggle${darkMode ? ' on' : ' off'}`} onClick={() => onChange('darkMode', !darkMode)} />
+        </div>
+        <div className="settings-row">
+          <div>
             <div className="settings-row-label">ベースカラー</div>
             <div className="settings-row-sub">{COLOR_PRESETS[colorIdx].name}</div>
           </div>
@@ -1894,6 +1934,19 @@ function SettingsTab({ settings, onChange }: {
               <div key={i} className={`color-swatch${colorIdx === i ? ' sel' : ''}`}
                 style={{ background: c.value }}
                 onClick={() => onChange('colorIdx', i)} />
+            ))}
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">背景テーマ</div>
+            <div className="settings-row-sub">{BG_PRESETS[settings.bgIdx ?? 0]?.name}</div>
+          </div>
+          <div className="color-swatches">
+            {BG_PRESETS.map((b, i) => (
+              <div key={i} className={`color-swatch${(settings.bgIdx ?? 0) === i ? ' sel' : ''}`}
+                style={{ background: b.bg, border: '1px solid #d0d0cc' }}
+                onClick={() => onChange('bgIdx', i)} />
             ))}
           </div>
         </div>
@@ -2057,7 +2110,7 @@ function SmartMemoApp() {
   const [ideas, setIdeas] = usePersistedState<Idea[]>(LS_IDEAS, []);
   const [settings, setSettings] = usePersistedState<Settings>(LS_SETTINGS, {
     colorIdx: 0, fontIdx: 1, notifEnabled: true, autoTag: true, autoDate: true,
-    completeSound: true, customTags: [], geminiApiKey: '', coins: 0,
+    completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0,
   });
 
   useEffect(() => {
@@ -2089,6 +2142,7 @@ function SmartMemoApp() {
     if (meta) meta.setAttribute('content', color.value);
   }, [color.value]);
 
+  const appBg = settings.darkMode ? '#141416' : (BG_PRESETS[settings.bgIdx ?? 0]?.bg ?? '#fafaf9');
   const appStyle: React.CSSProperties = {
     ['--accent'       as any]: color.value,
     ['--accent-light' as any]: color.light,
@@ -2096,6 +2150,7 @@ function SmartMemoApp() {
     ['--fs-base'      as any]: font.base,
     ['--fs-sm'        as any]: font.sm,
     ['--fs-xs'        as any]: font.xs,
+    background: appBg,
   };
 
   const existingProjects = ideas.map(i => i.projectName);
@@ -2145,7 +2200,7 @@ function SmartMemoApp() {
   ];
 
   return (
-    <div className="app" style={appStyle}>
+    <div className={`app${settings.darkMode ? ' dark' : ''}`} style={appStyle}>
       <div className="app-header">
         <div className="header-left">
           <h1>SmartMemo</h1>
@@ -2159,24 +2214,36 @@ function SmartMemoApp() {
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
-      <div className="bottom-nav-wrapper">
-        <button className="nav-fab-mic" onClick={handleFabMic} title="音声入力">
-          <IcoMicFab />
-        </button>
-        <div className="bottom-nav">
-          {navItems.map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-              <span className="nav-icon"><Icon active={tab === key} /></span>
-              <span className="nav-label">{label}</span>
-            </div>
-          ))}
+      <div className="bottom-nav">
+        {navItems.slice(0, 2).map(({ key, label, Icon }) => (
+          <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
+            <span className="nav-icon"><Icon active={tab === key} /></span>
+            <span className="nav-label">{label}</span>
+          </div>
+        ))}
+        <div className="nav-mic-slot">
+          <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
+            <IcoMicFab />
+          </button>
         </div>
+        {navItems.slice(2).map(({ key, label, Icon }) => (
+          <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
+            <span className="nav-icon"><Icon active={tab === key} /></span>
+            <span className="nav-label">{label}</span>
+          </div>
+        ))}
       </div>
       {showGacha && (
         <GachaModal
           coins={settings.coins || 0}
           onClose={() => setShowGacha(false)}
-          onResult={delta => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }))}
+          onResult={prize => setSettings(p => {
+            const newCoins = Math.max(0, (p.coins || 0) - GACHA_COST);
+            const updates: Partial<Settings> = { coins: newCoins };
+            if (prize.type === 'sound' && prize.soundType) updates.soundType = prize.soundType;
+            if (prize.type === 'bg' && prize.bgIdx !== undefined) updates.bgIdx = prize.bgIdx;
+            return { ...p, ...updates };
+          })}
         />
       )}
     </div>
