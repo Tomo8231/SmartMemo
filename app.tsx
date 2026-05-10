@@ -1609,7 +1609,6 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
           <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
           {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
         </div>
-        <button className="add-item-btn" onClick={() => setAdding(true)} title="タスクを追加">＋</button>
         <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
           <IcoCalendar />
           {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
@@ -1623,6 +1622,9 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
           ? <div className="todo-empty">この日のタスクはありません</div>
           : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
         }
+        <button className="todo-add-row" onClick={() => setAdding(true)}>
+          ＋ タスクを追加
+        </button>
         {sortedUndated.length > 0 && <>
           <div className="divider"/>
           <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
@@ -1818,17 +1820,15 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
           ideaTabs={ideaTabs}
         />
       )}
-      <div className="ideas-header-row">
-        {subtabBar}
-        <button className="add-item-btn" onClick={() => setAddingIdea(true)} title="アイデアを追加">＋</button>
-      </div>
+      {subtabBar}
       {subtabInput}
       <div className="ideas-tab tab-pane">
-        {ideas.length === 0
-          ? <div className="ideas-empty">まだアイデアがありません<br/>メモタブで思いついたことを入力し、<br/>「AI で反映」を押すと蓄積されます</div>
-          : filteredIdeas.length === 0
-            ? <div className="ideas-empty">このタブにはまだアイデアがありません</div>
-            : ideaCards
+        <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
+          ＋ 新しいアイデアを追加
+        </button>
+        {filteredIdeas.length === 0
+          ? <div className="ideas-empty">まだアイデアがありません</div>
+          : ideaCards
         }
       </div>
     </div>
