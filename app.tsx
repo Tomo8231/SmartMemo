@@ -1622,9 +1622,6 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
           ? <div className="todo-empty">この日のタスクはありません</div>
           : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
         }
-        <button className="todo-add-row" onClick={() => setAdding(true)}>
-          ＋ タスクを追加
-        </button>
         {sortedUndated.length > 0 && <>
           <div className="divider"/>
           <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
@@ -1636,6 +1633,9 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
             {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
           </div>
         </>}
+        <button className="todo-add-row" onClick={() => setAdding(true)}>
+          ＋ タスクを追加
+        </button>
       </div>
     </div>
   );
@@ -1823,13 +1823,13 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
       {subtabBar}
       {subtabInput}
       <div className="ideas-tab tab-pane">
-        <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
-          ＋ 新しいアイデアを追加
-        </button>
         {filteredIdeas.length === 0
           ? <div className="ideas-empty">まだアイデアがありません</div>
           : ideaCards
         }
+        <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
+          ＋ 新しいアイデアを追加
+        </button>
       </div>
     </div>
   );
