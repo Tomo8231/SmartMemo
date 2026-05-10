@@ -854,8 +854,9 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, onSave, onClose, customTags = [] }: {
+function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
   todo: Todo | (TodoDraft & { id: string });
+  mode?: 'add' | 'edit';
   onSave: (t: any) => void;
   onClose: () => void;
   customTags?: string[];
@@ -878,7 +879,7 @@ function EditModal({ todo, onSave, onClose, customTags = [] }: {
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
         <div className="modal-handle"/>
-        <div className="modal-title">タスクを編集</div>
+        <div className="modal-title">{mode === 'add' ? 'タスクを追加' : 'タスクを編集'}</div>
 
         <div className="modal-field">
           <label>タイトル</label>
@@ -908,7 +909,7 @@ function EditModal({ todo, onSave, onClose, customTags = [] }: {
         </div>
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
-          <button className="modal-save" onClick={handleSave}>保存</button>
+          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? '追加' : '保存'}</button>
         </div>
       </div>
     </div>
@@ -918,8 +919,9 @@ function EditModal({ todo, onSave, onClose, customTags = [] }: {
 // ─────────────────────────────────────────────────────────────
 // Idea Edit Modal
 // ─────────────────────────────────────────────────────────────
-function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [], ideaTabs = [] }: {
+function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customTags = [], ideaTabs = [] }: {
   idea: Idea | (IdeaDraft & { id: string });
+  mode?: 'add' | 'edit';
   projects: string[];
   onSave: (i: any) => void;
   onClose: () => void;
@@ -950,7 +952,7 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [], ideaT
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
         <div className="modal-handle"/>
-        <div className="modal-title">アイデアを編集</div>
+        <div className="modal-title">{mode === 'add' ? 'アイデアを追加' : 'アイデアを編集'}</div>
 
         <div className="modal-field">
           <label>プロジェクト</label>
@@ -986,7 +988,7 @@ function IdeaEditModal({ idea, projects, onSave, onClose, customTags = [], ideaT
         )}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
-          <button className="modal-save" onClick={handleSave}>保存</button>
+          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? '追加' : '保存'}</button>
         </div>
       </div>
     </div>
@@ -1550,17 +1552,19 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 // ─────────────────────────────────────────────────────────────
 // TODO Tab
 // ─────────────────────────────────────────────────────────────
-function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType = 'doremi', customTags }: {
+function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, soundType = 'doremi', customTags }: {
   todos: Todo[];
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onUpdate: (t: Todo) => void;
+  onAdd: (t: Todo) => void;
   soundEnabled: boolean;
   soundType?: string;
   customTags: string[];
 }) {
   const [sel,          setSel]          = useState(todayStr);
   const [editing,      setEditing]      = useState<Todo | null>(null);
+  const [adding,       setAdding]       = useState(false);
   const [showCalendar, setShowCalendar] = useState(true);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
@@ -1590,6 +1594,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType 
   return (
     <div className="todo-tab">
       {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
+      {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: '', time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => { onAdd(t); setAdding(false); }} onClose={() => setAdding(false)} customTags={customTags} />}
       <div className="todo-controls">
         <div className="filter-tags">
           {tagOptions.map(tag => (
@@ -1604,6 +1609,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType 
           <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
           {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
         </div>
+        <button className="add-item-btn" onClick={() => setAdding(true)} title="タスクを追加">＋</button>
         <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
           <IcoCalendar />
           {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
@@ -1636,15 +1642,17 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, soundEnabled, soundType 
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
   ideas: Idea[];
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
+  onAdd: (i: Idea) => void;
   customTags: string[];
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
+  const [addingIdea,     setAddingIdea]     = useState(false);
   const [activeSubTab,   setActiveSubTab]   = useState<string>('all');
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
@@ -1799,7 +1807,21 @@ function IdeasTab({ ideas, onUpdate, onDelete, customTags, ideaTabs = [], onUpda
           ideaTabs={ideaTabs}
         />
       )}
-      {subtabBar}
+      {addingIdea && (
+        <IdeaEditModal
+          mode="add"
+          idea={{ id: Date.now(), projectName: '', summary: '', details: [], tags: [], subTab: activeSubTab === 'all' ? undefined : activeSubTab, addedAt: Date.now(), updatedAt: todayStr } as Idea}
+          projects={projectNames}
+          onSave={i => { onAdd(i); setAddingIdea(false); }}
+          onClose={() => setAddingIdea(false)}
+          customTags={customTags}
+          ideaTabs={ideaTabs}
+        />
+      )}
+      <div className="ideas-header-row">
+        {subtabBar}
+        <button className="add-item-btn" onClick={() => setAddingIdea(true)} title="アイデアを追加">＋</button>
+      </div>
       {subtabInput}
       <div className="ideas-tab tab-pane">
         {ideas.length === 0
@@ -2107,8 +2129,10 @@ function SmartMemoApp() {
   };
   const remove     = (id: number | string) => setTodos(p => p.filter(t => t.id !== id));
   const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? item : t));
+  const addTodo    = (item: Todo)          => setTodos(p => [...p, item]);
   const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
   const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
+  const addIdea    = (item: Idea)          => setIdeas(p => [...p, item]);
   const setSetting = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings(p => ({ ...p, [k]: v }));
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
@@ -2131,8 +2155,8 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav">

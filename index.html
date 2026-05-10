@@ -599,6 +599,17 @@
       font-size:var(--fs-sm); line-height:1.7;
     }
     .ideas-wrapper { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
+    .ideas-header-row { display:flex; align-items:center; background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0; }
+    .ideas-header-row .ideas-subtabs { border-bottom:none; flex:1; min-width:0; }
+    .ideas-header-row .add-item-btn { margin-right:10px; flex-shrink:0; }
+    .add-item-btn {
+      width:28px; height:28px; border-radius:50%;
+      background:var(--accent-light); color:var(--accent);
+      border:none; font-size:18px; line-height:1;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; flex-shrink:0; transition:opacity .15s;
+    }
+    .add-item-btn:active { opacity:.65; }
     .ideas-subtabs {
       display:flex; align-items:center; overflow-x:auto;
       padding:0 16px; border-bottom:1px solid #ebebea;
