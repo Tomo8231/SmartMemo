@@ -30,9 +30,9 @@
     /* Mobile / installed PWA — safe-area inserts */
     @media (max-width:500px), (display-mode:standalone) {
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
-      .bottom-nav   { padding-bottom:calc(6px + env(safe-area-inset-bottom)); }
+      .bottom-nav-wrapper { margin-bottom:calc(12px + env(safe-area-inset-bottom)); }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
-      .modal-sheet, .confirm-sheet { padding-bottom:calc(96px + env(safe-area-inset-bottom)); }
+      .modal-sheet, .confirm-sheet { padding-bottom:calc(32px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
       .memo-textarea, .modal-field input, .modal-field select {
         font-size:max(16px, var(--fs-base));
@@ -133,19 +133,21 @@
     /* Bottom nav */
     .bottom-nav-wrapper {
       position:relative; flex:0 0 auto;
+      isolation:isolate;    /* contain FAB z-index so modals (z-index:1000) stay on top */
+      align-self:center;    /* don't stretch to full width */
+      margin-bottom:12px;
     }
     .bottom-nav {
       display:flex; background:#fff;
-      border-top:none;
-      box-shadow:0 -3px 16px rgba(0,0,0,.08);
-      border-radius:20px 20px 0 0;
-      padding:4px 0 6px;
+      box-shadow:0 4px 24px rgba(0,0,0,.13);
+      border-radius:20px;
+      padding:4px 8px 6px;
       align-items:center;
     }
     .nav-tab {
-      flex:1; display:flex; flex-direction:column;
+      width:72px; display:flex; flex-direction:column;
       align-items:center; justify-content:center;
-      gap:3px; cursor:pointer; padding-bottom:5px; padding-top:5px;
+      gap:3px; cursor:pointer; padding:5px 0;
     }
     .nav-fab-mic {
       position:absolute; bottom:calc(100% + 8px);
