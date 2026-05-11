@@ -437,18 +437,21 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, onClose, onR
               </div>
           }
         </div>
-        {phase === 'result' && (
-          <>
-            <div className="gacha-result-name" style={{ color: result!.color }}>{labelText || result!.label}</div>
-            <div className="gacha-result-desc">{resultDesc}</div>
-          </>
-        )}
+        <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
+          <div className="gacha-result-name" style={{ color: result?.color }}>{labelText || result?.label || ' '}</div>
+          <div className="gacha-result-desc">{resultDesc || ' '}</div>
+        </div>
         <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
-        {phase !== 'spinning' && (
-          <button className="gacha-pull-btn" onClick={phase === 'result' ? again : pull} disabled={phase === 'idle' && !canAfford}>
-            {phase === 'result' ? '✨ もう一度引く' : canAfford ? '✨ ガチャを引く！' : 'コインが足りません'}
-          </button>
-        )}
+        <button
+          className="gacha-pull-btn"
+          onClick={phase === 'result' ? again : pull}
+          disabled={phase === 'spinning' || (phase === 'idle' && !canAfford)}
+        >
+          {phase === 'result' ? '✨ もう一度引く'
+           : phase === 'spinning' ? 'ガチャ中...'
+           : canAfford ? '✨ ガチャを引く！'
+           : 'コインが足りません'}
+        </button>
       </div>
     </div>
   );
@@ -1215,13 +1218,14 @@ const SPARK_POS = [
   { dx: 21, dy: 21, bg: 'var(--accent)' },
 ];
 
-function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi' }: {
+function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi', overdue }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onEdit: (t: Todo) => void;
   soundEnabled: boolean;
   soundType?: string;
+  overdue?: boolean;
 }) {
   const [animating, setAnimating] = useState(false);
   const [sparkling, setSparkling] = useState(false);
@@ -1238,7 +1242,7 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
     onToggle(todo.id);
   }
   return (
-    <div className={`todo-item${todo.done ? ' done' : ''}${animating ? ' animate-fade' : ''}${justAdded ? ' just-added' : ''}`}>
+    <div className={`todo-item${todo.done ? ' done' : ''}${animating ? ' animate-fade' : ''}${justAdded ? ' just-added' : ''}${overdue ? ' overdue' : ''}`}>
       {sparkling && (
         <div className="todo-sparkle">
           {SPARK_POS.map(({ dx, dy, bg }, i) => (
@@ -1787,8 +1791,14 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
     selectedTags.size === 0 || (t.tags || []).some(tag => selectedTags.has(tag))
   );
 
+  const overdueTodos = filteredTodos.filter(t => {
+    if (t.done || !t.startDate) return false;
+    return (t.endDate || t.startDate) < todayStr;
+  });
+  const overdueIds = new Set(overdueTodos.map(t => t.id));
+
   const dateTodos = filteredTodos.filter(t => {
-    if (!t.startDate) return false;
+    if (!t.startDate || overdueIds.has(t.id as string)) return false;
     return sel >= t.startDate && sel <= (t.endDate || t.startDate);
   });
   const sortedDateTodos = [...dateTodos.filter(t => !t.done), ...dateTodos.filter(t => t.done)];
@@ -1808,48 +1818,60 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
     <div className="todo-tab">
       {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: '', time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => { onAdd(t); setAdding(false); }} onClose={() => setAdding(false)} customTags={customTags} />}
-      <div className="todo-controls">
-        <div className="filter-tags">
-          {tagOptions.map(tag => (
-            <button key={tag} className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`} onClick={() => toggleTag(tag)}>
-              {tag}
-            </button>
-          ))}
+      <div className="todo-pane-left">
+        <div className="todo-controls">
+          <div className="filter-tags">
+            {tagOptions.map(tag => (
+              <button key={tag} className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`} onClick={() => toggleTag(tag)}>
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="todo-list-header">
+          <div style={{ display:'flex', alignItems:'center', gap:'7px', flex:1, minWidth:0 }}>
+            <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
+            {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
+          </div>
+          <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
+            <IcoCalendar />
+            {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
+          </button>
+        </div>
+        <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
+          <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} />
         </div>
       </div>
-      <div className="todo-list-header">
-        <div style={{ display:'flex', alignItems:'center', gap:'7px', flex:1, minWidth:0 }}>
-          <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
-          {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
+      <div className="todo-pane-right">
+        <div className="todo-list-area">
+          {boss && <BossItem boss={boss} onComplete={onBossComplete || (() => {})} onDismiss={onBossDismiss || (() => {})} />}
+          {overdueTodos.length > 0 && <>
+            <div className="overdue-head">
+              <span className="section-head-label">期限切れ</span>
+              <span className="section-count">{overdueTodos.length}</span>
+            </div>
+            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} overdue />)}
+            <div className="divider"/>
+          </>}
+          {sortedDateTodos.length === 0
+            ? <div className="todo-empty">この日のタスクはありません</div>
+            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
+          }
+          {sortedUndated.length > 0 && <>
+            <div className="divider"/>
+            <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
+              <span className="section-head-label">日付未定</span>
+              <span className="section-count">{sortedUndated.length}</span>
+              <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
+            </div>
+            <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
+              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
+            </div>
+          </>}
+          <button className="todo-add-row" onClick={() => setAdding(true)}>
+            ＋ タスクを追加
+          </button>
         </div>
-        <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
-          <IcoCalendar />
-          {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
-        </button>
-      </div>
-      <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
-        <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} />
-      </div>
-      <div className="todo-list-area">
-        {boss && <BossItem boss={boss} onComplete={onBossComplete || (() => {})} onDismiss={onBossDismiss || (() => {})} />}
-        {sortedDateTodos.length === 0
-          ? <div className="todo-empty">この日のタスクはありません</div>
-          : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
-        }
-        {sortedUndated.length > 0 && <>
-          <div className="divider"/>
-          <div className="section-head undated-head" onClick={() => setUndatedOpen(o => !o)}>
-            <span className="section-head-label">日付未定</span>
-            <span className="section-count">{sortedUndated.length}</span>
-            <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
-          </div>
-          <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
-            {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
-          </div>
-        </>}
-        <button className="todo-add-row" onClick={() => setAdding(true)}>
-          ＋ タスクを追加
-        </button>
       </div>
     </div>
   );
