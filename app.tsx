@@ -326,6 +326,16 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
   { type: 'bg',    label: '🌅 ローズ背景',       rarity: 'ultra',  stars: '★★★★★', color: '#c2185b', bgIdx: 6,             weight: 1  },
 ];
+const BOSS_TODOS = [
+  '今日のタスクを3つ完了させよ！',
+  'メモを書いてAI解析してみよ！',
+  'アイデアを新しく1つ追加せよ！',
+  'ガチャを1回引け！',
+  'タスクを新しく追加してみよ！',
+  '週表示でカレンダーを確認せよ！',
+  '設定のサウンドを変えてみよ！',
+];
+
 function pickGacha(): GachaPrize {
   const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
   const r = Math.random() * total;
@@ -364,6 +374,19 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, onClose, onR
   const [localCoins, setLocalCoins] = useState(coins);
   const canAfford = infinite || localCoins >= GACHA_COST;
 
+  const rarityBg: Record<string, string> = {
+    common: 'linear-gradient(135deg, #9e9e9e 0%, #e0e0e0 100%)',
+    rare:   'linear-gradient(135deg, #1565c0 0%, #42a5f5 100%)',
+    super:  'linear-gradient(135deg, #6a1b9a 0%, #ce93d8 80%, #ffd700 100%)',
+    ultra:  'linear-gradient(135deg, #ffd700 0%, #ff6b35 35%, #e91e63 65%, #9c27b0 100%)',
+  };
+  const rarityGlow: Record<string, string> = {
+    common: '0 0 20px rgba(158,158,158,0.5), 0 4px 20px rgba(0,0,0,.4)',
+    rare:   '0 0 30px rgba(66,165,245,0.7), 0 0 60px rgba(21,101,192,0.35), 0 4px 20px rgba(0,0,0,.4)',
+    super:  '0 0 30px rgba(206,147,216,0.7), 0 0 60px rgba(106,27,154,0.45), 0 4px 20px rgba(0,0,0,.4)',
+    ultra:  '0 0 40px rgba(255,215,0,0.9), 0 0 80px rgba(255,107,53,0.5), 0 4px 20px rgba(0,0,0,.4)',
+  };
+
   function pull() {
     if (!canAfford || phase === 'spinning') return;
     if (!infinite) setLocalCoins(c => c - GACHA_COST);
@@ -378,38 +401,52 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, onClose, onR
       if (dup && !infinite) setLocalCoins(c => c + 10);
       onResult(r, dup);
       setPhase('result');
-    }, 1300);
+    }, 1600);
   }
 
   function again() { setPhase('idle'); setResult(null); setIsDuplicate(false); }
 
+  const capsuleBg  = phase === 'result' && result ? (rarityBg[result.rarity]  || rarityBg.common)  : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
+  const capsuleGlow = phase === 'result' && result ? (rarityGlow[result.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
+
   const resultDesc = result
-    ? isDuplicate        ? `すでに解放済み！ コイン +10`
-    : result.type === 'sound' ? `${result.label} をゲット！設定に反映`
-    : result.type === 'bg'    ? `${result.label} をゲット！設定に反映`
-    : ''
+    ? isDuplicate ? 'すでに解放済み！ コイン +10 獲得'
+    : `${result.label} をゲット！設定に反映されました`
     : '';
 
+  const labelParts = result ? result.label.split(' ') : [];
+  const labelEmoji = labelParts[0] || '';
+  const labelText  = labelParts.slice(1).join(' ');
+
   return (
-    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="modal-backdrop gacha-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="gacha-modal">
         <button className="gacha-close-btn" onClick={onClose}>✕</button>
-        <div className="gacha-title">ガチャ</div>
+        <div className="gacha-title">🎰 ガチャ</div>
         <div className="gacha-cost-info"><IcoCoin />&nbsp;{GACHA_COST}コインで1回</div>
-        <div className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}>
+        <div
+          className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}
+          style={{ background: capsuleBg, boxShadow: capsuleGlow }}
+        >
+          {phase === 'spinning' && <div className="gacha-flash" />}
           {phase !== 'result'
-            ? <div className="gacha-capsule-inner" />
-            : <div className="gacha-result" style={{ color: result!.color }}>
-                <div className="gacha-result-rarity">{result!.stars}</div>
-                <div className="gacha-result-label">{result!.label}</div>
+            ? <div className="gacha-capsule-inner">？</div>
+            : <div className="gacha-result">
+                <div className="gacha-result-rarity" style={{ color: result!.color }}>{result!.stars}</div>
+                <div className="gacha-result-label">{labelEmoji}</div>
               </div>
           }
         </div>
-        {phase === 'result' && <div className="gacha-result-desc">{resultDesc}</div>}
+        {phase === 'result' && (
+          <>
+            <div className="gacha-result-name" style={{ color: result!.color }}>{labelText || result!.label}</div>
+            <div className="gacha-result-desc">{resultDesc}</div>
+          </>
+        )}
         <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
         {phase !== 'spinning' && (
           <button className="gacha-pull-btn" onClick={phase === 'result' ? again : pull} disabled={phase === 'idle' && !canAfford}>
-            {phase === 'result' ? 'もう一度' : canAfford ? 'ガチャを引く！' : 'コインが足りません'}
+            {phase === 'result' ? '✨ もう一度引く' : canAfford ? '✨ ガチャを引く！' : 'コインが足りません'}
           </button>
         )}
       </div>
@@ -830,6 +867,7 @@ function copyToClipboard(text: string) {
     document.body.appendChild(el); el.select();
     document.execCommand('copy'); document.body.removeChild(el);
   });
+  window.dispatchEvent(new CustomEvent('copy-success'));
 }
 function buildTodoCopyText(t: Todo): string {
   const lines = [t.title];
@@ -843,6 +881,29 @@ function buildIdeaCopyText(i: Idea): string {
   if (i.summary) lines.push(i.summary);
   (i.details || []).forEach(d => lines.push(`・${d}`));
   return lines.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────
+// Boss Item
+// ─────────────────────────────────────────────────────────────
+function BossItem({ boss, onComplete, onDismiss }: {
+  boss: { id: string; title: string; spawnedAt: number };
+  onComplete: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="boss-item">
+      <div className="boss-crown">👑</div>
+      <div className="boss-body">
+        <div className="boss-title">ボスミッション: {boss.title}</div>
+        <div className="boss-reward">達成で 🪙 +50コイン！</div>
+      </div>
+      <div className="boss-actions">
+        <button className="boss-complete-btn" onClick={onComplete}>達成！</button>
+        <button className="boss-dismiss-btn" onClick={onDismiss} title="後で">✕</button>
+      </div>
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1698,8 +1759,11 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 // ─────────────────────────────────────────────────────────────
 // TODO Tab
 // ─────────────────────────────────────────────────────────────
-function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, soundType = 'doremi', customTags }: {
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, soundEnabled, soundType = 'doremi', customTags }: {
   todos: Todo[];
+  boss?: { id: string; title: string; spawnedAt: number } | null;
+  onBossComplete?: () => void;
+  onBossDismiss?: () => void;
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onUpdate: (t: Todo) => void;
@@ -1708,14 +1772,15 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
   soundType?: string;
   customTags: string[];
 }) {
-  const [sel,          setSel]          = useState(todayStr);
-  const [editing,      setEditing]      = useState<Todo | null>(null);
-  const [adding,       setAdding]       = useState(false);
+  const [sel,          setSel]        = usePersistedState<string>('smartmemo:ui:sel', todayStr);
+  const [editing,      setEditing]    = useState<Todo | null>(null);
+  const [adding,       setAdding]     = useState(false);
   const [showCalendar, setShowCalendar] = useState(true);
-  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
-  const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
+  const [selTagsArr,   setSelTagsArr] = usePersistedState<string[]>('smartmemo:ui:tags', []);
+  const [calendarMode, setCalendarMode] = usePersistedState<'month' | 'week'>('smartmemo:ui:calMode', 'month');
   const [undatedOpen,  setUndatedOpen]  = useState(true);
 
+  const selectedTags = new Set(selTagsArr);
   const tagOptions = getTodoTagOptions(customTags);
 
   const filteredTodos = todos.filter(t =>
@@ -1732,9 +1797,11 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
   const sortedUndated = [...undated.filter(t => !t.done), ...undated.filter(t => t.done)];
 
   const toggleTag = (tag: string) => {
-    const s = new Set(selectedTags);
-    if (s.has(tag)) s.delete(tag); else s.add(tag);
-    setSelectedTags(s);
+    setSelTagsArr(prev => {
+      const s = new Set(prev);
+      if (s.has(tag)) s.delete(tag); else s.add(tag);
+      return Array.from(s);
+    });
   };
 
   return (
@@ -1764,6 +1831,7 @@ function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, soundEnabled, sou
         <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} />
       </div>
       <div className="todo-list-area">
+        {boss && <BossItem boss={boss} onComplete={onBossComplete || (() => {})} onDismiss={onBossDismiss || (() => {})} />}
         {sortedDateTodos.length === 0
           ? <div className="todo-empty">この日のタスクはありません</div>
           : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
@@ -1801,7 +1869,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
-  const [activeSubTab,   setActiveSubTab]   = useState<string>('all');
+  const [activeSubTab,   setActiveSubTab]   = usePersistedState<string>('smartmemo:ui:subTab', 'all');
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
   const [dragTabIdx,     setDragTabIdx]     = useState<number | null>(null);
@@ -2223,10 +2291,13 @@ function SettingsTab({ settings, onChange }: {
 // Root
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
-  const [tab, setTab] = useState<Tab>('memo');
+  const [tab, setTab] = usePersistedState<Tab>('smartmemo:ui:tab', 'memo');
   const [pulseTabs, setPulseTabs] = useState<Set<Tab>>(new Set());
   const [micTrigger, setMicTrigger] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
+  const [appToast, setAppToast] = useState<string | null>(null);
+  const appToastRef = useRef<number | undefined>(undefined);
+  const [boss, setBoss] = usePersistedState<{ id: string; title: string; spawnedAt: number } | null>('smartmemo:boss', null);
   const [todos, setTodos] = usePersistedState<Todo[]>(LS_TODOS, [
     { id: 1, title: 'プレゼン資料の作成', startDate: todayStr, endDate: '', time: '10:00', tags: ['仕事'],   done: false },
     { id: 2, title: '牛乳を購入する',     startDate: todayStr, endDate: '', time: '',      tags: ['買い物'], done: false },
@@ -2259,6 +2330,35 @@ function SmartMemoApp() {
       document.removeEventListener('visibilitychange', onVis);
     };
   }, [todos, ideas, settings]);
+
+  function showAppToast(msg: string) {
+    setAppToast(msg);
+    if (appToastRef.current) clearTimeout(appToastRef.current);
+    appToastRef.current = window.setTimeout(() => setAppToast(null), 2700);
+  }
+
+  useEffect(() => {
+    const handler = () => showAppToast('コピーしました ✓');
+    window.addEventListener('copy-success', handler);
+    return () => window.removeEventListener('copy-success', handler);
+  }, []);
+
+  useEffect(() => {
+    if (boss !== null) return;
+    const lastDate = loadStored<string>('smartmemo:boss:date', '');
+    if (lastDate === todayStr) return;
+    saveStored('smartmemo:boss:date', todayStr);
+    if (Math.random() < 0.30) {
+      const idx = Math.floor(Math.random() * BOSS_TODOS.length);
+      setBoss({ id: `boss-${Date.now()}`, title: BOSS_TODOS[idx], spawnedAt: Date.now() });
+    }
+  }, []);
+
+  function handleBossComplete() {
+    setBoss(null);
+    setSettings(p => ({ ...p, coins: (p.coins || 0) + 50 }));
+    showAppToast('👑 ボスミッション達成！ 🪙 +50コイン！');
+  }
 
   const color = COLOR_PRESETS[settings.colorIdx];
   const font  = FONT_SIZE_OPTS[settings.fontIdx];
@@ -2336,7 +2436,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
@@ -2360,6 +2460,7 @@ function SmartMemoApp() {
           ))}
         </div>
       </div>
+      {appToast && <div className="toast">{appToast}</div>}
       {showGacha && (
         <GachaModal
           coins={settings.coins || 0}
