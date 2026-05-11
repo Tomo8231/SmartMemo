@@ -30,7 +30,8 @@
     /* Mobile / installed PWA — safe-area inserts */
     @media (max-width:500px), (display-mode:standalone) {
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
-      .bottom-nav { padding-bottom:calc(6px + env(safe-area-inset-bottom)); }
+      .bottom-nav { padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
+      .bottom-nav-wrapper { /* safe area is handled by .bottom-nav padding */ }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
       .modal-sheet, .confirm-sheet { padding-bottom:calc(32px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
@@ -132,14 +133,17 @@
     .tab-pane > * { flex-shrink:0; }
 
     /* Bottom nav */
+    .bottom-nav-wrapper {
+      position:relative; flex:0 0 auto;
+      isolation:isolate;
+    }
     .bottom-nav {
       display:flex; background:#fff;
       box-shadow:0 -2px 14px rgba(0,0,0,.09);
       border-radius:20px 20px 0 0;
       padding:4px 0 6px;
-      flex:0 0 auto;
       align-items:flex-end;
-      isolation:isolate;
+      width:100%;
     }
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
@@ -147,20 +151,20 @@
       gap:3px; cursor:pointer; padding-bottom:5px; min-height:54px;
     }
     .nav-mic-slot {
-      width:72px; flex-shrink:0;
-      display:flex; align-items:flex-end; justify-content:center;
-      padding-bottom:4px;
+      width:72px; flex-shrink:0; /* empty placeholder aligned with mic button */
     }
     .nav-center-mic {
-      width:52px; height:52px; border-radius:50%; border:none;
+      position:absolute;
+      left:50%; transform:translateX(-50%);
+      bottom:calc(100% - 28px); /* bottom half (28px) inside nav bar */
+      width:56px; height:56px; border-radius:50%; border:none;
       background:var(--accent); color:#fff;
       display:flex; align-items:center; justify-content:center;
       box-shadow:0 4px 16px rgba(0,0,0,.26);
-      transform:translateY(-10px);
-      transition:transform .15s, box-shadow .15s;
       cursor:pointer;
+      transition:transform .15s, box-shadow .15s;
     }
-    .nav-center-mic:active { transform:translateY(-10px) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
+    .nav-center-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     .nav-tab .nav-icon svg { transition:all 0.2s; width:24px; height:24px; }
     .nav-tab .nav-label { font-size:11px; font-weight:500; color:#c0c0ba; letter-spacing:0.2px; transition:color 0.2s; }
     .nav-tab.active .nav-label { color:var(--accent); }
@@ -808,6 +812,7 @@
     .app.dark .tagline { color:#6a6a68; }
     .app.dark .coin-badge { background:rgba(255,255,255,.08); }
     .app.dark .bottom-nav { background:#1e1e21; }
+    .app.dark .bottom-nav-wrapper { /* inherits from .bottom-nav */ }
     .app.dark .nav-tab .nav-label { color:#5a5a58; }
     .app.dark .nav-tab.active .nav-label { color:var(--accent); }
     .app.dark .tab-content { background:#141416; }

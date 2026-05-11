@@ -2214,24 +2214,25 @@ function SmartMemoApp() {
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
-      <div className="bottom-nav">
-        {navItems.slice(0, 2).map(({ key, label, Icon }) => (
-          <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-            <span className="nav-icon"><Icon active={tab === key} /></span>
-            <span className="nav-label">{label}</span>
-          </div>
-        ))}
-        <div className="nav-mic-slot">
-          <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
-            <IcoMicFab />
-          </button>
+      <div className="bottom-nav-wrapper">
+        <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
+          <IcoMicFab />
+        </button>
+        <div className="bottom-nav">
+          {navItems.slice(0, 2).map(({ key, label, Icon }) => (
+            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
+              <span className="nav-icon"><Icon active={tab === key} /></span>
+              <span className="nav-label">{label}</span>
+            </div>
+          ))}
+          <div className="nav-mic-slot" />
+          {navItems.slice(2).map(({ key, label, Icon }) => (
+            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
+              <span className="nav-icon"><Icon active={tab === key} /></span>
+              <span className="nav-label">{label}</span>
+            </div>
+          ))}
         </div>
-        {navItems.slice(2).map(({ key, label, Icon }) => (
-          <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-            <span className="nav-icon"><Icon active={tab === key} /></span>
-            <span className="nav-label">{label}</span>
-          </div>
-        ))}
       </div>
       {showGacha && (
         <GachaModal
