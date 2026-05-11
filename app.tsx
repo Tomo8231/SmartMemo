@@ -41,6 +41,7 @@ type Settings = {
   darkMode?: boolean;
   bgIdx?: number;
   infiniteCoins?: boolean;
+  gachaUnlocked?: { sounds: string[]; bgs: number[] };
 };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg';
@@ -133,10 +134,15 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 // Sound types for task completion.
 const SOUND_TYPES = [
-  { key: 'doremi', label: 'ドレミ' },
-  { key: 'pop',    label: 'ポップ' },
-  { key: 'chime',  label: 'チャイム' },
-  { key: 'coin',   label: 'コイン' },
+  { key: 'doremi',   label: 'ドレミ' },
+  { key: 'pop',      label: 'ポップ' },
+  { key: 'chime',    label: 'チャイム' },
+  { key: 'coin',     label: 'コイン' },
+  { key: 'mario',    label: '🍄 マリオ' },
+  { key: '8bit',     label: '🎮 8ビット' },
+  { key: 'bell',     label: '🎶 ベル' },
+  { key: 'fanfare',  label: '🎺 ファンファーレ' },
+  { key: 'special',  label: '🎵 特製メロディ' },
 ];
 let _audioCtx: AudioContext | undefined;
 function _getAudioCtx(): AudioContext {
@@ -190,6 +196,52 @@ function playSound(type: string) {
         gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
         osc.connect(gain).connect(ctx.destination);
         osc.start(t); osc.stop(t + 0.4);
+      });
+    } else if (type === 'mario') {
+      // Classic coin: square wave step up (B5 → E6)
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(988, now);
+      osc.frequency.setValueAtTime(1319, now + 0.075);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.1, now + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now); osc.stop(now + 0.3);
+    } else if (type === '8bit') {
+      // Chiptune ascending arpeggio
+      [261.63, 329.63, 392, 523.25].forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'square'; osc.frequency.value = freq;
+        const t = now + i * 0.05;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.055);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.07);
+      });
+    } else if (type === 'bell') {
+      // Bell with rich harmonics
+      [880, 1760, 2640].forEach((freq, j) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        const amp = [0.16, 0.07, 0.03][j];
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(amp, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now); osc.stop(now + 1.0);
+      });
+    } else if (type === 'special') {
+      [523.25, 659.25, 783.99, 880, 1046.5].forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.type = 'triangle'; osc.frequency.value = freq;
+        const t = now + i * 0.09;
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.13, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(t); osc.stop(t + 0.45);
       });
     } else {
       // doremi (default)
@@ -254,15 +306,25 @@ const BG_PRESETS = [
   { name: 'ミント',     bg: '#f0faf5' },
   { name: 'ラベンダー', bg: '#f5f0ff' },
   { name: 'スカイ',     bg: '#f0f7ff' },
+  { name: 'ナイト',     bg: '#1a1a2e' },
+  { name: 'ローズ',     bg: '#fff0f5' },
 ];
 const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
-  { type: 'miss',  label: 'ハズレ',           rarity: 'common', stars: '★',     color: '#aaa',    weight: 30 },
-  { type: 'sound', label: '🔔 チャイム',       rarity: 'common', stars: '★★',    color: '#888',    soundType: 'chime',   weight: 22 },
-  { type: 'sound', label: '🎹 ドレミ',         rarity: 'common', stars: '★★',    color: '#888',    soundType: 'doremi',  weight: 18 },
-  { type: 'bg',    label: '🎨 クリーム背景',   rarity: 'rare',   stars: '★★★',   color: '#e8a020', bgIdx: 1,             weight: 14 },
-  { type: 'bg',    label: '🌿 ミント背景',     rarity: 'super',  stars: '★★★★',  color: '#27ae60', bgIdx: 2,             weight: 8  },
-  { type: 'sound', label: '🎺 ファンファーレ', rarity: 'super',  stars: '★★★★',  color: '#9c27b0', soundType: 'fanfare', weight: 6  },
-  { type: 'bg',    label: '💜 ラベンダー背景', rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', bgIdx: 3,             weight: 2  },
+  { type: 'sound', label: '🔔 チャイム',         rarity: 'common', stars: '★★',    color: '#777',    soundType: 'chime',   weight: 20 },
+  { type: 'sound', label: '💥 ポップ',           rarity: 'common', stars: '★★',    color: '#777',    soundType: 'pop',     weight: 18 },
+  { type: 'sound', label: '🎮 8ビット',          rarity: 'common', stars: '★★',    color: '#777',    soundType: '8bit',    weight: 16 },
+  { type: 'bg',    label: '🎨 クリーム背景',     rarity: 'common', stars: '★★',    color: '#c8860a', bgIdx: 1,             weight: 14 },
+  { type: 'sound', label: '🎹 ドレミ',           rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'doremi',  weight: 10 },
+  { type: 'sound', label: '🪙 コイン音',         rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'coin',    weight: 8  },
+  { type: 'bg',    label: '🌿 ミント背景',       rarity: 'rare',   stars: '★★★',   color: '#27ae60', bgIdx: 2,             weight: 8  },
+  { type: 'bg',    label: '🌸 スカイ背景',       rarity: 'rare',   stars: '★★★',   color: '#1a88d0', bgIdx: 4,             weight: 6  },
+  { type: 'sound', label: '🍄 マリオ音',         rarity: 'super',  stars: '★★★★',  color: '#e53935', soundType: 'mario',   weight: 5  },
+  { type: 'sound', label: '🎺 ファンファーレ',   rarity: 'super',  stars: '★★★★',  color: '#9c27b0', soundType: 'fanfare', weight: 4  },
+  { type: 'bg',    label: '💜 ラベンダー背景',   rarity: 'super',  stars: '★★★★',  color: '#8e24aa', bgIdx: 3,             weight: 4  },
+  { type: 'bg',    label: '🌙 ナイト背景',       rarity: 'super',  stars: '★★★★',  color: '#546e7a', bgIdx: 5,             weight: 3  },
+  { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2  },
+  { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
+  { type: 'bg',    label: '🌅 ローズ背景',       rarity: 'ultra',  stars: '★★★★★', color: '#c2185b', bgIdx: 6,             weight: 1  },
 ];
 function pickGacha(): GachaPrize {
   const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
@@ -291,30 +353,41 @@ function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boo
   );
 }
 
-function GachaModal({ coins, infinite, onClose, onResult }: { coins: number; infinite?: boolean; onClose: () => void; onResult: (prize: GachaPrize) => void }) {
+function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, onClose, onResult }: {
+  coins: number; infinite?: boolean;
+  unlockedSounds: string[]; unlockedBgs: number[];
+  onClose: () => void; onResult: (prize: GachaPrize, isDuplicate: boolean) => void;
+}) {
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
   const [result, setResult] = useState<GachaPrize | null>(null);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [localCoins, setLocalCoins] = useState(coins);
   const canAfford = infinite || localCoins >= GACHA_COST;
 
   function pull() {
     if (!canAfford || phase === 'spinning') return;
-    setLocalCoins(c => c - GACHA_COST);
+    if (!infinite) setLocalCoins(c => c - GACHA_COST);
     setPhase('spinning');
     setTimeout(() => {
       const r = pickGacha();
+      const dup =
+        (r.type === 'sound' && !!r.soundType && unlockedSounds.includes(r.soundType)) ||
+        (r.type === 'bg'    && r.bgIdx !== undefined && unlockedBgs.includes(r.bgIdx));
       setResult(r);
-      onResult(r);
+      setIsDuplicate(dup);
+      if (dup && !infinite) setLocalCoins(c => c + 10);
+      onResult(r, dup);
       setPhase('result');
     }, 1300);
   }
 
-  function again() { setPhase('idle'); setResult(null); }
+  function again() { setPhase('idle'); setResult(null); setIsDuplicate(false); }
 
   const resultDesc = result
-    ? result.type === 'sound' ? `サウンド「${result.label}」をゲット！`
-    : result.type === 'bg'    ? `背景「${result.label}」をゲット！`
-    : 'またチャレンジしよう！'
+    ? isDuplicate        ? `すでに解放済み！ コイン +10`
+    : result.type === 'sound' ? `${result.label} をゲット！設定に反映`
+    : result.type === 'bg'    ? `${result.label} をゲット！設定に反映`
+    : ''
     : '';
 
   return (
@@ -2162,7 +2235,8 @@ function SmartMemoApp() {
   const [ideas, setIdeas] = usePersistedState<Idea[]>(LS_IDEAS, []);
   const [settings, setSettings] = usePersistedState<Settings>(LS_SETTINGS, {
     colorIdx: 0, fontIdx: 1, notifEnabled: true, autoTag: true, autoDate: true,
-    completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0, infiniteCoins: false,
+    completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0,
+    infiniteCoins: false, gachaUnlocked: { sounds: [], bgs: [] },
   });
 
   useEffect(() => {
@@ -2290,12 +2364,27 @@ function SmartMemoApp() {
         <GachaModal
           coins={settings.coins || 0}
           infinite={settings.infiniteCoins}
+          unlockedSounds={(settings.gachaUnlocked || { sounds: [], bgs: [] }).sounds}
+          unlockedBgs={(settings.gachaUnlocked || { sounds: [], bgs: [] }).bgs}
           onClose={() => setShowGacha(false)}
-          onResult={prize => setSettings(p => {
+          onResult={(prize, isDuplicate) => setSettings(p => {
+            const unlocked = p.gachaUnlocked || { sounds: [], bgs: [] };
             const updates: Partial<Settings> = {};
             if (!p.infiniteCoins) updates.coins = Math.max(0, (p.coins || 0) - GACHA_COST);
-            if (prize.type === 'sound' && prize.soundType) updates.soundType = prize.soundType;
-            if (prize.type === 'bg' && prize.bgIdx !== undefined) updates.bgIdx = prize.bgIdx;
+            if (isDuplicate) {
+              updates.coins = (updates.coins ?? (p.coins || 0)) + 10;
+            } else {
+              const newUnlocked = { sounds: [...unlocked.sounds], bgs: [...unlocked.bgs] };
+              if (prize.type === 'sound' && prize.soundType) {
+                updates.soundType = prize.soundType;
+                newUnlocked.sounds.push(prize.soundType);
+              }
+              if (prize.type === 'bg' && prize.bgIdx !== undefined) {
+                updates.bgIdx = prize.bgIdx;
+                newUnlocked.bgs.push(prize.bgIdx);
+              }
+              updates.gachaUnlocked = newUnlocked;
+            }
             return { ...p, ...updates };
           })}
         />
