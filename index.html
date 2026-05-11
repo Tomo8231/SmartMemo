@@ -30,7 +30,8 @@
     /* Mobile / installed PWA — safe-area inserts */
     @media (max-width:500px), (display-mode:standalone) {
       .app-header   { padding-top:calc(14px + env(safe-area-inset-top)); }
-      .bottom-nav-wrapper { margin-bottom:calc(12px + env(safe-area-inset-bottom)); }
+      .bottom-nav { padding-bottom:calc(8px + env(safe-area-inset-bottom)); }
+      .bottom-nav-wrapper { /* safe area is handled by .bottom-nav padding */ }
       .toast        { top:calc(20px + env(safe-area-inset-top)); }
       .modal-sheet, .confirm-sheet { padding-bottom:calc(32px + env(safe-area-inset-bottom)); }
       /* Prevent iOS auto-zoom on focus: form inputs must be ≥16px */
@@ -115,6 +116,7 @@
     }
     .gacha-pull-btn:disabled { opacity:.4; cursor:not-allowed; }
     .gacha-pull-btn:not(:disabled):active { opacity:.8; transform:scale(.97); }
+    .gacha-result-desc { font-size:13px; color:#4a4a48; text-align:center; }
 
     /* Tab content */
     .tab-content {
@@ -133,33 +135,36 @@
     /* Bottom nav */
     .bottom-nav-wrapper {
       position:relative; flex:0 0 auto;
-      isolation:isolate;    /* contain FAB z-index so modals (z-index:1000) stay on top */
-      align-self:center;    /* don't stretch to full width */
-      margin-bottom:12px;
+      isolation:isolate;
     }
     .bottom-nav {
       display:flex; background:#fff;
-      box-shadow:0 4px 24px rgba(0,0,0,.13);
-      border-radius:20px;
-      padding:4px 8px 6px;
-      align-items:center;
+      box-shadow:0 -2px 14px rgba(0,0,0,.09);
+      border-radius:20px 20px 0 0;
+      padding:4px 0 6px;
+      align-items:flex-end;
+      width:100%;
     }
     .nav-tab {
-      width:72px; display:flex; flex-direction:column;
-      align-items:center; justify-content:center;
-      gap:3px; cursor:pointer; padding:5px 0;
+      flex:1; display:flex; flex-direction:column;
+      align-items:center; justify-content:flex-end;
+      gap:3px; cursor:pointer; padding-bottom:5px; min-height:54px;
     }
-    .nav-fab-mic {
-      position:absolute; bottom:calc(100% + 8px);
+    .nav-mic-slot {
+      width:72px; flex-shrink:0; /* empty placeholder aligned with mic button */
+    }
+    .nav-center-mic {
+      position:absolute;
       left:50%; transform:translateX(-50%);
+      bottom:calc(100% - 28px); /* bottom half (28px) inside nav bar */
       width:56px; height:56px; border-radius:50%; border:none;
       background:var(--accent); color:#fff;
       display:flex; align-items:center; justify-content:center;
-      cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.26);
+      box-shadow:0 4px 16px rgba(0,0,0,.26);
+      cursor:pointer;
       transition:transform .15s, box-shadow .15s;
-      z-index:10;
     }
-    .nav-fab-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
+    .nav-center-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     .nav-tab .nav-icon svg { transition:all 0.2s; width:24px; height:24px; }
     .nav-tab .nav-label { font-size:11px; font-weight:500; color:#c0c0ba; letter-spacing:0.2px; transition:color 0.2s; }
     .nav-tab.active .nav-label { color:var(--accent); }
@@ -800,6 +805,92 @@
       60%  { opacity:.8; }
       100% { opacity:0; transform:translate(var(--dx), var(--dy)) scale(0); }
     }
+
+    /* ── Dark mode ───────────────────────────────── */
+    .app.dark { color:#f0f0ee; }
+    .app.dark .app-header { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .tagline { color:#6a6a68; }
+    .app.dark .coin-badge { background:rgba(255,255,255,.08); }
+    .app.dark .bottom-nav { background:#1e1e21; }
+    .app.dark .bottom-nav-wrapper { /* inherits from .bottom-nav */ }
+    .app.dark .nav-tab .nav-label { color:#5a5a58; }
+    .app.dark .nav-tab.active .nav-label { color:var(--accent); }
+    .app.dark .tab-content { background:#141416; }
+    .app.dark .memo-card { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .memo-card-label { color:#6a6a68; }
+    .app.dark .memo-textarea { color:#f0f0ee; background:transparent; }
+    .app.dark .memo-textarea::placeholder { color:#4a4a48; }
+    .app.dark .memo-char-count { color:#4a4a48; }
+    .app.dark .memo-actions { border-color:#2e2e32; }
+    .app.dark .action-btn { background:#1e1e21; border-color:#2e2e32; color:#c0c0be; }
+    .app.dark .hint-card { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .hint-title { color:#c0c0be; }
+    .app.dark .hint-body { color:#6a6a68; }
+    .app.dark .todo-controls { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .search-input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .filter-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .cal-wrapper { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .todo-list-header { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .cal-month-label { color:#f0f0ee; }
+    .app.dark .cal-nav-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .cal-num { color:#f0f0ee; }
+    .app.dark .cal-cell.other-month .cal-num { color:#3a3a3e; }
+    .app.dark .cal-cell:hover { background:#2e2e32; }
+    .app.dark .cal-cell.today { background:#2e2e32; }
+    .app.dark .mode-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .cal-toggle { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .todo-item { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .todo-title { color:#f0f0ee; }
+    .app.dark .todo-del { background:#1e1e21; border-color:#2e2e32; color:#4a4a48; }
+    .app.dark .todo-add-row { border-color:#2e2e32; background:transparent; }
+    .app.dark .section-head-label { color:#5a5a58; }
+    .app.dark .divider { background:#2e2e32; }
+    .app.dark .undated-arrow { color:#5a5a58; }
+    .app.dark .todo-empty { color:#4a4a48; }
+    .app.dark .ideas-tab { background:#141416; }
+    .app.dark .idea-card { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .idea-project { color:#f0f0ee; }
+    .app.dark .idea-summary { color:#b0b0ac; }
+    .app.dark .idea-detail { color:#b0b0ac; }
+    .app.dark .ideas-subtabs { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .ideas-header-row { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .ideas-subtab { color:#5a5a58; }
+    .app.dark .ideas-subtab.active { color:var(--accent); }
+    .app.dark .ideas-subtab-input { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .ideas-subtab-input input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .ideas-add-row { background:var(--accent-light); }
+    .app.dark .ideas-empty { color:#4a4a48; }
+    .app.dark .settings-tab { background:#141416; }
+    .app.dark .settings-card { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .settings-row { border-color:#2e2e32; }
+    .app.dark .settings-row-label { color:#f0f0ee; }
+    .app.dark .settings-row-sub { color:#6a6a68; }
+    .app.dark .settings-section-title { color:#6a6a68; }
+    .app.dark .sound-type-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .api-input-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .tag-chip-builtin { background:#2e2e32; color:#8a8a88; }
+    .app.dark .tag-add-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .about-card { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .about-app-name { color:#f0f0ee; }
+    .app.dark .modal-backdrop { background:rgba(0,0,0,.6); }
+    .app.dark .modal-sheet { background:#1e1e21; }
+    .app.dark .modal-handle { background:#3a3a3e; }
+    .app.dark .modal-title { color:#f0f0ee; }
+    .app.dark .modal-field label { color:#6a6a68; }
+    .app.dark .modal-field input, .app.dark .modal-field select, .app.dark .modal-field textarea {
+      background:#28282c; color:#f0f0ee; border-color:#2e2e32;
+    }
+    .app.dark .modal-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .modal-cancel { background:#1e1e21; border-color:#2e2e32; color:#f0f0ee; }
+    .app.dark .confirm-sheet { background:#1e1e21; }
+    .app.dark .confirm-title { color:#f0f0ee; }
+    .app.dark .confirm-sub { color:#6a6a68; }
+    .app.dark .confirm-actions { border-color:#2e2e32; }
+    .app.dark .confirm-section-head { color:#6a6a68; }
+    .app.dark .gacha-modal { background:#1e1e21; }
+    .app.dark .gacha-title { color:#f0f0ee; }
+    .app.dark .gacha-result-desc { color:#b0b0ac; }
+    .app.dark .font-size-opt { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
 
     /* Sparkle burst overlay (memo→items reflection) */
     .sparkle-burst {
