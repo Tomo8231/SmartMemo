@@ -40,6 +40,7 @@ type Settings = {
   coins?: number;
   darkMode?: boolean;
   bgIdx?: number;
+  infiniteCoins?: boolean;
 };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg';
@@ -280,21 +281,21 @@ const IcoCoin = () => (
   </svg>
 );
 
-function CoinBadge({ coins, onGacha }: { coins: number; onGacha: () => void }) {
+function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boolean; onGacha: () => void }) {
   return (
     <button className="coin-badge" onClick={onGacha} title="ガチャを引く">
       <IcoCoin />
-      <span className="coin-badge-count">{coins}</span>
+      <span className="coin-badge-count">{infinite ? '∞' : coins}</span>
       <span className="coin-badge-gacha">ガチャ</span>
     </button>
   );
 }
 
-function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () => void; onResult: (prize: GachaPrize) => void }) {
+function GachaModal({ coins, infinite, onClose, onResult }: { coins: number; infinite?: boolean; onClose: () => void; onResult: (prize: GachaPrize) => void }) {
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
   const [result, setResult] = useState<GachaPrize | null>(null);
   const [localCoins, setLocalCoins] = useState(coins);
-  const canAfford = localCoins >= GACHA_COST;
+  const canAfford = infinite || localCoins >= GACHA_COST;
 
   function pull() {
     if (!canAfford || phase === 'spinning') return;
@@ -332,7 +333,7 @@ function GachaModal({ coins, onClose, onResult }: { coins: number; onClose: () =
           }
         </div>
         {phase === 'result' && <div className="gacha-result-desc">{resultDesc}</div>}
-        <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{localCoins}</div>
+        <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
         {phase !== 'spinning' && (
           <button className="gacha-pull-btn" onClick={phase === 'result' ? again : pull} disabled={phase === 'idle' && !canAfford}>
             {phase === 'result' ? 'もう一度' : canAfford ? 'ガチャを引く！' : 'コインが足りません'}
@@ -742,6 +743,35 @@ const IcoMicFab = () => (
   </svg>
 );
 
+const IcoCopy = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2"/>
+    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+  </svg>
+);
+
+function copyToClipboard(text: string) {
+  navigator.clipboard?.writeText(text).catch(() => {
+    const el = document.createElement('textarea');
+    el.value = text; el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el); el.select();
+    document.execCommand('copy'); document.body.removeChild(el);
+  });
+}
+function buildTodoCopyText(t: Todo): string {
+  const lines = [t.title];
+  if (t.startDate) lines.push(`📅 ${t.startDate}${t.endDate ? ` — ${t.endDate}` : ''}`);
+  if (t.time) lines.push(`⏰ ${t.time}`);
+  if ((t.tags || []).length > 0) lines.push(`🏷 ${t.tags.join(', ')}`);
+  return lines.join('\n');
+}
+function buildIdeaCopyText(i: Idea): string {
+  const lines = [i.projectName];
+  if (i.summary) lines.push(i.summary);
+  (i.details || []).forEach(d => lines.push(`・${d}`));
+  return lines.join('\n');
+}
+
 // ─────────────────────────────────────────────────────────────
 // Calendar
 // ─────────────────────────────────────────────────────────────
@@ -867,11 +897,20 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
               <span className="cal-num">{c.date.getDate()}</span>
               {cellTodos.length > 0 && (
                 <div className="cal-todos">
-                  {cellTodos.slice(0, 2).map((t, idx) => (
-                    <div key={idx} className="cal-todo-item" title={t.title}>
-                      {t.title.length > 12 ? t.title.substring(0, 12) + '...' : t.title}
-                    </div>
-                  ))}
+                  {cellTodos.slice(0, 2).map((t, idx) => {
+                    const multi = t.startDate && t.endDate && t.startDate !== t.endDate;
+                    const spanCls = multi
+                      ? ds === t.startDate ? 'span-start'
+                      : ds === t.endDate   ? 'span-end'
+                      : 'span-middle'
+                      : '';
+                    return (
+                      <div key={idx} className={`cal-todo-item${spanCls ? ` ${spanCls}` : ''}`} title={t.title}>
+                        {spanCls === 'span-middle' || spanCls === 'span-end' ? '' :
+                          t.title.length > 10 ? t.title.substring(0, 10) + '…' : t.title}
+                      </div>
+                    );
+                  })}
                   {cellTodos.length > 2 && <div className="cal-more">+{cellTodos.length - 2}</div>}
                 </div>
               )}
@@ -1088,6 +1127,7 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
           {(todo.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
         </div>
       </div>
+      <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildTodoCopyText(todo)); }} title="コピー"><IcoCopy /></button>
       <button className="todo-del" onClick={() => onDelete(todo.id)}>✕</button>
     </div>
   );
@@ -1825,6 +1865,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
             {i.updatedAt && <span className="idea-updated">{i.updatedAt}</span>}
           </div>
         </div>
+        <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildIdeaCopyText(i)); }} title="コピー"><IcoCopy /></button>
         <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
       </div>
     );
@@ -1962,6 +2003,17 @@ function SettingsTab({ settings, onChange }: {
                 onClick={() => onChange('fontIdx', i)}>{o.label}</button>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className="settings-section-title">テスト</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">コイン無限モード</div>
+            <div className="settings-row-sub">ガチャのコスト不要（テスト用）</div>
+          </div>
+          <button className={`toggle${settings.infiniteCoins ? ' on' : ' off'}`} onClick={() => onChange('infiniteCoins', !settings.infiniteCoins)} />
         </div>
       </div>
 
@@ -2110,7 +2162,7 @@ function SmartMemoApp() {
   const [ideas, setIdeas] = usePersistedState<Idea[]>(LS_IDEAS, []);
   const [settings, setSettings] = usePersistedState<Settings>(LS_SETTINGS, {
     colorIdx: 0, fontIdx: 1, notifEnabled: true, autoTag: true, autoDate: true,
-    completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0,
+    completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0, infiniteCoins: false,
   });
 
   useEffect(() => {
@@ -2176,7 +2228,7 @@ function SmartMemoApp() {
 
   const toggle = (id: number | string) => {
     const todo = todos.find(t => t.id === id);
-    if (todo) {
+    if (todo && !settings.infiniteCoins) {
       const delta = todo.done ? -10 : 10;
       setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
     }
@@ -2206,7 +2258,7 @@ function SmartMemoApp() {
           <h1>SmartMemo</h1>
           <span className="tagline">AI でタスクを自動整理</span>
         </div>
-        <CoinBadge coins={settings.coins || 0} onGacha={() => setShowGacha(true)} />
+        <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
@@ -2237,10 +2289,11 @@ function SmartMemoApp() {
       {showGacha && (
         <GachaModal
           coins={settings.coins || 0}
+          infinite={settings.infiniteCoins}
           onClose={() => setShowGacha(false)}
           onResult={prize => setSettings(p => {
-            const newCoins = Math.max(0, (p.coins || 0) - GACHA_COST);
-            const updates: Partial<Settings> = { coins: newCoins };
+            const updates: Partial<Settings> = {};
+            if (!p.infiniteCoins) updates.coins = Math.max(0, (p.coins || 0) - GACHA_COST);
             if (prize.type === 'sound' && prize.soundType) updates.soundType = prize.soundType;
             if (prize.type === 'bg' && prize.bgIdx !== undefined) updates.bgIdx = prize.bgIdx;
             return { ...p, ...updates };
