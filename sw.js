@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v28';
+const CACHE = 'smartmemo-v29';
 const SHELL = [
   './',
   './index.html',
