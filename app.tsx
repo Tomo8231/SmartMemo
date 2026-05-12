@@ -44,7 +44,7 @@ type Settings = {
   infiniteCoinsUnlocked?: boolean;
   gachaUnlocked?: { sounds: string[]; bgs: number[]; mons?: string[] };
 };
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
@@ -375,12 +375,11 @@ const SKULLON_PIXELS = [
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
     id: 'kuroneko', name: 'クロネコ',
-    pixels: KURONEKO_PIXELS,
-    palette: { C: '#0d0d14', E: '#e8c840' },
+    pixels: [], palette: {},
+    imageUrl: './kuroneko.jpg',
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
-    monW: KURONEKO_PIXELS[0].length * MON_SCALE,
-    monH: KURONEKO_PIXELS.length * MON_SCALE,
+    monW: 24, monH: 23,
   },
   {
     id: 'skullon', name: 'ドクロン',
@@ -405,7 +404,7 @@ function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" shape-rendering="crispEdges">${rects}</svg>`)}`;
 }
 const MEMOMON_IMGS: Record<string, string> = {};
-MEMOMON_DEFS.forEach(def => { MEMOMON_IMGS[def.id] = pixelToDataUrl(def.pixels, def.palette); });
+MEMOMON_DEFS.forEach(def => { MEMOMON_IMGS[def.id] = def.imageUrl ?? pixelToDataUrl(def.pixels, def.palette); });
 
 function pickGacha(): GachaPrize {
   const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
