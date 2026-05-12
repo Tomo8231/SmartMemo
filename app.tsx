@@ -329,6 +329,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
   { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1 },
   { type: 'memomon', label: '🐱 クロネコ',  rarity: 'ultra', stars: '★★★★★', color: '#1a1a2e', monDefId: 'kuroneko', weight: 2 },
+  { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -357,15 +358,40 @@ const KURONEKO_PIXELS = [
   '.CC......CC.',
   '..CC....CC..',
 ];
-const MEMOMON_DEFS: MemoMonDef[] = [{
-  id: 'kuroneko', name: 'クロネコ',
-  pixels: KURONEKO_PIXELS,
-  palette: { C: '#0d0d14', E: '#e8c840' },
-  rarity: 'ultra',
-  desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
-  monW: KURONEKO_PIXELS[0].length * MON_SCALE,
-  monH: KURONEKO_PIXELS.length * MON_SCALE,
-}];
+const SKULLON_PIXELS = [
+  '....BB....BB....',
+  '...BBBB..BBBB...',
+  '...BGGGBBGGGB...',
+  '..BGGGGGGGGGBB..',
+  '.BBGGGGGGGGGGGB.',
+  '.BGGG.BB..BBGGB.',
+  '.BGGG.BB..BBGGB.',
+  '.BGGGGGGGGGGGB..',
+  '.BGGGGGGGGGGGB..',
+  '.BGG.GG.GG.GGB..',
+  '.BBB.BB.BB.BBB..',
+  '..BBBBBBBBBBB...',
+];
+const MEMOMON_DEFS: MemoMonDef[] = [
+  {
+    id: 'kuroneko', name: 'クロネコ',
+    pixels: KURONEKO_PIXELS,
+    palette: { C: '#0d0d14', E: '#e8c840' },
+    rarity: 'ultra',
+    desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
+    monW: KURONEKO_PIXELS[0].length * MON_SCALE,
+    monH: KURONEKO_PIXELS.length * MON_SCALE,
+  },
+  {
+    id: 'skullon', name: 'ドクロン',
+    pixels: SKULLON_PIXELS,
+    palette: { G: '#52575e', B: '#1a1a1a' },
+    rarity: 'ultra',
+    desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。タップすると逃げ出す。',
+    monW: SKULLON_PIXELS[0].length * MON_SCALE,
+    monH: SKULLON_PIXELS.length * MON_SCALE,
+  },
+];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
   const w = pixels[0].length * scale;
   const h = pixels.length * scale;
