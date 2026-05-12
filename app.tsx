@@ -41,6 +41,7 @@ type Settings = {
   darkMode?: boolean;
   bgIdx?: number;
   infiniteCoins?: boolean;
+  infiniteCoinsUnlocked?: boolean;
   gachaUnlocked?: { sounds: string[]; bgs: number[] };
 };
 type GachaPrize = {
@@ -1407,7 +1408,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   geminiApiKey: string;
   ideaTabs?: string[];
   micTrigger?: number;
-  onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[] }) => void;
+  onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[]; unlockCoins?: boolean }) => void;
 }) {
   const [text,       setText]       = useState('');
   const [loading,    setLoading]    = useState(false);
@@ -1681,7 +1682,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         details: i.details,
         tags: i.tags,
       }));
-      onCommit({ todos: newTodos, ideas: newIdeas });
+      onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
       showToast(`${total}件を追加しました`);
       setText(''); setImgPrev(null); setPending(null); setSwooshing(false);
     }, 320);
@@ -1880,11 +1881,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
   ideas: Idea[];
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
   onAdd: (i: Idea) => void;
+  onReorder: (fromId: number | string, toId: number | string) => void;
   customTags: string[];
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
@@ -1897,6 +1899,12 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
   const [dragTabIdx,     setDragTabIdx]     = useState<number | null>(null);
   const [dragOverTabIdx, setDragOverTabIdx] = useState<number | null>(null);
   const [dragIdeaId,     setDragIdeaId]     = useState<number | string | null>(null);
+  const [dragOverIdeaId, setDragOverIdeaId] = useState<number | string | null>(null);
+  const [touchDragId,    setTouchDragId]    = useState<number | string | null>(null);
+  const [touchDragOverId,setTouchDragOverId]= useState<string | null>(null);
+  const touchTimerRef    = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchActiveRef   = React.useRef(false);
+  const justDraggedRef   = React.useRef(false);
   const [dropTabTarget,  setDropTabTarget]  = useState<string | null>(null);
   const projectNames = ideas.map(i => i.projectName);
 
@@ -1954,9 +1962,60 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
     setDropTabTarget(null);
   }
 
+  function onIdeaDragOverCard(e: React.DragEvent, id: number | string) {
+    if (dragIdeaId == null || dragIdeaId === id) return;
+    e.preventDefault();
+    setDragOverIdeaId(id);
+  }
+  function onIdeaDropCard(e: React.DragEvent, toId: number | string) {
+    e.preventDefault();
+    if (dragIdeaId == null || dragIdeaId === toId) { setDragOverIdeaId(null); return; }
+    onReorder(dragIdeaId, toId);
+    setDragIdeaId(null);
+    setDragOverIdeaId(null);
+  }
+
+  function onIdeaTouchStart(e: React.TouchEvent, id: number | string) {
+    touchTimerRef.current = setTimeout(() => {
+      touchActiveRef.current = true;
+      setTouchDragId(id);
+      (navigator as any).vibrate?.(30);
+    }, 500);
+  }
+  function onIdeaTouchMove(e: React.TouchEvent) {
+    if (!touchActiveRef.current) { clearTimeout(touchTimerRef.current!); touchTimerRef.current = null; return; }
+    e.preventDefault();
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const card = el?.closest('[data-idea-id]') as HTMLElement | null;
+    const subtab = el?.closest('[data-subtab]') as HTMLElement | null;
+    if (card) { setTouchDragOverId(card.getAttribute('data-idea-id')); setDropTabTarget(null); }
+    else if (subtab) { setDropTabTarget(subtab.getAttribute('data-subtab')); setTouchDragOverId(null); }
+  }
+  function onIdeaTouchEnd() {
+    clearTimeout(touchTimerRef.current!);
+    touchTimerRef.current = null;
+    if (touchActiveRef.current) {
+      justDraggedRef.current = true;
+      setTimeout(() => { justDraggedRef.current = false; }, 200);
+      if (touchDragOverId && touchDragId != null && String(touchDragId) !== touchDragOverId) {
+        const toIdea = ideas.find(i => String(i.id) === touchDragOverId);
+        if (toIdea) onReorder(touchDragId, toIdea.id);
+      } else if (dropTabTarget && touchDragId != null) {
+        const idea = ideas.find(i => i.id === touchDragId);
+        if (idea) onUpdate({ ...idea, subTab: dropTabTarget === 'all' ? undefined : dropTabTarget });
+      }
+    }
+    touchActiveRef.current = false;
+    setTouchDragId(null);
+    setTouchDragOverId(null);
+    setDropTabTarget(null);
+  }
+
   const subtabBar = (
     <div className="ideas-subtabs">
       <span
+        data-subtab="all"
         className={`ideas-subtab${activeSubTab === 'all' ? ' active' : ''}${dropTabTarget === 'all' ? ' drop-target' : ''}`}
         onClick={() => setActiveSubTab('all')}
         onDragOver={e => { if (dragIdeaId != null) { e.preventDefault(); setDropTabTarget('all'); } }}
@@ -1966,6 +2025,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
       {ideaTabs.map((t, idx) => (
         <span
           key={t}
+          data-subtab={t}
           draggable
           className={[
             'ideas-subtab',
@@ -2006,14 +2066,28 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
 
   const ideaCards = filteredIdeas.map(i => {
     const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
+    const isTouchDragging = touchDragId === i.id;
+    const isDragOver = dragOverIdeaId === i.id || touchDragOverId === String(i.id);
     return (
       <div
         key={i.id}
+        data-idea-id={String(i.id)}
         draggable
-        className={`idea-card${justAdded ? ' just-added' : ''}${dragIdeaId === i.id ? ' dragging' : ''}`}
+        className={[
+          'idea-card',
+          justAdded ? 'just-added' : '',
+          dragIdeaId === i.id ? 'dragging' : '',
+          isTouchDragging ? 'touch-dragging' : '',
+          isDragOver ? 'drag-over-top' : '',
+        ].filter(Boolean).join(' ')}
         onDragStart={e => onIdeaDragStart(e, i.id)}
         onDragEnd={onIdeaDragEnd}
-        onClick={() => setEditing(i)}
+        onDragOver={e => onIdeaDragOverCard(e, i.id)}
+        onDrop={e => onIdeaDropCard(e, i.id)}
+        onTouchStart={e => onIdeaTouchStart(e, i.id)}
+        onTouchMove={onIdeaTouchMove}
+        onTouchEnd={onIdeaTouchEnd}
+        onClick={() => { if (justDraggedRef.current) return; setEditing(i); }}
       >
         <div className="idea-card-body">
           <div className="idea-project">{i.projectName}</div>
@@ -2059,7 +2133,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, customTags, ideaTabs = [],
       )}
       {subtabBar}
       {subtabInput}
-      <div className="ideas-tab tab-pane">
+      <div className={`ideas-tab tab-pane${touchDragId != null ? ' touch-dragging' : ''}`}>
         {filteredIdeas.length === 0
           ? <div className="ideas-empty">まだアイデアがありません</div>
           : ideaCards
@@ -2169,16 +2243,18 @@ function SettingsTab({ settings, onChange }: {
         </div>
       </div>
 
-      <div className="settings-section-title">テスト</div>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">コイン無限モード</div>
-            <div className="settings-row-sub">ガチャのコスト不要（テスト用）</div>
+      {settings.infiniteCoinsUnlocked && <>
+        <div className="settings-section-title">テスト</div>
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">コイン無限モード</div>
+              <div className="settings-row-sub">ガチャのコスト不要（テスト用）</div>
+            </div>
+            <button className={`toggle${settings.infiniteCoins ? ' on' : ' off'}`} onClick={() => onChange('infiniteCoins', !settings.infiniteCoins)} />
           </div>
-          <button className={`toggle${settings.infiniteCoins ? ' on' : ' off'}`} onClick={() => onChange('infiniteCoins', !settings.infiniteCoins)} />
         </div>
-      </div>
+      </>}
 
       <div className="settings-section-title">通知・サウンド</div>
       <div className="settings-card">
@@ -2403,7 +2479,8 @@ function SmartMemoApp() {
 
   const existingProjects = ideas.map(i => i.projectName);
 
-  function commit({ todos: newTodos = [], ideas: newIdeas = [] }: { todos?: Todo[]; ideas?: IdeaDraft[] }) {
+  function commit({ todos: newTodos = [], ideas: newIdeas = [], unlockCoins = false }: { todos?: Todo[]; ideas?: IdeaDraft[]; unlockCoins?: boolean }) {
+    if (unlockCoins) setSetting('infiniteCoinsUnlocked', true);
     if (newTodos.length) {
       setTodos(p => [...p, ...newTodos]);
     }
@@ -2420,6 +2497,18 @@ function SmartMemoApp() {
     if (newTodos.length && !newIdeas.length) setTab('todo');
     else if (!newTodos.length && newIdeas.length) setTab('idea');
     else if (newTodos.length && newIdeas.length) setTab('todo');
+  }
+
+  function reorderIdea(fromId: number | string, toId: number | string) {
+    setIdeas(prev => {
+      const arr = [...prev];
+      const fromIdx = arr.findIndex(i => i.id === fromId);
+      const toIdx   = arr.findIndex(i => i.id === toId);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
+      const [item] = arr.splice(fromIdx, 1);
+      arr.splice(toIdx, 0, item);
+      return arr;
+    });
   }
 
   const toggle = (id: number | string) => {
@@ -2459,7 +2548,7 @@ function SmartMemoApp() {
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
       </div>
       <div className="bottom-nav-wrapper">
