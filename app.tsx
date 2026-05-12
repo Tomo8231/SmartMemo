@@ -45,6 +45,7 @@ type Settings = {
   gachaUnlocked?: { sounds: string[]; bgs: number[]; mons?: string[] };
   memoMonVisible?: boolean;
   hiddenMons?: string[];
+  memoMonSize?: 'small' | 'medium' | 'large';
 };
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
@@ -331,6 +332,9 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
   { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1 },
   { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2 },
+  { type: 'memomon', label: '💧 スライム', rarity: 'super',  stars: '★★★★',  color: '#0288d1', monDefId: 'slime',    weight: 3 },
+  { type: 'memomon', label: '🐥 ひよこ',   rarity: 'super',  stars: '★★★★',  color: '#f9a825', monDefId: 'hiyoko',   weight: 3 },
+  { type: 'memomon', label: '👻 おばけ',   rarity: 'ultra',  stars: '★★★★★', color: '#616161', monDefId: 'obake',    weight: 2 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -390,6 +394,58 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。タップすると逃げ出す。',
     monW: SKULLON_PIXELS[0].length * MON_SCALE,
     monH: SKULLON_PIXELS.length * MON_SCALE,
+  },
+  {
+    id: 'slime', name: 'スライム',
+    pixels: [
+      '..SSSSSS..',
+      '.SSSSSSSS.',
+      'SS.EE.EE.S',
+      'SSSSSSSSSS',
+      '.SSSSSSSS.',
+      '..SSSSSS..',
+      '...SSSS...',
+      '....SS....',
+    ],
+    palette: { S: '#4fc3f7', E: '#1a243a' },
+    rarity: 'super',
+    desc: 'まるくてかわいいスライム。つるつるしてそう。',
+    monW: 10 * MON_SCALE, monH: 8 * MON_SCALE,
+  },
+  {
+    id: 'hiyoko', name: 'ひよこ',
+    pixels: [
+      '....YY....',
+      '...YYYY...',
+      '..YYYYYY..',
+      '..Y.EE.Y..',
+      '..YYOOYY..',
+      '.YYYYYYYY.',
+      '.YYYYYYYY.',
+      '...Y..Y...',
+      '..OO..OO..',
+    ],
+    palette: { Y: '#ffee58', O: '#ff8f00', E: '#1a1a2a' },
+    rarity: 'super',
+    desc: 'ちっちゃくてふわふわのひよこ。ぴよぴよ鳴く。',
+    monW: 10 * MON_SCALE, monH: 9 * MON_SCALE,
+  },
+  {
+    id: 'obake', name: 'おばけ',
+    pixels: [
+      '..GGGGGG..',
+      '.GGGGGGGG.',
+      'GG.EE.EE.G',
+      'GGGGGGGGGG',
+      'GGGGGGGGGG',
+      'GGGGGGGGGG',
+      'GG.G.G.GGG',
+      '..G.G.G...',
+    ],
+    palette: { G: '#eceff1', E: '#1a1a2a' },
+    rarity: 'ultra',
+    desc: 'ふわふわ漂う謎のおばけ。ドクロンとは友達らしい。',
+    monW: 10 * MON_SCALE, monH: 8 * MON_SCALE,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
@@ -2228,10 +2284,11 @@ function SettingsTab({ settings, onChange, memoMons }: {
 }) {
   const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
-  const [newTag, setNewTag]         = useState('');
-  const [keyInput, setKeyInput]     = useState(geminiApiKey || '');
-  const [keyVisible, setKeyVisible] = useState(false);
-  const [apiStatus, setApiStatus]   = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
+  const [newTag, setNewTag]             = useState('');
+  const [keyInput, setKeyInput]         = useState(geminiApiKey || '');
+  const [keyVisible, setKeyVisible]     = useState(false);
+  const [apiStatus, setApiStatus]       = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
+  const [showMonSelector, setShowMonSelector] = useState(false);
 
   useEffect(() => { setKeyInput(geminiApiKey || ''); }, [geminiApiKey]);
 
@@ -2462,38 +2519,93 @@ function SettingsTab({ settings, onChange, memoMons }: {
               onClick={() => onChange('memoMonVisible', settings.memoMonVisible === false ? true : false)}
             />
           </div>
-          {settings.memoMonVisible !== false && memoMons.map(m => {
-            const def = MEMOMON_DEFS.find(d => d.id === m.defId);
-            if (!def) return null;
-            const hidden = (settings.hiddenMons || []).includes(m.defId);
-            return (
-              <div key={m.uid} className="settings-row">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <img
-                    src={MEMOMON_IMGS[def.id]}
-                    alt={def.name}
-                    style={{ width: def.monW, height: def.monH, imageRendering: 'pixelated' }}
-                  />
-                  <div>
-                    <div className="settings-row-label">{def.name}</div>
-                    <div className="settings-row-sub">{def.desc}</div>
-                  </div>
-                </div>
-                <button
-                  className={`toggle${hidden ? ' off' : ' on'}`}
-                  onClick={() => {
-                    const current = settings.hiddenMons || [];
-                    onChange('hiddenMons', hidden
-                      ? current.filter(id => id !== m.defId)
-                      : [...current, m.defId]
-                    );
-                  }}
-                />
+          {settings.memoMonVisible !== false && <>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-label">サイズ</div>
               </div>
-            );
-          })}
+              <div className="font-size-opts">
+                {(['small', 'medium', 'large'] as const).map((s, i) => (
+                  <button
+                    key={s}
+                    className={`font-size-opt${(settings.memoMonSize || 'medium') === s ? ' sel' : ''}`}
+                    style={{ fontSize: i === 0 ? '11px' : i === 1 ? '13px' : '15px' }}
+                    onClick={() => onChange('memoMonSize', s)}
+                  >{['小', '中', '大'][i]}</button>
+                ))}
+              </div>
+            </div>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-label">メモモンを選ぶ</div>
+                <div className="settings-row-sub">
+                  {memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId)).length} / {memoMons.length} 体表示中
+                </div>
+              </div>
+              <button className="secondary" onClick={() => setShowMonSelector(true)}>選択</button>
+            </div>
+          </>}
         </div>
       </>}
+      {showMonSelector && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 2000,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'flex-end',
+        }} onClick={() => setShowMonSelector(false)}>
+          <div style={{
+            width: '100%', background: 'var(--card-bg, #fff)',
+            borderRadius: '20px 20px 0 0', padding: '20px 16px 32px',
+            maxHeight: '70vh', overflowY: 'auto',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 16, textAlign: 'center' }}>メモモンを選ぶ</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+              {memoMons.map(m => {
+                const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+                if (!def) return null;
+                const hidden = (settings.hiddenMons || []).includes(m.defId);
+                return (
+                  <div
+                    key={m.uid}
+                    onClick={() => {
+                      const current = settings.hiddenMons || [];
+                      onChange('hiddenMons', hidden
+                        ? current.filter(id => id !== m.defId)
+                        : [...current, m.defId]
+                      );
+                    }}
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      gap: 8, padding: '16px 8px',
+                      border: `2px solid ${hidden ? '#ddd' : 'var(--accent, #4f46e5)'}`,
+                      borderRadius: 14, cursor: 'pointer',
+                      background: hidden ? '#fafafa' : 'rgba(79,70,229,0.06)',
+                      opacity: hidden ? 0.5 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <img
+                      src={MEMOMON_IMGS[def.id]}
+                      alt={def.name}
+                      style={{ width: def.monW * 2, height: def.monH * 2, imageRendering: 'pixelated' }}
+                    />
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{def.name}</div>
+                    <div style={{
+                      fontSize: 11, padding: '2px 8px', borderRadius: 20,
+                      background: hidden ? '#eee' : 'var(--accent, #4f46e5)',
+                      color: hidden ? '#888' : '#fff',
+                    }}>{hidden ? '非表示' : '表示中'}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              style={{ width: '100%', marginTop: 20, padding: '12px 0', borderRadius: 12, fontSize: 15, fontWeight: 600 }}
+              onClick={() => setShowMonSelector(false)}
+            >閉じる</button>
+          </div>
+        </div>
+      )}
 
       <div className="settings-section-title">アプリ情報</div>
       <div className="about-card">
@@ -2515,7 +2627,9 @@ type LiveMon = MemoMonInstance & {
   hideTimer?: ReturnType<typeof setTimeout>;
 };
 
-function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
+function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number }) {
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
   const liveRef  = useRef<Record<string, LiveMon>>({});
   const elemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const imgRefs  = useRef<Record<string, HTMLImageElement | null>>({});
@@ -2532,9 +2646,10 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
         const def = MEMOMON_DEFS.find(d => d.id === m.defId)!;
         const hoursElapsed = (now - m.lastFed) / 3600000;
         const hunger = Math.max(0, m.hunger - hoursElapsed * 10);
+        const sc = scaleRef.current;
         liveRef.current[m.uid] = {
           ...m, hunger,
-          x: Math.random() * Math.max(0, W - def.monW),
+          x: Math.random() * Math.max(0, W - def.monW * sc),
           y: 60 + Math.random() * Math.max(0, H * 0.3),
           vx: (Math.random() > 0.5 ? 1 : -1) * 40,
           vy: (Math.random() - 0.5) * 20,
@@ -2560,7 +2675,9 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
       Object.values(liveRef.current).forEach(m => {
         const def = MEMOMON_DEFS.find(d => d.id === m.defId);
         if (!def) return;
-        const { monW: mw, monH: mh } = def;
+        const sc = scaleRef.current;
+        const mw = Math.round(def.monW * sc);
+        const mh = Math.round(def.monH * sc);
 
         if (m.state === 'hidden') return;
 
@@ -2578,8 +2695,9 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
             m.state = 'hidden';
             if (el) el.style.display = 'none';
             m.hideTimer = setTimeout(() => {
+              const sc2 = scaleRef.current;
               m.state = 'walk';
-              m.x = Math.random() * Math.max(0, W - mw);
+              m.x = Math.random() * Math.max(0, W - Math.round(def.monW * sc2));
               m.y = 60 + Math.random() * Math.max(0, H * 0.3);
               m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
               m.vy = (Math.random() - 0.5) * 20;
@@ -2670,6 +2788,8 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
         if (!m) return null;
         const def = MEMOMON_DEFS.find(d => d.id === m.defId);
         if (!def) return null;
+        const dW = Math.round(def.monW * scale);
+        const dH = Math.round(def.monH * scale);
         return (
           <div
             key={uid}
@@ -2677,7 +2797,7 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
             style={{
               position: 'absolute',
               left: Math.round(m.x), top: Math.round(m.y),
-              width: def.monW, height: def.monH,
+              width: dW, height: dH,
               pointerEvents: 'auto', cursor: 'pointer',
               transformOrigin: '50% 50%',
               transform: `scaleX(${m.facing === 'l' ? -1 : 1})`,
@@ -2693,7 +2813,7 @@ function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
               draggable={false}
               style={{
                 display: 'block', imageRendering: 'pixelated',
-                width: def.monW, height: def.monH,
+                width: dW, height: dH,
                 animation: 'monBob 0.6s ease-in-out infinite',
               }}
             />
@@ -2948,7 +3068,8 @@ function SmartMemoApp() {
       )}
       {settings.memoMonVisible !== false && (() => {
         const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
-        return visible.length > 0 ? <MemoMonLayer mons={visible} /> : null;
+        const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
+        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} /> : null;
       })()}
     </div>
   );
