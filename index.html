@@ -201,7 +201,7 @@
     .nav-center-mic {
       position:absolute;
       left:50%; transform:translateX(-50%);
-      bottom:calc(100% - 38px); /* ~60% of button inside nav bar */
+      bottom:calc(100% - 46px);
       width:62px; height:62px; border-radius:50%; border:none;
       background:var(--accent); color:#fff;
       display:flex; align-items:center; justify-content:center;
@@ -404,9 +404,9 @@
       display:flex; align-items:center; justify-content:center; transition:background .12s;
     }
     .cal-nav-btn:hover { background:#f5f5f3; }
-    .cal-dow { display:grid; grid-template-columns:repeat(7,1fr); padding:0 10px; }
+    .cal-dow { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); padding:0 10px; }
     .cal-dow-cell { text-align:center; font-size:10px; font-weight:600; color:#b0b0ac; padding:3px 0; }
-    .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); padding:2px 10px 10px; gap:1px; }
+    .cal-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); padding:2px 10px 10px; gap:1px; }
     .cal-grid.cal-slide-prev { animation: cal-slide-out-left .2s ease forwards; }
     .cal-grid.cal-slide-next { animation: cal-slide-out-right .2s ease forwards; }
     @keyframes cal-slide-out-left {
@@ -429,7 +429,7 @@
       aspect-ratio:1; display:flex; flex-direction:column;
       align-items:center; justify-content:flex-start; padding-top:2px;
       cursor:pointer; border-radius:7px; transition:background .1s; position:relative;
-      overflow:visible;
+      overflow:visible; min-width:0;
     }
     .cal-cell:hover { background:#f5f5f3; }
     .cal-num { font-size:13px; font-weight:400; color:#1a1a18; line-height:1; flex-shrink:0; position:relative; z-index:2; }
@@ -723,6 +723,10 @@
     .ideas-subtab.drop-target { background:var(--accent-light); border-radius:4px 4px 0 0; }
     .idea-card[draggable] { cursor:grab; }
     .idea-card.dragging { opacity:.35; cursor:grabbing; }
+    .idea-card.touch-dragging { opacity:.35; transform:scale(.97); box-shadow:0 4px 20px rgba(0,0,0,.15); }
+    .idea-card.drag-over-top { box-shadow:0 -3px 0 0 var(--accent), 0 1px 4px rgba(0,0,0,.06); }
+    .idea-card.drag-over-bottom { box-shadow:0 3px 0 0 var(--accent), 0 1px 4px rgba(0,0,0,.06); }
+    .ideas-tab.touch-dragging { touch-action:none; user-select:none; }
     .ideas-subtab-del {
       width:14px; height:14px; border-radius:50%; background:transparent;
       border:none; cursor:pointer; color:#c0c0ba; font-size:10px;
