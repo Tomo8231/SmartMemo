@@ -1047,6 +1047,20 @@
       80%  { opacity:1; }
       100% { opacity:0; transform:translate(var(--dx), var(--dy)) scale(1.1); }
     }
+
+    /* MemoMon animations */
+    @keyframes monBob {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-4px); }
+    }
+    @keyframes monHappy {
+      0%   { transform: scale(1) rotate(-8deg); }
+      100% { transform: scale(1.12) rotate(8deg); }
+    }
+    @keyframes monMsgFloat {
+      0%   { opacity:1; transform:translateX(-50%) translateY(0); }
+      100% { opacity:0; transform:translateX(-50%) translateY(-22px); }
+    }
   </style>
 </head>
 <body>
