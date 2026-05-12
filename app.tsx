@@ -43,8 +43,10 @@ type Settings = {
   infiniteCoins?: boolean;
   infiniteCoinsUnlocked?: boolean;
   gachaUnlocked?: { sounds: string[]; bgs: number[]; mons?: string[] };
+  memoMonVisible?: boolean;
+  hiddenMons?: string[];
 };
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
@@ -375,12 +377,11 @@ const SKULLON_PIXELS = [
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
     id: 'kuroneko', name: 'クロネコ',
-    pixels: KURONEKO_PIXELS,
-    palette: { C: '#0d0d14', E: '#e8c840' },
+    pixels: [], palette: {},
+    imageUrl: './kuroneko.jpg',
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
-    monW: KURONEKO_PIXELS[0].length * MON_SCALE,
-    monH: KURONEKO_PIXELS.length * MON_SCALE,
+    monW: 24, monH: 23,
   },
   {
     id: 'skullon', name: 'ドクロン',
@@ -405,7 +406,7 @@ function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" shape-rendering="crispEdges">${rects}</svg>`)}`;
 }
 const MEMOMON_IMGS: Record<string, string> = {};
-MEMOMON_DEFS.forEach(def => { MEMOMON_IMGS[def.id] = pixelToDataUrl(def.pixels, def.palette); });
+MEMOMON_DEFS.forEach(def => { MEMOMON_IMGS[def.id] = def.imageUrl ?? pixelToDataUrl(def.pixels, def.palette); });
 
 function pickGacha(): GachaPrize {
   const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
@@ -2221,9 +2222,10 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange }: {
+function SettingsTab({ settings, onChange, memoMons }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+  memoMons: MemoMonInstance[];
 }) {
   const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
@@ -2447,6 +2449,52 @@ function SettingsTab({ settings, onChange }: {
           </div>
         </div>
       </div>
+
+      {memoMons.length > 0 && <>
+        <div className="settings-section-title">メモモン</div>
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">メモモンを表示する</div>
+              <div className="settings-row-sub">画面上を歩き回るモンスターの表示</div>
+            </div>
+            <button
+              className={`toggle${settings.memoMonVisible === false ? ' off' : ' on'}`}
+              onClick={() => onChange('memoMonVisible', settings.memoMonVisible === false ? true : false)}
+            />
+          </div>
+          {settings.memoMonVisible !== false && memoMons.map(m => {
+            const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+            if (!def) return null;
+            const hidden = (settings.hiddenMons || []).includes(m.defId);
+            return (
+              <div key={m.uid} className="settings-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <img
+                    src={MEMOMON_IMGS[def.id]}
+                    alt={def.name}
+                    style={{ width: def.monW, height: def.monH, imageRendering: 'pixelated' }}
+                  />
+                  <div>
+                    <div className="settings-row-label">{def.name}</div>
+                    <div className="settings-row-sub">{def.desc}</div>
+                  </div>
+                </div>
+                <button
+                  className={`toggle${hidden ? ' off' : ' on'}`}
+                  onClick={() => {
+                    const current = settings.hiddenMons || [];
+                    onChange('hiddenMons', hidden
+                      ? current.filter(id => id !== m.defId)
+                      : [...current, m.defId]
+                    );
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </>}
 
       <div className="settings-section-title">アプリ情報</div>
       <div className="about-card">
@@ -2822,7 +2870,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
@@ -2888,7 +2936,10 @@ function SmartMemoApp() {
           }}
         />
       )}
-      {memoMons.length > 0 && <MemoMonLayer mons={memoMons} />}
+      {settings.memoMonVisible !== false && (() => {
+        const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
+        return visible.length > 0 ? <MemoMonLayer mons={visible} /> : null;
+      })()}
     </div>
   );
 }
