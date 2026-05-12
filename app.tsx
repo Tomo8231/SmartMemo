@@ -2731,6 +2731,15 @@ function SmartMemoApp() {
   ]);
 
   useEffect(() => {
+    if (!memoMons.find(m => m.defId === 'kuroneko')) {
+      setMemoMons(prev => [
+        { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now() },
+        ...prev,
+      ]);
+    }
+  }, []);
+
+  useEffect(() => {
     if (navigator.storage && (navigator.storage as any).persist) {
       (navigator.storage as any).persist().catch(() => {});
     }
