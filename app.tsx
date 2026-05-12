@@ -328,7 +328,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2  },
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
   { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1 },
-  { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon', weight: 2 },
+  { type: 'memomon', label: '🐱 クロネコ',  rarity: 'ultra', stars: '★★★★★', color: '#1a1a2e', monDefId: 'kuroneko', weight: 2 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -343,29 +343,28 @@ const BOSS_TODOS = [
 // ─────────────────────────────────────────────────────────────
 // MemoMon System
 // ─────────────────────────────────────────────────────────────
-const MON_SCALE = 5;
-const SKULLON_PIXELS = [
-  '....BB....BB....',
-  '...BBBB..BBBB...',
-  '...BGGGBBGGGB...',
-  '..BGGGGGGGGGBB..',
-  '.BBGGGGGGGGGGGB.',
-  '.BGGG.BB..BBGGB.',
-  '.BGGG.BB..BBGGB.',
-  '.BGGGGGGGGGGGB..',
-  '.BGGGGGGGGGGGB..',
-  '.BGG.GG.GG.GGB..',
-  '.BBB.BB.BB.BBB..',
-  '..BBBBBBBBBBB...',
+const MON_SCALE = 4;
+const KURONEKO_PIXELS = [
+  '.CC......CC.',
+  '.CCCC..CCCC.',
+  '.CCCCCCCCCC.',
+  'CCCCCCCCCCCC',
+  'CC.EE..EE.CC',
+  'CC.EE..EE.CC',
+  'CCCCCCCCCCCC',
+  'CC..CCCC..CC',
+  '.CCCCCCCCCC.',
+  '.CC......CC.',
+  '..CC....CC..',
 ];
 const MEMOMON_DEFS: MemoMonDef[] = [{
-  id: 'skullon', name: 'ドクロン',
-  pixels: SKULLON_PIXELS,
-  palette: { G: '#52575e', B: '#1a1a1a' },
+  id: 'kuroneko', name: 'クロネコ',
+  pixels: KURONEKO_PIXELS,
+  palette: { C: '#0d0d14', E: '#e8c840' },
   rarity: 'ultra',
-  desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。おなかが空くと不機嫌になる。',
-  monW: SKULLON_PIXELS[0].length * MON_SCALE,
-  monH: SKULLON_PIXELS.length * MON_SCALE,
+  desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
+  monW: KURONEKO_PIXELS[0].length * MON_SCALE,
+  monH: KURONEKO_PIXELS.length * MON_SCALE,
 }];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
   const w = pixels[0].length * scale;
@@ -2438,18 +2437,15 @@ function SettingsTab({ settings, onChange }: {
 type LiveMon = MemoMonInstance & {
   x: number; y: number; vx: number; vy: number;
   facing: 'r' | 'l';
-  state: 'walk' | 'idle' | 'happy' | 'full';
+  state: 'walk' | 'idle' | 'hiding' | 'hidden';
   stateUntil: number;
+  hideTimer?: ReturnType<typeof setTimeout>;
 };
 
-function MemoMonLayer({ mons, onFeed }: {
-  mons: MemoMonInstance[];
-  onFeed: (uid: string, newHunger: number) => void;
-}) {
+function MemoMonLayer({ mons }: { mons: MemoMonInstance[] }) {
   const liveRef  = useRef<Record<string, LiveMon>>({});
   const elemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const imgRefs  = useRef<Record<string, HTMLImageElement | null>>({});
-  const msgRefs  = useRef<Record<string, { el: HTMLDivElement | null; timer: ReturnType<typeof setTimeout> | null }>>({});
   const rafRef   = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const [monIds, setMonIds] = useState<string[]>([]);
@@ -2472,8 +2468,6 @@ function MemoMonLayer({ mons, onFeed }: {
           facing: 'r', state: 'walk',
           stateUntil: now + 2000 + Math.random() * 3000,
         };
-      } else if (m.lastFed > liveRef.current[m.uid].lastFed) {
-        liveRef.current[m.uid] = { ...liveRef.current[m.uid], hunger: m.hunger, lastFed: m.lastFed };
       }
     });
     Object.keys(liveRef.current).forEach(uid => {
@@ -2495,15 +2489,44 @@ function MemoMonLayer({ mons, onFeed }: {
         if (!def) return;
         const { monW: mw, monH: mh } = def;
 
+        if (m.state === 'hidden') return;
+
+        if (m.state === 'hiding') {
+          m.x += m.vx * dt; m.y += m.vy * dt;
+          if (m.vx !== 0) m.facing = m.vx < 0 ? 'l' : 'r';
+          const el = elemRefs.current[m.uid];
+          if (el) {
+            el.style.left = `${Math.round(m.x)}px`;
+            el.style.top  = `${Math.round(m.y)}px`;
+            el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
+          }
+          const offscreen = m.x < -mw - 10 || m.x > W + 10 || m.y < -mh - 10 || m.y > H + mh + 10;
+          if (offscreen) {
+            m.state = 'hidden';
+            if (el) el.style.display = 'none';
+            m.hideTimer = setTimeout(() => {
+              m.state = 'walk';
+              m.x = Math.random() * Math.max(0, W - mw);
+              m.y = 60 + Math.random() * Math.max(0, H * 0.3);
+              m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
+              m.vy = (Math.random() - 0.5) * 20;
+              m.stateUntil = Date.now() + 2000 + Math.random() * 4000;
+              const reEl = elemRefs.current[m.uid];
+              const reImg = imgRefs.current[m.uid];
+              if (reEl) {
+                reEl.style.display = 'block';
+                reEl.style.left = `${Math.round(m.x)}px`;
+                reEl.style.top  = `${Math.round(m.y)}px`;
+              }
+              if (reImg) { reImg.style.filter = 'none'; reImg.style.animation = 'monBob 0.6s ease-in-out infinite'; }
+            }, 15000 + Math.random() * 10000);
+          }
+          return;
+        }
+
         if (now > m.stateUntil) {
           const img = imgRefs.current[m.uid];
-          if (m.state === 'happy' || m.state === 'full') {
-            m.state = 'walk';
-            m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
-            m.vy = (Math.random() - 0.5) * 20;
-            m.stateUntil = now + 2000 + Math.random() * 4000;
-            if (img) { img.style.filter = 'none'; img.style.animation = 'monBob 0.6s ease-in-out infinite'; }
-          } else if (m.state === 'walk') {
+          if (m.state === 'walk') {
             if (Math.random() < 0.25) {
               m.state = 'idle'; m.vx = 0; m.vy = 0;
               m.stateUntil = now + 800 + Math.random() * 1500;
@@ -2535,8 +2558,6 @@ function MemoMonLayer({ mons, onFeed }: {
           el.style.top  = `${Math.round(m.y)}px`;
           el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
         }
-        const msgR = msgRefs.current[m.uid];
-        if (msgR?.el) msgR.el.style.transform = `translateX(-50%) scaleX(${m.facing === 'l' ? -1 : 1})`;
       });
 
       rafRef.current = requestAnimationFrame(step);
@@ -2545,41 +2566,28 @@ function MemoMonLayer({ mons, onFeed }: {
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
-  function showMsg(uid: string, text: string, color: string) {
-    if (!msgRefs.current[uid]) msgRefs.current[uid] = { el: null, timer: null };
-    const r = msgRefs.current[uid];
-    if (!r.el) return;
-    r.el.textContent = text;
-    r.el.style.color = color;
-    r.el.style.display = 'block';
-    r.el.style.animation = 'none';
-    void (r.el as HTMLElement).offsetHeight;
-    r.el.style.animation = 'monMsgFloat 1.5s ease-out forwards';
-    if (r.timer) clearTimeout(r.timer);
-    r.timer = setTimeout(() => { if (r.el) r.el.style.display = 'none'; }, 1500);
-  }
-
-  function handleFeed(uid: string) {
+  function handleTap(uid: string) {
     const m = liveRef.current[uid];
-    if (!m) return;
-    const now = Date.now();
-    if (m.hunger >= 90) {
-      showMsg(uid, 'おなかいっぱい！', '#888');
-      m.state = 'full'; m.stateUntil = now + 1200; m.vx = 0; m.vy = 0;
-      const img = imgRefs.current[uid];
-      if (img) img.style.animation = 'none';
-      return;
-    }
-    const newHunger = Math.min(100, m.hunger + 30);
-    m.hunger = newHunger; m.lastFed = now;
-    m.state = 'happy'; m.stateUntil = now + 2000; m.vx = 0; m.vy = 0;
+    if (!m || m.state === 'hiding' || m.state === 'hidden') return;
+    if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
+    const W = window.innerWidth;
+    const H = window.innerHeight - 80;
+    const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+    if (!def) return;
+    const toLeft  = m.x;
+    const toRight = W - m.x;
+    const toTop   = m.y - 60;
+    const toBot   = H - m.y;
+    const minDist = Math.min(toLeft, toRight, toTop, toBot);
+    const speed = 250;
+    if (minDist === toLeft)       { m.vx = -speed; m.vy = 0; }
+    else if (minDist === toRight) { m.vx =  speed; m.vy = 0; }
+    else if (minDist === toTop)   { m.vx = 0; m.vy = -speed; }
+    else                          { m.vx = 0; m.vy =  speed; }
+    m.state = 'hiding';
+    m.stateUntil = Date.now() + 10000;
     const img = imgRefs.current[uid];
-    if (img) {
-      img.style.filter = 'brightness(1.5) drop-shadow(0 0 6px gold)';
-      img.style.animation = 'monHappy 0.25s ease-in-out infinite alternate';
-    }
-    showMsg(uid, '+5🪙', '#FFD700');
-    onFeed(uid, newHunger);
+    if (img) { img.style.filter = 'none'; img.style.animation = 'monBob 0.3s ease-in-out infinite'; }
   }
 
   return (
@@ -2602,8 +2610,8 @@ function MemoMonLayer({ mons, onFeed }: {
               transform: `scaleX(${m.facing === 'l' ? -1 : 1})`,
               userSelect: 'none', WebkitUserSelect: 'none',
             }}
-            onClick={() => handleFeed(uid)}
-            title={`${def.name}（タップしてエサをあげる）`}
+            onClick={() => handleTap(uid)}
+            title={`${def.name}（タップすると隠れる）`}
           >
             <img
               ref={el => { imgRefs.current[uid] = el; }}
@@ -2614,18 +2622,6 @@ function MemoMonLayer({ mons, onFeed }: {
                 display: 'block', imageRendering: 'pixelated',
                 width: def.monW, height: def.monH,
                 animation: 'monBob 0.6s ease-in-out infinite',
-              }}
-            />
-            <div
-              ref={el => {
-                if (!msgRefs.current[uid]) msgRefs.current[uid] = { el: null, timer: null };
-                msgRefs.current[uid].el = el;
-              }}
-              style={{
-                display: 'none', position: 'absolute', top: -28, left: '50%',
-                transform: 'translateX(-50%)',
-                fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
-                textShadow: '0 1px 3px rgba(0,0,0,0.4)', pointerEvents: 'none',
               }}
             />
           </div>
@@ -2707,14 +2703,6 @@ function SmartMemoApp() {
     setBoss(null);
     setSettings(p => ({ ...p, coins: (p.coins || 0) + 50 }));
     showAppToast('👑 ボスミッション達成！ 🪙 +50コイン！');
-  }
-
-  function feedMon(uid: string, newHunger: number) {
-    setSetting('coins', (settings.coins || 0) + 5);
-    setMemoMons(prev => prev.map(m =>
-      m.uid === uid ? { ...m, hunger: newHunger, lastFed: Date.now() } : m
-    ));
-    showAppToast('メモモンが喜んでいる！ 🪙 +5コイン');
   }
 
   const color = COLOR_PRESETS[settings.colorIdx];
@@ -2874,7 +2862,7 @@ function SmartMemoApp() {
           }}
         />
       )}
-      {memoMons.length > 0 && <MemoMonLayer mons={memoMons} onFeed={feedMon} />}
+      {memoMons.length > 0 && <MemoMonLayer mons={memoMons} />}
     </div>
   );
 }
