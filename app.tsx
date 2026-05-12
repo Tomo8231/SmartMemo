@@ -330,7 +330,6 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2  },
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
   { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1 },
-  { type: 'memomon', label: '🐱 クロネコ',  rarity: 'ultra', stars: '★★★★★', color: '#1a1a2e', monDefId: 'kuroneko', weight: 2 },
   { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2 },
 ];
 const BOSS_TODOS = [
@@ -2727,7 +2726,9 @@ function SmartMemoApp() {
     completeSound: true, customTags: [], geminiApiKey: '', coins: 0, darkMode: false, bgIdx: 0,
     infiniteCoins: false, gachaUnlocked: { sounds: [], bgs: [] },
   });
-  const [memoMons, setMemoMons] = usePersistedState<MemoMonInstance[]>('smartmemo:memomons', []);
+  const [memoMons, setMemoMons] = usePersistedState<MemoMonInstance[]>('smartmemo:memomons', [
+    { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now() },
+  ]);
 
   useEffect(() => {
     if (navigator.storage && (navigator.storage as any).persist) {
