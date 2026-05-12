@@ -43,6 +43,8 @@ type Settings = {
   infiniteCoins?: boolean;
   infiniteCoinsUnlocked?: boolean;
   gachaUnlocked?: { sounds: string[]; bgs: number[]; mons?: string[] };
+  memoMonVisible?: boolean;
+  hiddenMons?: string[];
 };
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
@@ -2220,9 +2222,10 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange }: {
+function SettingsTab({ settings, onChange, memoMons }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+  memoMons: MemoMonInstance[];
 }) {
   const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
@@ -2446,6 +2449,52 @@ function SettingsTab({ settings, onChange }: {
           </div>
         </div>
       </div>
+
+      {memoMons.length > 0 && <>
+        <div className="settings-section-title">メモモン</div>
+        <div className="settings-card">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">メモモンを表示する</div>
+              <div className="settings-row-sub">画面上を歩き回るモンスターの表示</div>
+            </div>
+            <button
+              className={`toggle${settings.memoMonVisible === false ? ' off' : ' on'}`}
+              onClick={() => onChange('memoMonVisible', settings.memoMonVisible === false ? true : false)}
+            />
+          </div>
+          {settings.memoMonVisible !== false && memoMons.map(m => {
+            const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+            if (!def) return null;
+            const hidden = (settings.hiddenMons || []).includes(m.defId);
+            return (
+              <div key={m.uid} className="settings-row">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <img
+                    src={MEMOMON_IMGS[def.id]}
+                    alt={def.name}
+                    style={{ width: def.monW, height: def.monH, imageRendering: 'pixelated' }}
+                  />
+                  <div>
+                    <div className="settings-row-label">{def.name}</div>
+                    <div className="settings-row-sub">{def.desc}</div>
+                  </div>
+                </div>
+                <button
+                  className={`toggle${hidden ? ' off' : ' on'}`}
+                  onClick={() => {
+                    const current = settings.hiddenMons || [];
+                    onChange('hiddenMons', hidden
+                      ? current.filter(id => id !== m.defId)
+                      : [...current, m.defId]
+                    );
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </>}
 
       <div className="settings-section-title">アプリ情報</div>
       <div className="about-card">
@@ -2821,7 +2870,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
@@ -2887,7 +2936,10 @@ function SmartMemoApp() {
           }}
         />
       )}
-      {memoMons.length > 0 && <MemoMonLayer mons={memoMons} />}
+      {settings.memoMonVisible !== false && (() => {
+        const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
+        return visible.length > 0 ? <MemoMonLayer mons={visible} /> : null;
+      })()}
     </div>
   );
 }
