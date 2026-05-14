@@ -48,7 +48,7 @@ type Settings = {
   memoMonSize?: 'small' | 'medium' | 'large';
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
@@ -420,6 +420,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'super',
     desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
     monW: 60, monH: 50,
+    spriteFacing: 'l',
     sprites: SL_SPRITES,
   },
   {
@@ -2744,7 +2745,8 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
           if (el) {
             el.style.left = `${Math.round(m.x)}px`;
             el.style.top  = `${Math.round(m.y)}px`;
-            el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
+            const flip1 = (m.facing === 'l') !== (def.spriteFacing === 'l');
+            el.style.transform = `scaleX(${flip1 ? -1 : 1})`;
           }
           const offscreen = m.x < -mw - 10 || m.x > W + 10 || m.y < -mh - 10 || m.y > H + mh + 10;
           if (offscreen) {
@@ -2818,7 +2820,8 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
         if (el) {
           el.style.left = `${Math.round(m.x)}px`;
           el.style.top  = `${Math.round(m.y)}px`;
-          el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
+          const flip2 = (m.facing === 'l') !== (def.spriteFacing === 'l');
+          el.style.transform = `scaleX(${flip2 ? -1 : 1})`;
         }
       });
 
@@ -2898,7 +2901,7 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
               width: dW, height: dH,
               pointerEvents: 'auto', cursor: 'pointer',
               transformOrigin: '50% 50%',
-              transform: `scaleX(${m.facing === 'l' ? -1 : 1})`,
+              transform: `scaleX(${((m.facing === 'l') !== (def.spriteFacing === 'l')) ? -1 : 1})`,
               userSelect: 'none', WebkitUserSelect: 'none',
             }}
             onClick={() => handleTap(uid)}
