@@ -387,6 +387,15 @@ const KN_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
   }])
 ) as NonNullable<MemoMonDef['sprites']>;
 
+const SL_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
+const SL_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
+  SL_ANIMS.map(a => [a, {
+    frames: Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`),
+    fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
+    loop:   a === 'walk' || a === 'sit' || a === 'sleep',
+  }])
+) as NonNullable<MemoMonDef['sprites']>;
+
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
     id: 'kuroneko', name: 'クロネコ',
@@ -407,20 +416,11 @@ const MEMOMON_DEFS: MemoMonDef[] = [
   },
   {
     id: 'slime', name: 'スライム',
-    pixels: [
-      '..SSSSSS..',
-      '.SSSSSSSS.',
-      'SS.EE.EE.S',
-      'SSSSSSSSSS',
-      '.SSSSSSSS.',
-      '..SSSSSS..',
-      '...SSSS...',
-      '....SS....',
-    ],
-    palette: { S: '#4fc3f7', E: '#1a243a' },
+    pixels: [], palette: {},
     rarity: 'super',
-    desc: 'まるくてかわいいスライム。つるつるしてそう。',
-    monW: 10 * MON_SCALE, monH: 8 * MON_SCALE,
+    desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
+    monW: 60, monH: 50,
+    sprites: SL_SPRITES,
   },
   {
     id: 'hiyoko', name: 'ひよこ',
