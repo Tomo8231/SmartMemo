@@ -47,7 +47,8 @@ type Settings = {
   hiddenMons?: string[];
   memoMonSize?: 'small' | 'medium' | 'large';
 };
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; };
+type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
@@ -377,14 +378,32 @@ const SKULLON_PIXELS = [
   '.BBB.BB.BB.BBB..',
   '..BBBBBBBBBBB...',
 ];
+const KN_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
+const KN_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
+  KN_ANIMS.map(a => [a, {
+    frames: Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`),
+    fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
+    loop:   a === 'walk' || a === 'sit' || a === 'sleep',
+  }])
+) as NonNullable<MemoMonDef['sprites']>;
+
+const SL_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
+const SL_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
+  SL_ANIMS.map(a => [a, {
+    frames: Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`),
+    fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
+    loop:   a === 'walk' || a === 'sit' || a === 'sleep',
+  }])
+) as NonNullable<MemoMonDef['sprites']>;
+
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
     id: 'kuroneko', name: 'クロネコ',
     pixels: [], palette: {},
-    imageUrl: './kuroneko.jpg',
     rarity: 'ultra',
-    desc: 'メモのすみっこに住む神出鬼没な黒猫。タップすると素早く隠れてしまう。',
-    monW: 24, monH: 23,
+    desc: 'メモのすみっこに住む神出鬼没な黒猫。タップされると喜ぶが、しつこいと怒って逃げる。',
+    monW: 56, monH: 60,
+    sprites: KN_SPRITES,
   },
   {
     id: 'skullon', name: 'ドクロン',
@@ -397,20 +416,11 @@ const MEMOMON_DEFS: MemoMonDef[] = [
   },
   {
     id: 'slime', name: 'スライム',
-    pixels: [
-      '..SSSSSS..',
-      '.SSSSSSSS.',
-      'SS.EE.EE.S',
-      'SSSSSSSSSS',
-      '.SSSSSSSS.',
-      '..SSSSSS..',
-      '...SSSS...',
-      '....SS....',
-    ],
-    palette: { S: '#4fc3f7', E: '#1a243a' },
+    pixels: [], palette: {},
     rarity: 'super',
-    desc: 'まるくてかわいいスライム。つるつるしてそう。',
-    monW: 10 * MON_SCALE, monH: 8 * MON_SCALE,
+    desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
+    monW: 60, monH: 50,
+    sprites: SL_SPRITES,
   },
   {
     id: 'hiyoko', name: 'ひよこ',
@@ -461,7 +471,20 @@ function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" shape-rendering="crispEdges">${rects}</svg>`)}`;
 }
 const MEMOMON_IMGS: Record<string, string> = {};
-MEMOMON_DEFS.forEach(def => { MEMOMON_IMGS[def.id] = def.imageUrl ?? pixelToDataUrl(def.pixels, def.palette); });
+MEMOMON_DEFS.forEach(def => {
+  if (def.sprites) {
+    MEMOMON_IMGS[def.id] = def.sprites.sit?.frames[0] ?? def.sprites.walk?.frames[0] ?? '';
+  } else {
+    MEMOMON_IMGS[def.id] = def.imageUrl ?? pixelToDataUrl(def.pixels, def.palette);
+  }
+});
+// Preload all sprite frames
+MEMOMON_DEFS.forEach(def => {
+  if (!def.sprites) return;
+  Object.values(def.sprites).forEach(anim => {
+    anim.frames.forEach(src => { const img = new Image(); img.src = src; });
+  });
+});
 
 function pickGacha(): GachaPrize {
   const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
@@ -2625,15 +2648,19 @@ type LiveMon = MemoMonInstance & {
   state: 'walk' | 'idle' | 'hiding' | 'hidden';
   stateUntil: number;
   hideTimer?: ReturnType<typeof setTimeout>;
+  animState: AnimState;
+  frame: number;
+  frameTime: number;
+  tapCount: number;
 };
 
-function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number }) {
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
-  const liveRef  = useRef<Record<string, LiveMon>>({});
-  const elemRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const imgRefs  = useRef<Record<string, HTMLImageElement | null>>({});
-  const rafRef   = useRef<number>(0);
+function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean }) {
+  const scaleRef    = useRef(scale);
+  scaleRef.current  = scale;
+  const liveRef     = useRef<Record<string, LiveMon>>({});
+  const elemRefs    = useRef<Record<string, HTMLDivElement | null>>({});
+  const imgRefs     = useRef<Record<string, HTMLImageElement | null>>({});
+  const rafRef      = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const [monIds, setMonIds] = useState<string[]>([]);
 
@@ -2647,14 +2674,18 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
         const hoursElapsed = (now - m.lastFed) / 3600000;
         const hunger = Math.max(0, m.hunger - hoursElapsed * 10);
         const sc = scaleRef.current;
+        const startSleep = initSleep && !!def.sprites;
         liveRef.current[m.uid] = {
           ...m, hunger,
           x: Math.random() * Math.max(0, W - def.monW * sc),
           y: 60 + Math.random() * Math.max(0, H * 0.3),
-          vx: (Math.random() > 0.5 ? 1 : -1) * 40,
-          vy: (Math.random() - 0.5) * 20,
-          facing: 'r', state: 'walk',
+          vx: startSleep ? 0 : (Math.random() > 0.5 ? 1 : -1) * 40,
+          vy: startSleep ? 0 : (Math.random() - 0.5) * 20,
+          facing: 'r',
+          state: startSleep ? 'idle' : 'walk',
           stateUntil: now + 2000 + Math.random() * 3000,
+          animState: startSleep ? 'sleep' : 'sit',
+          frame: 0, frameTime: 0, tapCount: 0,
         };
       }
     });
@@ -2681,6 +2712,31 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
 
         if (m.state === 'hidden') return;
 
+        // ── Sprite frame animation ──────────────────────────────
+        if (def.sprites) {
+          const animDef = def.sprites[m.animState];
+          if (animDef) {
+            m.frameTime += dt;
+            const totalFrames = animDef.frames.length;
+            const rawFrame = Math.floor(m.frameTime * animDef.fps);
+            const newFrame = animDef.loop ? rawFrame % totalFrames : Math.min(rawFrame, totalFrames - 1);
+            if (newFrame !== m.frame) {
+              m.frame = newFrame;
+              const imgEl = imgRefs.current[m.uid];
+              if (imgEl) imgEl.src = animDef.frames[m.frame];
+            }
+            // Non-looping animation completed
+            if (!animDef.loop && rawFrame >= totalFrames) {
+              if (m.animState === 'happy') {
+                m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
+              } else if (m.animState === 'surprise') {
+                m.animState = 'sit'; m.frameTime = 0; m.frame = 0; m.tapCount = 0;
+              }
+              // 'dislike' completion handled by offscreen detection
+            }
+          }
+        }
+
         if (m.state === 'hiding') {
           m.x += m.vx * dt; m.y += m.vy * dt;
           if (m.vx !== 0) m.facing = m.vx < 0 ? 'l' : 'r';
@@ -2696,32 +2752,46 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
             if (el) el.style.display = 'none';
             m.hideTimer = setTimeout(() => {
               const sc2 = scaleRef.current;
-              m.state = 'walk';
+              m.state = 'idle'; m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
               m.x = Math.random() * Math.max(0, W - Math.round(def.monW * sc2));
               m.y = 60 + Math.random() * Math.max(0, H * 0.3);
-              m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
-              m.vy = (Math.random() - 0.5) * 20;
-              m.stateUntil = Date.now() + 2000 + Math.random() * 4000;
+              m.vx = 0; m.vy = 0;
+              m.stateUntil = Date.now() + 1500 + Math.random() * 2000;
               const reEl = elemRefs.current[m.uid];
               const reImg = imgRefs.current[m.uid];
-              if (reEl) {
-                reEl.style.display = 'block';
-                reEl.style.left = `${Math.round(m.x)}px`;
-                reEl.style.top  = `${Math.round(m.y)}px`;
-              }
-              if (reImg) { reImg.style.filter = 'none'; reImg.style.animation = 'monBob 0.6s ease-in-out infinite'; }
+              if (reEl) { reEl.style.display = 'block'; reEl.style.left = `${Math.round(m.x)}px`; reEl.style.top = `${Math.round(m.y)}px`; }
+              if (reImg && def.sprites?.sit) reImg.src = def.sprites.sit.frames[0];
+              else if (reImg) { reImg.style.animation = 'monBob 0.6s ease-in-out infinite'; }
             }, 15000 + Math.random() * 10000);
           }
           return;
         }
 
+        // Sleep state: no movement
+        if (m.animState === 'sleep') {
+          m.vx = 0; m.vy = 0;
+          const el = elemRefs.current[m.uid];
+          if (el) {
+            el.style.left = `${Math.round(m.x)}px`;
+            el.style.top  = `${Math.round(m.y)}px`;
+          }
+          return;
+        }
+
+        // Locked animations (happy/surprise): no movement
+        if (m.animState === 'happy' || m.animState === 'surprise') {
+          m.vx = 0; m.vy = 0;
+          return;
+        }
+
+        // Movement state machine
         if (now > m.stateUntil) {
-          const img = imgRefs.current[m.uid];
           if (m.state === 'walk') {
-            if (Math.random() < 0.25) {
+            if (Math.random() < 0.3) {
               m.state = 'idle'; m.vx = 0; m.vy = 0;
-              m.stateUntil = now + 800 + Math.random() * 1500;
-              if (img) img.style.animation = 'none';
+              m.stateUntil = now + 1000 + Math.random() * 2000;
+              if (def.sprites) { m.animState = 'sit'; m.frameTime = 0; }
+              else { const img = imgRefs.current[m.uid]; if (img) img.style.animation = 'none'; }
             } else {
               m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
               m.vy = (Math.random() - 0.5) * 20;
@@ -2732,7 +2802,8 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
             m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
             m.vy = (Math.random() - 0.5) * 20;
             m.stateUntil = now + 2000 + Math.random() * 4000;
-            if (img) img.style.animation = 'monBob 0.6s ease-in-out infinite';
+            if (def.sprites) { m.animState = 'walk'; m.frameTime = 0; }
+            else { const img = imgRefs.current[m.uid]; if (img) img.style.animation = 'monBob 0.6s ease-in-out infinite'; }
           }
         }
 
@@ -2757,28 +2828,52 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
     return () => cancelAnimationFrame(rafRef.current);
   }, []);
 
+  function startHide(m: LiveMon, def: MemoMonDef) {
+    if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
+    const W = window.innerWidth; const H = window.innerHeight - 80;
+    const sc = scaleRef.current;
+    const mw = Math.round(def.monW * sc);
+    const mh = Math.round(def.monH * sc);
+    const dirs = [
+      { dx: -250, dy: 0, dist: m.x },
+      { dx:  250, dy: 0, dist: W - m.x - mw },
+      { dx: 0, dy: -250, dist: m.y - 60 },
+      { dx: 0, dy:  250, dist: H - m.y - mh },
+    ];
+    const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
+    m.vx = best.dx; m.vy = best.dy;
+    m.state = 'hiding'; m.stateUntil = Date.now() + 10000;
+    if (def.sprites) { m.animState = 'dislike'; m.frameTime = 0; m.frame = 0; }
+  }
+
   function handleTap(uid: string) {
     const m = liveRef.current[uid];
     if (!m || m.state === 'hiding' || m.state === 'hidden') return;
-    if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
-    const W = window.innerWidth;
-    const H = window.innerHeight - 80;
     const def = MEMOMON_DEFS.find(d => d.id === m.defId);
     if (!def) return;
-    const toLeft  = m.x;
-    const toRight = W - m.x;
-    const toTop   = m.y - 60;
-    const toBot   = H - m.y;
-    const minDist = Math.min(toLeft, toRight, toTop, toBot);
-    const speed = 250;
-    if (minDist === toLeft)       { m.vx = -speed; m.vy = 0; }
-    else if (minDist === toRight) { m.vx =  speed; m.vy = 0; }
-    else if (minDist === toTop)   { m.vx = 0; m.vy = -speed; }
-    else                          { m.vx = 0; m.vy =  speed; }
-    m.state = 'hiding';
-    m.stateUntil = Date.now() + 10000;
-    const img = imgRefs.current[uid];
-    if (img) { img.style.filter = 'none'; img.style.animation = 'monBob 0.3s ease-in-out infinite'; }
+
+    if (!def.sprites) {
+      // Non-animated mons: always hide on tap
+      startHide(m, def);
+      return;
+    }
+
+    // Sleeping → surprised
+    if (m.animState === 'sleep') {
+      m.animState = 'surprise'; m.frameTime = 0; m.frame = 0;
+      return;
+    }
+
+    // Locked animation playing, ignore tap
+    if (m.animState === 'happy' || m.animState === 'surprise') return;
+
+    m.tapCount++;
+    if (m.tapCount <= 3) {
+      m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
+      m.vx = 0; m.vy = 0; m.state = 'idle';
+    } else {
+      startHide(m, def);
+    }
   }
 
   return (
@@ -2790,6 +2885,9 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
         if (!def) return null;
         const dW = Math.round(def.monW * scale);
         const dH = Math.round(def.monH * scale);
+        const initSrc = def.sprites
+          ? (def.sprites[m.animState]?.frames[0] ?? MEMOMON_IMGS[def.id])
+          : MEMOMON_IMGS[def.id];
         return (
           <div
             key={uid}
@@ -2804,17 +2902,17 @@ function MemoMonLayer({ mons, scale }: { mons: MemoMonInstance[]; scale: number 
               userSelect: 'none', WebkitUserSelect: 'none',
             }}
             onClick={() => handleTap(uid)}
-            title={`${def.name}（タップすると隠れる）`}
+            title={def.name}
           >
             <img
               ref={el => { imgRefs.current[uid] = el; }}
-              src={MEMOMON_IMGS[def.id]}
+              src={initSrc}
               alt={def.name}
               draggable={false}
               style={{
                 display: 'block', imageRendering: 'pixelated',
-                width: dW, height: dH,
-                animation: 'monBob 0.6s ease-in-out infinite',
+                width: dW, height: dH, objectFit: 'contain',
+                animation: def.sprites ? 'none' : 'monBob 0.6s ease-in-out infinite',
               }}
             />
           </div>
@@ -2832,6 +2930,12 @@ function SmartMemoApp() {
   const [pulseTabs, setPulseTabs] = useState<Set<Tab>>(new Set());
   const [micTrigger, setMicTrigger] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
+  const [monInitSleep] = useState(() => {
+    const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
+    const sleep = Date.now() - last > 12 * 3600 * 1000;
+    localStorage.setItem('smartmemo:lastOpen', String(Date.now()));
+    return sleep;
+  });
   const [appToast, setAppToast] = useState<string | null>(null);
   const appToastRef = useRef<number | undefined>(undefined);
   const [boss, setBoss] = usePersistedState<{ id: string; title: string; spawnedAt: number } | null>('smartmemo:boss', null);
@@ -3069,7 +3173,7 @@ function SmartMemoApp() {
       {settings.memoMonVisible !== false && (() => {
         const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
-        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} /> : null;
+        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} /> : null;
       })()}
     </div>
   );
