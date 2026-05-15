@@ -398,6 +398,20 @@ const SL_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
   }])
 ) as NonNullable<MemoMonDef['sprites']>;
 
+const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
+function makeSprites(prefix: string): NonNullable<MemoMonDef['sprites']> {
+  return Object.fromEntries(
+    MON_ANIMS.map(a => [a, {
+      frames: Array.from({length:6}, (_, i) => `./sprites/${prefix}_${a}_${i}.png`),
+      fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
+      loop:   a === 'walk' || a === 'sit' || a === 'sleep',
+    }])
+  ) as NonNullable<MemoMonDef['sprites']>;
+}
+const SK_SPRITES = makeSprites('sk');
+const HY_SPRITES = makeSprites('hy');
+const OB_SPRITES = makeSprites('ob');
+
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
     id: 'kuroneko', name: 'クロネコ',
@@ -409,12 +423,11 @@ const MEMOMON_DEFS: MemoMonDef[] = [
   },
   {
     id: 'skullon', name: 'ドクロン',
-    pixels: SKULLON_PIXELS,
-    palette: { G: '#52575e', B: '#1a1a1a' },
+    pixels: [], palette: {},
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。タップすると逃げ出す。',
-    monW: SKULLON_PIXELS[0].length * MON_SCALE,
-    monH: SKULLON_PIXELS.length * MON_SCALE,
+    monW: 66, monH: 60,
+    sprites: SK_SPRITES,
   },
   {
     id: 'slime', name: 'スライム',
@@ -427,38 +440,19 @@ const MEMOMON_DEFS: MemoMonDef[] = [
   },
   {
     id: 'hiyoko', name: 'ひよこ',
-    pixels: [
-      '....YY....',
-      '...YYYY...',
-      '..YYYYYY..',
-      '..Y.EE.Y..',
-      '..YYOOYY..',
-      '.YYYYYYYY.',
-      '.YYYYYYYY.',
-      '...Y..Y...',
-      '..OO..OO..',
-    ],
-    palette: { Y: '#ffee58', O: '#ff8f00', E: '#1a1a2a' },
+    pixels: [], palette: {},
     rarity: 'super',
     desc: 'ちっちゃくてふわふわのひよこ。ぴよぴよ鳴く。',
-    monW: 10 * MON_SCALE, monH: 9 * MON_SCALE,
+    monW: 65, monH: 60,
+    sprites: HY_SPRITES,
   },
   {
     id: 'obake', name: 'おばけ',
-    pixels: [
-      '..GGGGGG..',
-      '.GGGGGGGG.',
-      'GG.EE.EE.G',
-      'GGGGGGGGGG',
-      'GGGGGGGGGG',
-      'GGGGGGGGGG',
-      'GG.G.G.GGG',
-      '..G.G.G...',
-    ],
-    palette: { G: '#eceff1', E: '#1a1a2a' },
+    pixels: [], palette: {},
     rarity: 'ultra',
     desc: 'ふわふわ漂う謎のおばけ。ドクロンとは友達らしい。',
-    monW: 10 * MON_SCALE, monH: 8 * MON_SCALE,
+    monW: 65, monH: 60,
+    sprites: OB_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
