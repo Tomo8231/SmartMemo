@@ -519,16 +519,23 @@ function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boo
   );
 }
 
+type GachaMode = 'single' | 'ten' | 'memomon';
+
 function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, onClose, onResult }: {
   coins: number; infinite?: boolean;
   unlockedSounds: string[]; unlockedBgs: number[]; ownedMons: string[];
-  onClose: () => void; onResult: (prize: GachaPrize, isDuplicate: boolean) => void;
+  onClose: () => void;
+  onResult: (results: { prize: GachaPrize; dup: boolean }[], totalCost: number) => void;
 }) {
+  const [mode, setMode] = useState<GachaMode>('single');
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
-  const [result, setResult] = useState<GachaPrize | null>(null);
-  const [isDuplicate, setIsDuplicate] = useState(false);
+  const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
+  const [singleDup, setSingleDup] = useState(false);
+  const [tenResults, setTenResults] = useState<{ prize: GachaPrize; dup: boolean }[]>([]);
   const [localCoins, setLocalCoins] = useState(coins);
-  const canAfford = infinite || localCoins >= GACHA_COST;
+
+  const cost = mode === 'single' ? GACHA_COST : mode === 'ten' ? GACHA_COST_TEN : GACHA_COST_MON;
+  const canAfford = infinite || localCoins >= cost;
 
   const rarityBg: Record<string, string> = {
     common: 'linear-gradient(135deg, #9e9e9e 0%, #e0e0e0 100%)',
@@ -543,62 +550,114 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
     ultra:  '0 0 40px rgba(255,215,0,0.9), 0 0 80px rgba(255,107,53,0.5), 0 4px 20px rgba(0,0,0,.4)',
   };
 
+  function isDup(r: GachaPrize) {
+    return (r.type === 'sound'   && !!r.soundType       && unlockedSounds.includes(r.soundType)) ||
+           (r.type === 'bg'      && r.bgIdx !== undefined && unlockedBgs.includes(r.bgIdx)) ||
+           (r.type === 'memomon' && !!r.monDefId         && ownedMons.includes(r.monDefId));
+  }
+
   function pull() {
     if (!canAfford || phase === 'spinning') return;
-    if (!infinite) setLocalCoins(c => c - GACHA_COST);
+    if (!infinite) setLocalCoins(c => c - cost);
     setPhase('spinning');
     setTimeout(() => {
-      const r = pickGacha();
-      const dup =
-        (r.type === 'sound'   && !!r.soundType      && unlockedSounds.includes(r.soundType)) ||
-        (r.type === 'bg'      && r.bgIdx !== undefined && unlockedBgs.includes(r.bgIdx)) ||
-        (r.type === 'memomon' && !!r.monDefId        && ownedMons.includes(r.monDefId));
-      setResult(r);
-      setIsDuplicate(dup);
-      if (dup && !infinite) setLocalCoins(c => c + 10);
-      onResult(r, dup);
+      if (mode === 'ten') {
+        const results = Array.from({ length: 10 }, () => {
+          const r = pickGacha(); return { prize: r, dup: isDup(r) };
+        });
+        const refund = results.filter(r => r.dup).length * 10;
+        if (refund && !infinite) setLocalCoins(c => c + refund);
+        setTenResults(results);
+        onResult(results, GACHA_COST_TEN);
+      } else {
+        const r = mode === 'memomon' ? pickGachaMon() : pickGacha();
+        const dup = isDup(r);
+        setSingleResult(r); setSingleDup(dup);
+        if (dup && !infinite) setLocalCoins(c => c + 10);
+        onResult([{ prize: r, dup }], cost);
+      }
       setPhase('result');
     }, 1600);
   }
 
-  function again() { setPhase('idle'); setResult(null); setIsDuplicate(false); }
+  function again() { setPhase('idle'); setSingleResult(null); setSingleDup(false); setTenResults([]); }
+  function switchMode(m: GachaMode) { if (phase !== 'spinning') { setMode(m); again(); } }
 
-  const capsuleBg  = phase === 'result' && result ? (rarityBg[result.rarity]  || rarityBg.common)  : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
-  const capsuleGlow = phase === 'result' && result ? (rarityGlow[result.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
+  const capsuleBg   = phase === 'result' && singleResult ? (rarityBg[singleResult.rarity] || rarityBg.common) : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
+  const capsuleGlow = phase === 'result' && singleResult ? (rarityGlow[singleResult.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
 
-  const resultDesc = result
-    ? isDuplicate ? 'すでに解放済み！ コイン +10 獲得'
-    : result.type === 'memomon' ? `${result.label} がメモ画面を歩き回り始めた！`
-    : `${result.label} をゲット！設定に反映されました`
+  const singleDesc = singleResult
+    ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
+    : singleResult.type === 'memomon' ? `${singleResult.label} がメモ画面を歩き回り始めた！`
+    : `${singleResult.label} をゲット！設定に反映されました`
     : '';
-
-  const labelParts = result ? result.label.split(' ') : [];
-  const labelEmoji = labelParts[0] || '';
-  const labelText  = labelParts.slice(1).join(' ');
+  const labelParts = singleResult ? singleResult.label.split(' ') : [];
+  const modeCostLabel: Record<GachaMode, string> = {
+    single: `${GACHA_COST}コインで1回`,
+    ten:    `${GACHA_COST_TEN}コインで10連`,
+    memomon:`${GACHA_COST_MON}コインでメモモン確定`,
+  };
 
   return (
     <div className="modal-backdrop gacha-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="gacha-modal">
         <button className="gacha-close-btn" onClick={onClose}>✕</button>
         <div className="gacha-title">🎰 ガチャ</div>
-        <div className="gacha-cost-info"><IcoCoin />&nbsp;{GACHA_COST}コインで1回</div>
-        <div
-          className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}
-          style={{ background: capsuleBg, boxShadow: capsuleGlow }}
-        >
-          {phase === 'spinning' && <div className="gacha-flash" />}
-          {phase !== 'result'
-            ? <div className="gacha-capsule-inner">？</div>
-            : <div className="gacha-result">
-                <div className="gacha-result-rarity" style={{ color: result!.color }}>{result!.stars}</div>
-                <div className="gacha-result-label">{labelEmoji}</div>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 8 }}>
+          {(['single', 'ten', 'memomon'] as GachaMode[]).map(m => (
+            <button key={m} onClick={() => switchMode(m)} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
+              background: mode === m ? 'var(--accent, #4f46e5)' : 'var(--chip-bg, #f0f0f0)',
+              color: mode === m ? '#fff' : 'var(--text, #333)',
+            }}>
+              {m === 'single' ? '単発' : m === 'ten' ? '10連' : 'メモモン'}
+            </button>
+          ))}
+        </div>
+        <div className="gacha-cost-info"><IcoCoin />&nbsp;{modeCostLabel[mode]}</div>
+
+        {mode === 'ten' && phase === 'result' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 5, margin: '8px 0' }}>
+            {tenResults.map((r, i) => (
+              <div key={i} style={{
+                borderRadius: 10, padding: '6px 2px', textAlign: 'center',
+                background: rarityBg[r.prize.rarity] || rarityBg.common,
+                boxShadow: rarityGlow[r.prize.rarity],
+                fontSize: 20, lineHeight: 1.4,
+              }}>
+                {r.prize.label.split(' ')[0]}
+                {r.dup && <div style={{ fontSize: 9, color: '#fff', fontWeight: 700 }}>+10</div>}
               </div>
-          }
-        </div>
-        <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
-          <div className="gacha-result-name" style={{ color: result?.color }}>{labelText || result?.label || ' '}</div>
-          <div className="gacha-result-desc">{resultDesc || ' '}</div>
-        </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div
+              className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}
+              style={{ background: capsuleBg, boxShadow: capsuleGlow }}
+            >
+              {phase === 'spinning' && <div className="gacha-flash" />}
+              {phase !== 'result'
+                ? <div className="gacha-capsule-inner">{mode === 'memomon' ? '🐾' : '？'}</div>
+                : <div className="gacha-result">
+                    <div className="gacha-result-rarity" style={{ color: singleResult!.color }}>{singleResult!.stars}</div>
+                    <div className="gacha-result-label">{labelParts[0]}</div>
+                  </div>
+              }
+            </div>
+            <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
+              <div className="gacha-result-name" style={{ color: singleResult?.color }}>{labelParts.slice(1).join(' ') || singleResult?.label || ' '}</div>
+              <div className="gacha-result-desc">{singleDesc || ' '}</div>
+            </div>
+          </>
+        )}
+
+        {mode === 'ten' && phase === 'result' && (
+          <div style={{ textAlign: 'center', fontSize: 12, color: '#888', margin: '4px 0' }}>
+            重複 {tenResults.filter(r => r.dup).length}件 +{tenResults.filter(r => r.dup).length * 10} コイン返却
+          </div>
+        )}
+
         <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
         <button
           className="gacha-pull-btn"
@@ -607,8 +666,10 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
         >
           {phase === 'result' ? '✨ もう一度引く'
            : phase === 'spinning' ? 'ガチャ中...'
-           : canAfford ? '✨ ガチャを引く！'
-           : 'コインが足りません'}
+           : !canAfford ? 'コインが足りません'
+           : mode === 'ten' ? '✨ 10連ガチャ！'
+           : mode === 'memomon' ? '🐾 メモモンガチャ！'
+           : '✨ ガチャを引く！'}
         </button>
       </div>
     </div>
@@ -2468,7 +2529,12 @@ function SettingsTab({ settings, onChange, memoMons }: {
               autoComplete="off"
               spellCheck={false}
             />
-            <button className="secondary" onClick={() => setKeyVisible(v => !v)}>{keyVisible ? '隠' : '表'}</button>
+            <button className="secondary" onClick={() => setKeyVisible(v => !v)} style={{ padding: '0 8px', display: 'flex', alignItems: 'center' }}>
+              {keyVisible
+                ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+              }
+            </button>
           </div>
           <div className="api-input-row">
             <button onClick={saveKey} disabled={keyInput.trim() === (geminiApiKey || '')}>保存</button>
@@ -2571,7 +2637,7 @@ function SettingsTab({ settings, onChange, memoMons }: {
                   {memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId)).length} / {memoMons.length} 体表示中
                 </div>
               </div>
-              <button className="secondary" onClick={() => setShowMonSelector(true)}>選択</button>
+              <button onClick={() => setShowMonSelector(true)}>選択</button>
             </div>
           </>}
         </div>
@@ -2660,7 +2726,7 @@ type LiveMon = MemoMonInstance & {
   tapCount: number;
 };
 
-function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean }) {
+function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; onTapReward: () => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
   const liveRef     = useRef<Record<string, LiveMon>>({});
@@ -2737,10 +2803,26 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
                 m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
               } else if (m.animState === 'surprise') {
                 m.animState = 'sit'; m.frameTime = 0; m.frame = 0; m.tapCount = 0;
+              } else if (m.animState === 'dislike' && m.state === 'dislike-wait') {
+                const dirs = [
+                  { dx: -250, dy: 0, dist: m.x }, { dx: 250, dy: 0, dist: W - m.x - mw },
+                  { dx: 0, dy: -250, dist: m.y - 60 }, { dx: 0, dy: 250, dist: H - m.y - mh },
+                ];
+                const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
+                m.vx = best.dx; m.vy = best.dy;
+                m.state = 'hiding'; m.stateUntil = Date.now() + 10000;
               }
-              // 'dislike' completion handled by offscreen detection
             }
           }
+        }
+
+        if (m.state === 'dislike-wait') {
+          const el = elemRefs.current[m.uid];
+          if (el) {
+            el.style.left = `${Math.round(m.x)}px`;
+            el.style.top  = `${Math.round(m.y)}px`;
+          }
+          return;
         }
 
         if (m.state === 'hiding') {
@@ -2750,7 +2832,8 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
           if (el) {
             el.style.left = `${Math.round(m.x)}px`;
             el.style.top  = `${Math.round(m.y)}px`;
-            el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
+            const flipH = (m.facing === 'l') !== (def.spriteFacing === 'l');
+            el.style.transform = `scaleX(${flipH ? -1 : 1})`;
           }
           const offscreen = m.x < -mw - 10 || m.x > W + 10 || m.y < -mh - 10 || m.y > H + mh + 10;
           if (offscreen) {
@@ -2768,7 +2851,7 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
               if (reEl) { reEl.style.display = 'block'; reEl.style.left = `${Math.round(m.x)}px`; reEl.style.top = `${Math.round(m.y)}px`; }
               if (reImg && def.sprites?.sit) reImg.src = def.sprites.sit.frames[0];
               else if (reImg) { reImg.style.animation = 'monBob 0.6s ease-in-out infinite'; }
-            }, 15000 + Math.random() * 10000);
+            }, 600000);
           }
           return;
         }
@@ -2824,7 +2907,8 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
         if (el) {
           el.style.left = `${Math.round(m.x)}px`;
           el.style.top  = `${Math.round(m.y)}px`;
-          el.style.transform = `scaleX(${m.facing === 'l' ? -1 : 1})`;
+          const flipN = (m.facing === 'l') !== (def.spriteFacing === 'l');
+          el.style.transform = `scaleX(${flipN ? -1 : 1})`;
         }
       });
 
@@ -2836,47 +2920,48 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
 
   function startHide(m: LiveMon, def: MemoMonDef) {
     if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
-    const W = window.innerWidth; const H = window.innerHeight - 80;
-    const sc = scaleRef.current;
-    const mw = Math.round(def.monW * sc);
-    const mh = Math.round(def.monH * sc);
-    const dirs = [
-      { dx: -250, dy: 0, dist: m.x },
-      { dx:  250, dy: 0, dist: W - m.x - mw },
-      { dx: 0, dy: -250, dist: m.y - 60 },
-      { dx: 0, dy:  250, dist: H - m.y - mh },
-    ];
-    const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
-    m.vx = best.dx; m.vy = best.dy;
-    m.state = 'hiding'; m.stateUntil = Date.now() + 10000;
-    if (def.sprites) { m.animState = 'dislike'; m.frameTime = 0; m.frame = 0; }
+    m.vx = 0; m.vy = 0;
+    if (def.sprites) {
+      m.animState = 'dislike'; m.frameTime = 0; m.frame = 0;
+      m.state = 'dislike-wait';
+    } else {
+      const W = window.innerWidth; const H = window.innerHeight - 80;
+      const sc = scaleRef.current;
+      const mw = Math.round(def.monW * sc); const mh = Math.round(def.monH * sc);
+      const dirs = [
+        { dx: -250, dy: 0, dist: m.x }, { dx: 250, dy: 0, dist: W - m.x - mw },
+        { dx: 0, dy: -250, dist: m.y - 60 }, { dx: 0, dy: 250, dist: H - m.y - mh },
+      ];
+      const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
+      m.vx = best.dx; m.vy = best.dy;
+      m.state = 'hiding'; m.stateUntil = Date.now() + 10000;
+    }
   }
 
   function handleTap(uid: string) {
     const m = liveRef.current[uid];
-    if (!m || m.state === 'hiding' || m.state === 'hidden') return;
+    if (!m || m.state === 'hiding' || m.state === 'hidden' || m.state === 'dislike-wait') return;
     const def = MEMOMON_DEFS.find(d => d.id === m.defId);
     if (!def) return;
 
     if (!def.sprites) {
-      // Non-animated mons: always hide on tap
       startHide(m, def);
       return;
     }
 
-    // Sleeping → surprised
     if (m.animState === 'sleep') {
       m.animState = 'surprise'; m.frameTime = 0; m.frame = 0;
+      onTapReward();
       return;
     }
 
-    // Locked animation playing, ignore tap
     if (m.animState === 'happy' || m.animState === 'surprise') return;
 
     m.tapCount++;
     if (m.tapCount <= 3) {
       m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
       m.vx = 0; m.vy = 0; m.state = 'idle';
+      onTapReward();
     } else {
       startHide(m, def);
     }
@@ -2904,7 +2989,7 @@ function MemoMonLayer({ mons, scale, initSleep }: { mons: MemoMonInstance[]; sca
               width: dW, height: dH,
               pointerEvents: 'auto', cursor: 'pointer',
               transformOrigin: '50% 50%',
-              transform: `scaleX(${m.facing === 'l' ? -1 : 1})`,
+              transform: `scaleX(${((m.facing === 'l') !== (def.spriteFacing === 'l')) ? -1 : 1})`,
               userSelect: 'none', WebkitUserSelect: 'none',
             }}
             onClick={() => handleTap(uid)}
@@ -3141,36 +3226,39 @@ function SmartMemoApp() {
           unlockedBgs={(settings.gachaUnlocked || { sounds: [], bgs: [] }).bgs}
           ownedMons={memoMons.map(m => m.defId)}
           onClose={() => setShowGacha(false)}
-          onResult={(prize, isDuplicate) => {
-            if (!isDuplicate && prize.type === 'memomon' && prize.monDefId) {
-              setMemoMons(prev => [...prev, {
-                uid: `mon-${Date.now()}`,
-                defId: prize.monDefId!,
-                hunger: 100,
-                lastFed: Date.now(),
-              }]);
-            }
+          onResult={(results, totalCost) => {
+            results.forEach(({ prize, dup }, i) => {
+              if (!dup && prize.type === 'memomon' && prize.monDefId) {
+                setMemoMons(prev => [...prev, {
+                  uid: `mon-${Date.now()}-${i}`,
+                  defId: prize.monDefId!,
+                  hunger: 100,
+                  lastFed: Date.now(),
+                }]);
+              }
+            });
             setSettings(p => {
               const unlocked = p.gachaUnlocked || { sounds: [], bgs: [], mons: [] };
+              const newUnlocked = { sounds: [...unlocked.sounds], bgs: [...unlocked.bgs], mons: [...(unlocked.mons || [])] };
               const updates: Partial<Settings> = {};
-              if (!p.infiniteCoins) updates.coins = Math.max(0, (p.coins || 0) - GACHA_COST);
-              if (isDuplicate) {
-                updates.coins = (updates.coins ?? (p.coins || 0)) + 10;
-              } else {
-                const newUnlocked = { sounds: [...unlocked.sounds], bgs: [...unlocked.bgs], mons: [...(unlocked.mons || [])] };
-                if (prize.type === 'sound' && prize.soundType) {
+              if (!p.infiniteCoins) updates.coins = Math.max(0, (p.coins || 0) - totalCost);
+              let dupRefund = 0;
+              results.forEach(({ prize, dup }) => {
+                if (dup) { dupRefund += 10; return; }
+                if (prize.type === 'sound' && prize.soundType && !newUnlocked.sounds.includes(prize.soundType)) {
                   updates.soundType = prize.soundType;
                   newUnlocked.sounds.push(prize.soundType);
                 }
-                if (prize.type === 'bg' && prize.bgIdx !== undefined) {
+                if (prize.type === 'bg' && prize.bgIdx !== undefined && !newUnlocked.bgs.includes(prize.bgIdx)) {
                   updates.bgIdx = prize.bgIdx;
                   newUnlocked.bgs.push(prize.bgIdx);
                 }
-                if (prize.type === 'memomon' && prize.monDefId) {
+                if (prize.type === 'memomon' && prize.monDefId && !newUnlocked.mons.includes(prize.monDefId)) {
                   newUnlocked.mons.push(prize.monDefId);
                 }
-                updates.gachaUnlocked = newUnlocked;
-              }
+              });
+              if (dupRefund && !p.infiniteCoins) updates.coins = (updates.coins ?? (p.coins || 0)) + dupRefund;
+              updates.gachaUnlocked = newUnlocked;
               return { ...p, ...updates };
             });
           }}
@@ -3179,7 +3267,7 @@ function SmartMemoApp() {
       {settings.memoMonVisible !== false && (() => {
         const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
-        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} /> : null;
+        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
     </div>
   );
