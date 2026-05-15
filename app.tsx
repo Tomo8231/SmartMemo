@@ -515,6 +515,44 @@ function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boo
 
 type GachaMode = 'single' | 'ten' | 'memomon';
 
+const ORBIT_DOTS = [
+  { color: '#ffd700', rot: '0deg',   dur: '1.5s', delay: '0s',     sz: '9px' },
+  { color: '#ff6b35', rot: '60deg',  dur: '1.65s', delay: '-.26s', sz: '7px' },
+  { color: '#e91e63', rot: '120deg', dur: '1.45s', delay: '-.5s',  sz: '9px' },
+  { color: '#9c27b0', rot: '180deg', dur: '1.7s',  delay: '-.76s', sz: '7px' },
+  { color: '#42a5f5', rot: '240deg', dur: '1.55s', delay: '-1s',   sz: '8px' },
+  { color: '#4caf50', rot: '300deg', dur: '1.6s',  delay: '-1.2s', sz: '6px' },
+];
+
+function GachaParticles({ rarity }: { rarity: string }) {
+  const palettes: Record<string, string[]> = {
+    ultra: ['#ffd700','#ff6b35','#e91e63','#9c27b0','#fff','#42a5f5'],
+    super: ['#ce93d8','#9c27b0','#ffd700','#fff','#e040fb'],
+    rare:  ['#42a5f5','#1565c0','#90caf9','#fff'],
+  };
+  const colors = palettes[rarity] || palettes.rare;
+  const count = rarity === 'ultra' ? 22 : rarity === 'super' ? 16 : 10;
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => {
+        const angle = (i / count) * 360 + Math.random() * 20 - 10;
+        const dist = 55 + Math.random() * 65;
+        return (
+          <div key={i} className="gacha-particle" style={{
+            width: 6 + Math.random() * 6, height: 6 + Math.random() * 6,
+            background: colors[i % colors.length],
+            boxShadow: `0 0 5px ${colors[i % colors.length]}`,
+            '--tx': `${Math.cos(angle * Math.PI / 180) * dist}px`,
+            '--ty': `${Math.sin(angle * Math.PI / 180) * dist}px`,
+            '--delay': `${i * 0.035}s`,
+            '--dur': `${0.65 + Math.random() * 0.45}s`,
+          } as any} />
+        );
+      })}
+    </>
+  );
+}
+
 function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, onClose, onResult }: {
   coins: number; infinite?: boolean;
   unlockedSounds: string[]; unlockedBgs: number[]; ownedMons: string[];
@@ -522,32 +560,41 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   onResult: (results: { prize: GachaPrize; dup: boolean }[], totalCost: number) => void;
 }) {
   const [mode, setMode] = useState<GachaMode>('single');
-  const [phase, setPhase] = useState<'idle' | 'spinning' | 'result'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'spinning' | 'flashing' | 'result'>('idle');
   const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
   const [singleDup, setSingleDup] = useState(false);
   const [tenResults, setTenResults] = useState<{ prize: GachaPrize; dup: boolean }[]>([]);
   const [localCoins, setLocalCoins] = useState(coins);
+  const [flashRarity, setFlashRarity] = useState<string | null>(null);
+  const [revealCount, setRevealCount] = useState(-1);
+
+  useEffect(() => {
+    if (phase === 'result' && mode === 'ten' && revealCount >= 0 && revealCount < 10) {
+      const t = setTimeout(() => setRevealCount(c => c + 1), 175);
+      return () => clearTimeout(t);
+    }
+  }, [phase, mode, revealCount]);
 
   const cost = mode === 'single' ? GACHA_COST : mode === 'ten' ? GACHA_COST_TEN : GACHA_COST_MON;
   const canAfford = infinite || localCoins >= cost;
 
   const rarityBg: Record<string, string> = {
-    common: 'linear-gradient(135deg, #9e9e9e 0%, #e0e0e0 100%)',
-    rare:   'linear-gradient(135deg, #1565c0 0%, #42a5f5 100%)',
-    super:  'linear-gradient(135deg, #6a1b9a 0%, #ce93d8 80%, #ffd700 100%)',
-    ultra:  'linear-gradient(135deg, #ffd700 0%, #ff6b35 35%, #e91e63 65%, #9c27b0 100%)',
+    common: 'linear-gradient(135deg, #616161 0%, #9e9e9e 100%)',
+    rare:   'linear-gradient(135deg, #0d47a1 0%, #1976d2 50%, #42a5f5 100%)',
+    super:  'linear-gradient(135deg, #4a148c 0%, #7b1fa2 40%, #ce93d8 80%, #ffd700 100%)',
+    ultra:  'linear-gradient(135deg, #ffd700 0%, #ff6b35 30%, #e91e63 60%, #9c27b0 100%)',
   };
   const rarityGlow: Record<string, string> = {
-    common: '0 0 20px rgba(158,158,158,0.5), 0 4px 20px rgba(0,0,0,.4)',
-    rare:   '0 0 30px rgba(66,165,245,0.7), 0 0 60px rgba(21,101,192,0.35), 0 4px 20px rgba(0,0,0,.4)',
-    super:  '0 0 30px rgba(206,147,216,0.7), 0 0 60px rgba(106,27,154,0.45), 0 4px 20px rgba(0,0,0,.4)',
-    ultra:  '0 0 40px rgba(255,215,0,0.9), 0 0 80px rgba(255,107,53,0.5), 0 4px 20px rgba(0,0,0,.4)',
+    common: '0 0 20px rgba(158,158,158,0.4), 0 4px 20px rgba(0,0,0,.5)',
+    rare:   '0 0 30px rgba(66,165,245,0.8), 0 0 70px rgba(21,101,192,0.4), 0 4px 20px rgba(0,0,0,.5)',
+    super:  '0 0 35px rgba(206,147,216,0.85), 0 0 80px rgba(106,27,154,0.5), 0 4px 20px rgba(0,0,0,.5)',
+    ultra:  '0 0 50px rgba(255,215,0,1), 0 0 100px rgba(255,107,53,0.6), 0 4px 20px rgba(0,0,0,.5)',
   };
 
   function isDup(r: GachaPrize) {
-    return (r.type === 'sound'   && !!r.soundType       && unlockedSounds.includes(r.soundType)) ||
+    return (r.type === 'sound'   && !!r.soundType        && unlockedSounds.includes(r.soundType)) ||
            (r.type === 'bg'      && r.bgIdx !== undefined && unlockedBgs.includes(r.bgIdx)) ||
-           (r.type === 'memomon' && !!r.monDefId         && ownedMons.includes(r.monDefId));
+           (r.type === 'memomon' && !!r.monDefId          && ownedMons.includes(r.monDefId));
   }
 
   function pull() {
@@ -562,23 +609,34 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
         const refund = results.filter(r => r.dup).length * 10;
         if (refund && !infinite) setLocalCoins(c => c + refund);
         setTenResults(results);
+        setRevealCount(0);
         onResult(results, GACHA_COST_TEN);
+        setPhase('result');
       } else {
         const r = mode === 'memomon' ? pickGachaMon() : pickGacha();
         const dup = isDup(r);
         setSingleResult(r); setSingleDup(dup);
         if (dup && !infinite) setLocalCoins(c => c + 10);
         onResult([{ prize: r, dup }], cost);
+        if (r.rarity !== 'common') {
+          setFlashRarity(r.rarity);
+          setPhase('flashing');
+        } else {
+          setPhase('result');
+        }
       }
-      setPhase('result');
     }, 1600);
   }
 
-  function again() { setPhase('idle'); setSingleResult(null); setSingleDup(false); setTenResults([]); }
+  function again() {
+    setPhase('idle'); setSingleResult(null); setSingleDup(false);
+    setTenResults([]); setRevealCount(-1); setFlashRarity(null);
+  }
   function switchMode(m: GachaMode) { if (phase !== 'spinning') { setMode(m); again(); } }
 
-  const capsuleBg   = phase === 'result' && singleResult ? (rarityBg[singleResult.rarity] || rarityBg.common) : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
-  const capsuleGlow = phase === 'result' && singleResult ? (rarityGlow[singleResult.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
+  const revealed = phase === 'flashing' || phase === 'result';
+  const capsuleBg   = revealed && singleResult ? (rarityBg[singleResult.rarity] || rarityBg.common) : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
+  const capsuleGlow = revealed && singleResult ? (rarityGlow[singleResult.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
 
   const singleDesc = singleResult
     ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
@@ -587,86 +645,104 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
     : '';
   const labelParts = singleResult ? singleResult.label.split(' ') : [];
   const modeCostLabel: Record<GachaMode, string> = {
-    single: `${GACHA_COST}コインで1回`,
-    ten:    `${GACHA_COST_TEN}コインで10連`,
-    memomon:`${GACHA_COST_MON}コインでメモモン確定`,
+    single:  `${GACHA_COST}コインで1回`,
+    ten:     `${GACHA_COST_TEN}コインで10連`,
+    memomon: `${GACHA_COST_MON}コインでメモモン確定`,
   };
 
   return (
-    <div className="modal-backdrop gacha-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="gacha-modal">
-        <button className="gacha-close-btn" onClick={onClose}>✕</button>
-        <div className="gacha-title">🎰 ガチャ</div>
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 8 }}>
-          {(['single', 'ten', 'memomon'] as GachaMode[]).map(m => (
-            <button key={m} onClick={() => switchMode(m)} style={{
-              padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: mode === m ? 'var(--accent, #4f46e5)' : 'var(--chip-bg, #f0f0f0)',
-              color: mode === m ? '#fff' : 'var(--text, #333)',
-            }}>
-              {m === 'single' ? '単発' : m === 'ten' ? '10連' : 'メモモン'}
-            </button>
-          ))}
-        </div>
-        <div className="gacha-cost-info"><IcoCoin />&nbsp;{modeCostLabel[mode]}</div>
-
-        {mode === 'ten' && phase === 'result' ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 5, margin: '8px 0' }}>
-            {tenResults.map((r, i) => (
-              <div key={i} style={{
-                borderRadius: 10, padding: '6px 2px', textAlign: 'center',
-                background: rarityBg[r.prize.rarity] || rarityBg.common,
-                boxShadow: rarityGlow[r.prize.rarity],
-                fontSize: 20, lineHeight: 1.4,
-              }}>
-                {r.prize.label.split(' ')[0]}
-                {r.dup && <div style={{ fontSize: 9, color: '#fff', fontWeight: 700 }}>+10</div>}
-              </div>
+    <>
+      {flashRarity && (
+        <div
+          className={`gacha-rarity-flash ${flashRarity}`}
+          onAnimationEnd={() => { setFlashRarity(null); setPhase('result'); }}
+        />
+      )}
+      <div className="modal-backdrop gacha-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+        <div className="gacha-modal">
+          <button className="gacha-close-btn" onClick={onClose}>✕</button>
+          <div className="gacha-title">🎰 ガチャ</div>
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+            {(['single', 'ten', 'memomon'] as GachaMode[]).map(m => (
+              <button key={m} onClick={() => switchMode(m)}
+                className={`gacha-mode-btn${mode === m ? ' active' : ''}`}>
+                {m === 'single' ? '単発' : m === 'ten' ? '10連' : 'メモモン'}
+              </button>
             ))}
           </div>
-        ) : (
-          <>
-            <div
-              className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${phase === 'result' ? ' revealed' : ''}`}
-              style={{ background: capsuleBg, boxShadow: capsuleGlow }}
-            >
-              {phase === 'spinning' && <div className="gacha-flash" />}
-              {phase !== 'result'
-                ? <div className="gacha-capsule-inner">{mode === 'memomon' ? '🐾' : '？'}</div>
-                : <div className="gacha-result">
-                    <div className="gacha-result-rarity" style={{ color: singleResult!.color }}>{singleResult!.stars}</div>
-                    <div className="gacha-result-label">{labelParts[0]}</div>
+          <div className="gacha-cost-info"><IcoCoin />&nbsp;{modeCostLabel[mode]}</div>
+
+          {mode === 'ten' && phase === 'result' ? (
+            <>
+              <div className="gacha-ten-grid">
+                {tenResults.map((r, i) => (
+                  <div key={i} className={`gacha-ten-card${i < revealCount ? ' show' : ''}`}
+                    style={{
+                      background: rarityBg[r.prize.rarity] || rarityBg.common,
+                      boxShadow: rarityGlow[r.prize.rarity],
+                    }}>
+                    <div style={{ fontSize: 22, lineHeight: 1.4 }}>{r.prize.label.split(' ')[0]}</div>
+                    <div style={{ fontSize: 10, color: '#fff', fontWeight: 700, opacity: .85 }}>{r.prize.stars}</div>
+                    {r.dup && <div style={{ fontSize: 9, color: '#ffd700', fontWeight: 700 }}>+10</div>}
                   </div>
-              }
-            </div>
-            <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
-              <div className="gacha-result-name" style={{ color: singleResult?.color }}>{labelParts.slice(1).join(' ') || singleResult?.label || ' '}</div>
-              <div className="gacha-result-desc">{singleDesc || ' '}</div>
-            </div>
-          </>
-        )}
+                ))}
+              </div>
+              <div style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,.4)', position: 'relative', zIndex: 1 }}>
+                重複 {tenResults.filter(r => r.dup).length}件 +{tenResults.filter(r => r.dup).length * 10} コイン返却
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="gacha-capsule-wrap">
+                {revealed && singleResult && (singleResult.rarity === 'ultra' || singleResult.rarity === 'super') && (
+                  <div className={`gacha-beam gacha-beam-${singleResult.rarity}`} />
+                )}
+                {phase === 'spinning' && ORBIT_DOTS.map((d, i) => (
+                  <div key={i} className="gacha-orbit-ring" style={{
+                    '--dot-color': d.color, '--rot': d.rot, '--dur': d.dur,
+                    '--delay': d.delay, '--sz': d.sz,
+                  } as any} />
+                ))}
+                {revealed && singleResult && singleResult.rarity !== 'common' && (
+                  <GachaParticles rarity={singleResult.rarity} />
+                )}
+                <div
+                  className={`gacha-capsule${phase === 'spinning' ? ' spinning' : ''}${revealed ? ' revealed' : ''}`}
+                  style={{ background: capsuleBg, boxShadow: capsuleGlow }}
+                >
+                  {phase === 'spinning' && <div className="gacha-flash" />}
+                  {!revealed
+                    ? <div className="gacha-capsule-inner">{mode === 'memomon' ? '🐾' : '？'}</div>
+                    : <div className="gacha-result">
+                        <div className="gacha-result-rarity" style={{ color: singleResult!.color }}>{singleResult!.stars}</div>
+                        <div className="gacha-result-label">{labelParts[0]}</div>
+                      </div>
+                  }
+                </div>
+              </div>
+              <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
+                <div className="gacha-result-name">{labelParts.slice(1).join(' ') || singleResult?.label || ' '}</div>
+                <div className="gacha-result-desc">{singleDesc || ' '}</div>
+              </div>
+            </>
+          )}
 
-        {mode === 'ten' && phase === 'result' && (
-          <div style={{ textAlign: 'center', fontSize: 12, color: '#888', margin: '4px 0' }}>
-            重複 {tenResults.filter(r => r.dup).length}件 +{tenResults.filter(r => r.dup).length * 10} コイン返却
-          </div>
-        )}
-
-        <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
-        <button
-          className="gacha-pull-btn"
-          onClick={phase === 'result' ? again : pull}
-          disabled={phase === 'spinning' || (phase === 'idle' && !canAfford)}
-        >
-          {phase === 'result' ? '✨ もう一度引く'
-           : phase === 'spinning' ? 'ガチャ中...'
-           : !canAfford ? 'コインが足りません'
-           : mode === 'ten' ? '✨ 10連ガチャ！'
-           : mode === 'memomon' ? '🐾 メモモンガチャ！'
-           : '✨ ガチャを引く！'}
-        </button>
+          <div className="gacha-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : localCoins}</div>
+          <button
+            className="gacha-pull-btn"
+            onClick={phase === 'result' ? again : pull}
+            disabled={phase === 'spinning' || phase === 'flashing' || (phase === 'idle' && !canAfford)}
+          >
+            {phase === 'result'   ? '✨ もう一度引く'
+             : phase === 'spinning' || phase === 'flashing' ? 'ガチャ中...'
+             : !canAfford         ? 'コインが足りません'
+             : mode === 'ten'     ? '🌟 10連ガチャ！'
+             : mode === 'memomon' ? '🐾 メモモンガチャ！'
+             : '✨ ガチャを引く！'}
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
