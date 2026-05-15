@@ -48,7 +48,7 @@ type Settings = {
   memoMonSize?: 'small' | 'medium' | 'large';
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
@@ -307,6 +307,8 @@ const FONT_SIZE_OPTS = [
 ];
 
 const GACHA_COST = 50;
+const GACHA_COST_TEN = 500;
+const GACHA_COST_MON = 500;
 const BG_PRESETS = [
   { name: 'デフォルト', bg: '#fafaf9' },
   { name: 'クリーム',   bg: '#fdf8f0' },
@@ -420,6 +422,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'super',
     desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
     monW: 60, monH: 50,
+    spriteFacing: 'l',
     sprites: SL_SPRITES,
   },
   {
@@ -486,15 +489,18 @@ MEMOMON_DEFS.forEach(def => {
   });
 });
 
-function pickGacha(): GachaPrize {
-  const total = GACHA_ITEMS.reduce((s, i) => s + i.weight, 0);
+function pickGacha(pool = GACHA_ITEMS): GachaPrize {
+  const total = pool.reduce((s, i) => s + i.weight, 0);
   const r = Math.random() * total;
   let cum = 0;
-  for (const item of GACHA_ITEMS) {
+  for (const item of pool) {
     cum += item.weight;
     if (r < cum) return item;
   }
-  return GACHA_ITEMS[0];
+  return pool[0];
+}
+function pickGachaMon(): GachaPrize {
+  return pickGacha(GACHA_ITEMS.filter(i => i.type === 'memomon'));
 }
 
 const IcoCoin = () => (
@@ -2645,7 +2651,7 @@ function SettingsTab({ settings, onChange, memoMons }: {
 type LiveMon = MemoMonInstance & {
   x: number; y: number; vx: number; vy: number;
   facing: 'r' | 'l';
-  state: 'walk' | 'idle' | 'hiding' | 'hidden';
+  state: 'walk' | 'idle' | 'hiding' | 'hidden' | 'dislike-wait';
   stateUntil: number;
   hideTimer?: ReturnType<typeof setTimeout>;
   animState: AnimState;
