@@ -14,6 +14,7 @@ type Todo = {
   tags: string[];
   done: boolean;
   addedAt?: number;
+  coinReward?: number;
 };
 type Idea = {
   id: number | string;
@@ -63,6 +64,7 @@ type TodoDraft = {
   time: string;
   tags: string[];
   done?: boolean;
+  coinReward?: number;
 };
 type IdeaDraft = {
   id?: number | string;
@@ -888,6 +890,26 @@ const isTodoLine = (line: string) => {
   return ACTION_VERB_RE.test(line) || DATE_TOKEN_RE.test(line);
 };
 
+function estimateCoinReward(title: string, tags: string[]): number {
+  let score = 30;
+  const t = title;
+  // Tag-based base
+  if (tags.includes('仕事') || tags.includes('勉強')) score += 40;
+  else if (tags.includes('家事') || tags.includes('健康')) score += 20;
+  else if (tags.includes('買い物')) score += 0;
+  // Keyword difficulty bumps
+  if (/資料|企画|設計|開発|実装|レポート|報告書|プレゼン|調査|分析/.test(t)) score += 60;
+  else if (/作成|準備|計画|手続き|申請|修正|編集/.test(t)) score += 30;
+  else if (/確認|チェック|送付|連絡|返信|予約/.test(t)) score -= 10;
+  else if (/買う|購入|注文/.test(t)) score -= 15;
+  // Title length (longer = likely more complex)
+  if (t.length > 20) score += 20;
+  else if (t.length > 12) score += 10;
+  // Clamp and snap to nearest 10
+  score = Math.max(10, Math.min(200, score));
+  return Math.round(score / 10) * 10;
+}
+
 function extractTodosFromLine(line: string): TodoDraft[] {
   const dates = parseRelative(line);
   const time = parseTime(line);
@@ -900,7 +922,8 @@ function extractTodosFromLine(line: string): TodoDraft[] {
     const verb = verbM[2];
     const tags = inferTagsForTodo(line);
     for (const n of nouns) {
-      out.push({ title: `${n}を${verb}`, startDate: dates.startDate, endDate: dates.endDate, time, tags });
+      const title = `${n}を${verb}`;
+      out.push({ title, startDate: dates.startDate, endDate: dates.endDate, time, tags, coinReward: estimateCoinReward(title, tags) });
     }
     return out;
   }
@@ -908,10 +931,12 @@ function extractTodosFromLine(line: string): TodoDraft[] {
   const parts = cleaned.split(/[、,]/).map(s => s.trim()).filter(Boolean);
   if (parts.length > 1) {
     for (const p of parts) {
-      out.push({ title: p, startDate: dates.startDate, endDate: dates.endDate, time, tags: inferTagsForTodo(p) });
+      const tags = inferTagsForTodo(p);
+      out.push({ title: p, startDate: dates.startDate, endDate: dates.endDate, time, tags, coinReward: estimateCoinReward(p, tags) });
     }
   } else {
-    out.push({ title: cleaned || line, startDate: dates.startDate, endDate: dates.endDate, time, tags: inferTagsForTodo(line) });
+    const tags = inferTagsForTodo(line);
+    out.push({ title: cleaned || line, startDate: dates.startDate, endDate: dates.endDate, time, tags, coinReward: estimateCoinReward(cleaned || line, tags) });
   }
   return out;
 }
@@ -1030,11 +1055,16 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `5. 時間は HH:MM か ""。\n` +
     `   - TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」は使わない）\n` +
     `   - アイデアのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
-    `6. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
-    `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
-    `8. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n\n` +
+    `6. TODOのcoinReward: タスクの難易度・手間・所要時間をもとに10〜200の整数で設定（10の倍数推奨）\n` +
+    `   - 10〜30: 買い物・連絡など数分でできる簡単なもの\n` +
+    `   - 40〜80: 家事・軽い仕事など30分〜1時間程度\n` +
+    `   - 90〜150: 複雑な仕事・長時間の作業・勉強など\n` +
+    `   - 160〜200: 大型プロジェクト・困難なタスク\n` +
+    `7. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
+    `8. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
+    `9. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n\n` +
     `形式（JSONのみ）:\n` +
-    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[]}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
+    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
     `メモ:\n${text}`;
 
   const tryParseJson = (res: string): ParseResult | null => {
@@ -1552,6 +1582,9 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
             </span>
           )}
           {(todo.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
+          {todo.coinReward != null && (
+            <span className="todo-coin-reward">🪙 +{todo.coinReward}</span>
+          )}
         </div>
       </div>
       <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildTodoCopyText(todo)); }} title="コピー"><IcoCopy /></button>
@@ -1609,6 +1642,9 @@ function ConfirmSheet({
                     </span>
                   )}
                   {(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
+                  {t.coinReward != null && (
+                    <span className="todo-coin-reward">🪙 +{t.coinReward}</span>
+                  )}
                 </div>
               </div>
               <button className="todo-del" onClick={() => onDeleteTodo(t.id)}>✕</button>
@@ -3230,7 +3266,8 @@ function SmartMemoApp() {
   const toggle = (id: number | string) => {
     const todo = todos.find(t => t.id === id);
     if (todo && !settings.infiniteCoins) {
-      const delta = todo.done ? -10 : 10;
+      const reward = todo.coinReward ?? 10;
+      const delta = todo.done ? -reward : reward;
       setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
     }
     setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
