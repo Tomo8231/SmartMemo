@@ -339,7 +339,9 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2 },
   { type: 'memomon', label: '💧 スライム', rarity: 'super',  stars: '★★★★',  color: '#0288d1', monDefId: 'slime',    weight: 3 },
   { type: 'memomon', label: '🐥 ひよこ',   rarity: 'super',  stars: '★★★★',  color: '#f9a825', monDefId: 'hiyoko',   weight: 3 },
-  { type: 'memomon', label: '👻 おばけ',   rarity: 'ultra',  stars: '★★★★★', color: '#616161', monDefId: 'obake',    weight: 2 },
+  { type: 'memomon', label: '👻 おばけ',      rarity: 'ultra', stars: '★★★★★', color: '#616161', monDefId: 'obake',       weight: 2 },
+  { type: 'memomon', label: '🦊 ゆきぎつね', rarity: 'ultra', stars: '★★★★★', color: '#90caf9', monDefId: 'yukigitsune', weight: 2 },
+  { type: 'memomon', label: '🐕 しばいぬ',   rarity: 'super', stars: '★★★★',  color: '#e65100', monDefId: 'shibainu',    weight: 3 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -413,6 +415,8 @@ function makeSprites(prefix: string): NonNullable<MemoMonDef['sprites']> {
 const SK_SPRITES = makeSprites('sk');
 const HY_SPRITES = makeSprites('hy');
 const OB_SPRITES = makeSprites('ob');
+const YF_SPRITES = makeSprites('yf');
+const SB_SPRITES = makeSprites('sb');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -421,6 +425,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没な黒猫。タップされると喜ぶが、しつこいと怒って逃げる。',
     monW: 56, monH: 60,
+    spriteFacing: 'l',
     sprites: KN_SPRITES,
   },
   {
@@ -429,6 +434,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。タップすると逃げ出す。',
     monW: 66, monH: 60,
+    spriteFacing: 'l',
     sprites: SK_SPRITES,
   },
   {
@@ -446,6 +452,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'super',
     desc: 'ちっちゃくてふわふわのひよこ。ぴよぴよ鳴く。',
     monW: 65, monH: 60,
+    spriteFacing: 'l',
     sprites: HY_SPRITES,
   },
   {
@@ -454,7 +461,26 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'ultra',
     desc: 'ふわふわ漂う謎のおばけ。ドクロンとは友達らしい。',
     monW: 65, monH: 60,
+    spriteFacing: 'l',
     sprites: OB_SPRITES,
+  },
+  {
+    id: 'yukigitsune', name: 'ゆきぎつね',
+    pixels: [], palette: {},
+    rarity: 'ultra',
+    desc: '雪のように白い神秘の狐。現れると幸運が訪れるとか。',
+    monW: 65, monH: 65,
+    spriteFacing: 'l',
+    sprites: YF_SPRITES,
+  },
+  {
+    id: 'shibainu', name: 'しばいぬ',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: '元気いっぱいのしば犬。メモが増えるほど喜んでくれる。',
+    monW: 65, monH: 60,
+    spriteFacing: 'l',
+    sprites: SB_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
