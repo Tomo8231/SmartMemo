@@ -2064,6 +2064,12 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           <span className="memo-card-label">メモ</span>
           <span className="memo-char-count">{text.length}</span>
         </div>
+        {imgPrev && (
+          <div className="img-preview">
+            <img src={imgPrev} alt="" />
+            <button className="img-clear" onClick={() => setImgPrev(null)}>✕</button>
+          </div>
+        )}
         <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e => setText(e.target.value)} />
         <div className="memo-actions">
           <button className={`action-btn${recording ? ' recording' : ''}`} onClick={toggleRec}>
@@ -2073,13 +2079,6 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImg} />
         </div>
       </div>
-
-      {imgPrev && (
-        <div className="img-preview">
-          <img src={imgPrev} alt="" />
-          <button className="img-clear" onClick={() => setImgPrev(null)}>✕</button>
-        </div>
-      )}
 
       <div className="reflect-actions">
         <button
@@ -2096,17 +2095,34 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           <IcoSparkle /> AI で TODO・アイデアに反映
         </button>
       </div>
-
-      <div className="hint-card">
-        <div className="hint-title">入力のヒント</div>
-        <div className="hint-body">
-          AI が自動で TODO とアイデアを判別します。<br/>
-          「明日から来週水曜まで出張」「8月中」「7月1日〜15日」→ 期間つきTODO<br/>
-          「にんじん、じゃがいも、玉ねぎを買う」→ 3つのTODOに分割<br/>
-          「新アプリ案: チャット機能を追加」→ プロジェクト『新アプリ案』のアイデア<br/>
-          既存プロジェクト名で書くと、そのアイデアに詳細が追記されます
+      {showHistory && (
+        <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
+          <div className="memo-history-sheet" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <div className="modal-handle" />
+            <div className="memo-history-header">
+              <span className="modal-title" style={{ marginBottom: 0 }}>メモ履歴</span>
+              {memoHistory.length > 0 && (
+                <button className="memo-history-clear" onClick={() => setMemoHistory([])}>全削除</button>
+              )}
+            </div>
+            {memoHistory.length === 0 ? (
+              <div className="memo-history-empty">履歴はありません</div>
+            ) : (
+              <div className="memo-history-list">
+                {memoHistory.map(item => (
+                  <div key={item.id} className="memo-history-item" onClick={() => { setText(item.text); setShowHistory(false); }}>
+                    <div className="memo-history-info">
+                      <div className="memo-history-date">{formatHistoryDate(item.savedAt)}</div>
+                      <div className="memo-history-text">{item.text.length > 100 ? item.text.slice(0, 100) + '…' : item.text}</div>
+                    </div>
+                    <button className="memo-history-del" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setMemoHistory(h => h.filter(x => x.id !== item.id)); }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
