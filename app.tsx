@@ -1995,6 +1995,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 
   async function reflect(originX: number, originY: number) {
     if (!text.trim()) { showToast('メモを入力してください'); return; }
+    setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now() }, ...h].slice(0, 100));
     setLoading(true);
     setLMsg('AI で TODO とアイデアに自動分類中');
     try {
@@ -2054,7 +2055,6 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
       showToast(`${total}件を追加しました`);
-      if (text.trim()) setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now() }, ...h].slice(0, 100));
       setText(''); setImgPrev(null); setPending(null); setSwooshing(false);
     }, 320);
   }
@@ -2165,7 +2165,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   soundType?: string;
   customTags: string[];
 }) {
-  const [sel,          setSel]        = usePersistedState<string>('smartmemo:ui:sel', todayStr);
+  const [sel,          setSel]        = useState<string>(todayStr);
   const [editing,      setEditing]    = useState<Todo | null>(null);
   const [adding,       setAdding]     = useState(false);
   const [showCalendar, setShowCalendar] = useState(true);
