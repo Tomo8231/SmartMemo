@@ -78,6 +78,7 @@ type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
 type Tab = 'memo' | 'todo' | 'idea' | 'settings';
+type MemoHistoryItem = { id: number; text: string; savedAt: number };
 
 const { useState, useRef, useEffect } = React;
 
@@ -1137,6 +1138,11 @@ const IcoMic = () => (
     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
   </svg>
 );
+const IcoHistory = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+);
 const IcoImg = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
     <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
@@ -1751,6 +1757,18 @@ function SparkleBurst({ x, y }: { x: number; y: number }) {
 
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
+function formatHistoryDate(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  const isYest = d.toDateString() === yest.toDateString();
+  const t = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (isToday) return `今日 ${t}`;
+  if (isYest) return `昨日 ${t}`;
+  return `${d.getMonth()+1}/${d.getDate()} ${t}`;
+}
+
 // ─────────────────────────────────────────────────────────────
 function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], micTrigger = 0, onCommit }: {
   existingProjects: string[];
@@ -1760,7 +1778,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   micTrigger?: number;
   onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[]; unlockCoins?: boolean }) => void;
 }) {
-  const [text,       setText]       = useState('');
+  const [text,       setText]       = usePersistedState<string>('smartmemo:memo:draft', '');
   const [loading,    setLoading]    = useState(false);
   const [loadingMsg, setLMsg]       = useState('');
   const [recording,  setRec]        = useState(false);
@@ -1769,6 +1787,8 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   const [pending,    setPending]    = useState<Pending | null>(null);
   const [swooshing,  setSwooshing]  = useState(false);
   const [burst,      setBurst]      = useState<{ x: number; y: number; key: number } | null>(null);
+  const [memoHistory, setMemoHistory] = usePersistedState<MemoHistoryItem[]>('smartmemo:memoHistory', []);
+  const [showHistory, setShowHistory] = useState(false);
   const fileRef         = useRef<HTMLInputElement | null>(null);
   const recRef          = useRef<any>(null);
   const tRef            = useRef<number | undefined>(undefined);
@@ -2034,6 +2054,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
       showToast(`${total}件を追加しました`);
+      if (text.trim()) setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now() }, ...h].slice(0, 100));
       setText(''); setImgPrev(null); setPending(null); setSwooshing(false);
     }, 320);
   }
@@ -2077,6 +2098,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           </button>
           <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg />画像から入力</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImg} />
+          <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory(true)}><IcoHistory />履歴</button>
         </div>
       </div>
 
