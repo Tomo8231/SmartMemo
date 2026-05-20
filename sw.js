@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v45';
+const CACHE = 'smartmemo-v46';
 const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'];
 const KN_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`));
 const SL_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`));
@@ -7,6 +7,8 @@ const HY_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sp
 const OB_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/ob_${a}_${i}.png`));
 const YF_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/yf_${a}_${i}.png`));
 const SB_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/sb_${a}_${i}.png`));
+const MJ_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/mj_${a}_${i}.png`));
+const DR_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/dr_${a}_${i}.png`));
 const SHELL = [
   './',
   './index.html',
@@ -20,6 +22,8 @@ const SHELL = [
   ...OB_SPRITES,
   ...YF_SPRITES,
   ...SB_SPRITES,
+  ...MJ_SPRITES,
+  ...DR_SPRITES,
   'https://unpkg.com/react@18.3.1/umd/react.development.js',
   'https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js',
   'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js',

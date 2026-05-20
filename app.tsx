@@ -595,6 +595,8 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '👻 おばけ',      rarity: 'ultra', stars: '★★★★★', color: '#616161', monDefId: 'obake',       weight: 2 },
   { type: 'memomon', label: '🦊 ゆきぎつね', rarity: 'ultra', stars: '★★★★★', color: '#90caf9', monDefId: 'yukigitsune', weight: 2 },
   { type: 'memomon', label: '🐕 しばいぬ',   rarity: 'super', stars: '★★★★',  color: '#e65100', monDefId: 'shibainu',    weight: 3 },
+  { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3 },
+  { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -670,6 +672,8 @@ const HY_SPRITES = makeSprites('hy');
 const OB_SPRITES = makeSprites('ob');
 const YF_SPRITES = makeSprites('yf');
 const SB_SPRITES = makeSprites('sb');
+const MJ_SPRITES = makeSprites('mj');
+const DR_SPRITES = makeSprites('dr');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -734,6 +738,22 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     monW: 65, monH: 60,
     spriteFacing: 'l',
     sprites: SB_SPRITES,
+  },
+  {
+    id: 'magician', name: 'マジシャン',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: '青いとんがり帽子をかぶった謎のマジシャン。手品でメモをサプライズしてくれる。',
+    monW: 65, monH: 65,
+    sprites: MJ_SPRITES,
+  },
+  {
+    id: 'dragon', name: 'ドラゴン',
+    pixels: [], palette: {},
+    rarity: 'ultra',
+    desc: '漆黒のドラゴン。めったに姿を現さないが、一度懐くと絶対的な忠誠を誓う。',
+    monW: 65, monH: 65,
+    sprites: DR_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
