@@ -67,7 +67,9 @@ type TodoDraft = {
   done?: boolean;
   coinReward?: number;
   recurring?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  recurringDay?: number;
 };
+type TrashedTodo = Todo & { trashedAt: number };
 type IdeaDraft = {
   id?: number | string;
   projectName: string;
@@ -90,6 +92,7 @@ const { useState, useRef, useEffect } = React;
 const LS_TODOS    = 'smartmemo:todos';
 const LS_IDEAS    = 'smartmemo:ideas';
 const LS_SETTINGS = 'smartmemo:settings';
+const LS_TRASH    = 'smartmemo:trash';
 
 function loadStored<T>(key: string, fallback: T): T {
   try {
@@ -828,7 +831,21 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
   const declaredEnd = draft.endDate ? new Date(draft.endDate + 'T00:00:00') : null;
   const end = declaredEnd && declaredEnd < maxEnd ? declaredEnd : maxEnd;
   const todos: Todo[] = [];
-  const cur = new Date(start);
+
+  // Determine first occurrence considering recurringDay
+  let cur = new Date(start);
+  const rd = draft.recurringDay;
+  if (rd !== undefined) {
+    if (draft.recurring === 'weekly' || draft.recurring === 'biweekly') {
+      // advance to first matching weekday on or after start
+      while (cur.getDay() !== rd && cur <= end) cur.setDate(cur.getDate() + 1);
+    } else if (draft.recurring === 'monthly') {
+      // set to rd-th day of start month; if already passed, advance to next month
+      cur = new Date(start.getFullYear(), start.getMonth(), rd);
+      if (cur < start) { cur.setDate(1); cur.setMonth(cur.getMonth() + 1); cur.setDate(Math.min(rd, lastDayOfMonth(cur.getFullYear(), cur.getMonth() + 1))); }
+    }
+  }
+
   while (cur <= end && todos.length < 500) {
     const ds = cur.toISOString().slice(0, 10);
     todos.push({
@@ -840,7 +857,12 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
     if (draft.recurring === 'daily') cur.setDate(cur.getDate() + 1);
     else if (draft.recurring === 'weekly') cur.setDate(cur.getDate() + 7);
     else if (draft.recurring === 'biweekly') cur.setDate(cur.getDate() + 14);
-    else cur.setMonth(cur.getMonth() + 1);
+    else {
+      // monthly: advance to same day next month (clamped to last day)
+      cur.setDate(1); cur.setMonth(cur.getMonth() + 1);
+      const day = rd !== undefined ? rd : start.getDate();
+      cur.setDate(Math.min(day, lastDayOfMonth(cur.getFullYear(), cur.getMonth() + 1)));
+    }
   }
   return todos;
 }
@@ -1414,6 +1436,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
         }</span>
         <div className="cal-nav">
           <button className="cal-nav-btn" onClick={prev}>‹</button>
+          <button className="cal-today-btn" onClick={() => { setVy(today.getFullYear()); setVm(today.getMonth()); onSelect(todayStr); }}>今日</button>
           <button className="cal-nav-btn" onClick={next}>›</button>
         </div>
       </div>
@@ -1548,11 +1571,13 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
   const [time,      setTime]      = useState(todo.time);
   const [tags,      setTags]      = useState<string[]>(todo.tags || []);
   const [recurring, setRecurring] = useState<RecurringVal | ''>((todo as any).recurring || '');
+  const [recurringDay, setRecurringDay] = useState<number | undefined>((todo as any).recurringDay);
+  const DOW_LABELS = ['日','月','火','水','木','金','土'];
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   function handleSave() {
     if (!title.trim()) return;
-    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined });
+    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined });
     onClose();
   }
 
@@ -1583,6 +1608,26 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
               <button key={o.value} className={`modal-tag${recurring === o.value ? ' sel' : ''}`} onClick={() => setRecurring(o.value)}>{o.label}</button>
             ))}
           </div>
+          {(recurring === 'weekly' || recurring === 'biweekly') && (
+            <div className="modal-field" style={{ marginTop: 8, marginBottom: 0 }}>
+              <label>曜日</label>
+              <div className="modal-tags">
+                {DOW_LABELS.map((d, i) => (
+                  <button key={i} className={`modal-tag${recurringDay === i ? ' sel' : ''}`} onClick={() => setRecurringDay(i)}>{d}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {recurring === 'monthly' && (
+            <div className="modal-field" style={{ marginTop: 8, marginBottom: 0 }}>
+              <label>日</label>
+              <div className="modal-day-picker">
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <button key={d} className={`modal-day-btn${recurringDay === d ? ' sel' : ''}`} onClick={() => setRecurringDay(d)}>{d}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {recurring && (
             <div className="modal-recurring-note">
               {startDate ? `${startDate} から` : '開始日'} {endDate ? `${endDate} まで` : '（終了日未設定 → 最大6ヶ月）'}に展開されます
@@ -2291,7 +2336,46 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 // ─────────────────────────────────────────────────────────────
 // TODO Tab
 // ─────────────────────────────────────────────────────────────
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, soundEnabled, soundType = 'doremi', customTags }: {
+function TrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
+  trash: TrashedTodo[];
+  onRestore: (id: number | string) => void;
+  onDelete: (id: number | string) => void;
+  onEmpty: () => void;
+  onClose: () => void;
+}) {
+  function formatTrashedDate(ts: number) {
+    const d = new Date(ts);
+    return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="memo-history-sheet">
+        <div className="modal-handle"/>
+        <div className="memo-history-header">
+          <span className="modal-title" style={{ marginBottom: 0 }}>🗑 ゴミ箱</span>
+          {trash.length > 0 && <button className="memo-history-clear" onClick={onEmpty}>全削除</button>}
+        </div>
+        {trash.length === 0
+          ? <div className="memo-history-empty">ゴミ箱は空です</div>
+          : <div className="memo-history-list">
+              {trash.map(t => (
+                <div key={t.id} className="trash-item">
+                  <div className="trash-item-info" onClick={() => { onRestore(t.id); onClose(); }}>
+                    <div className="trash-item-title">{t.title}</div>
+                    <div className="memo-history-date">{formatTrashedDate(t.trashedAt)}{t.startDate ? ` · ${t.startDate}` : ''}</div>
+                  </div>
+                  <button className="trash-restore-btn" onClick={() => { onRestore(t.id); onClose(); }}>元に戻す</button>
+                  <button className="memo-history-del" onClick={() => onDelete(t.id)}>✕</button>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -2300,6 +2384,10 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   onDelete: (id: number | string) => void;
   onUpdate: (t: Todo) => void;
   onAdd: (t: Todo) => void;
+  trash: TrashedTodo[];
+  onTrashRestore: (id: number | string) => void;
+  onTrashDelete: (id: number | string) => void;
+  onTrashEmpty: () => void;
   soundEnabled: boolean;
   soundType?: string;
   customTags: string[];
@@ -2307,6 +2395,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editing,      setEditing]    = useState<Todo | null>(null);
   const [adding,       setAdding]     = useState(false);
+  const [showTrash,    setShowTrash]  = useState(false);
   const [showCalendar, setShowCalendar] = useState(true);
   const [selTagsArr,   setSelTagsArr] = usePersistedState<string[]>('smartmemo:ui:tags', []);
   const [calendarMode, setCalendarMode] = usePersistedState<'month' | 'week'>('smartmemo:ui:calMode', 'month');
@@ -2354,7 +2443,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         }
         setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
-      {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: '', time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
+      {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
         if (t.recurring) {
           const stamp = Date.now();
           expandRecurringDraft(t, stamp).forEach(onAdd);
@@ -2416,8 +2505,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           <button className="todo-add-row" onClick={() => setAdding(true)}>
             ＋ タスクを追加
           </button>
+          <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
+            🗑 ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
+          </button>
         </div>
       </div>
+      {showTrash && <TrashModal trash={trash} onRestore={onTrashRestore} onDelete={onTrashDelete} onEmpty={onTrashEmpty} onClose={() => setShowTrash(false)} />}
     </div>
   );
 }
@@ -3534,7 +3627,19 @@ function SmartMemoApp() {
     }
     setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
   };
-  const remove     = (id: number | string) => setTodos(p => p.filter(t => t.id !== id));
+  const [trash, setTrash] = usePersistedState<TrashedTodo[]>(LS_TRASH, []);
+  const remove     = (id: number | string) => {
+    const t = todos.find(x => x.id === id);
+    if (t) setTrash(p => [{ ...t, trashedAt: Date.now() }, ...p].slice(0, 200));
+    setTodos(p => p.filter(t => t.id !== id));
+  };
+  const trashRestore = (id: number | string) => {
+    const item = trash.find(x => x.id === id);
+    if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, t as Todo]); }
+    setTrash(p => p.filter(x => x.id !== id));
+  };
+  const trashDelete  = (id: number | string) => setTrash(p => p.filter(x => x.id !== id));
+  const trashEmpty   = () => setTrash([]);
   const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? item : t));
   const addTodo    = (item: Todo)          => setTodos(p => [...p, item]);
   const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
@@ -3562,7 +3667,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} />}
       </div>
