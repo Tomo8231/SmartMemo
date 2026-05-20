@@ -528,6 +528,12 @@
       display:flex; align-items:center; justify-content:center; transition:background .12s;
     }
     .cal-nav-btn:hover { background:#f5f5f3; }
+    .cal-today-btn {
+      height:26px; padding:0 8px; border:1px solid #e0e0de; background:#fff;
+      border-radius:6px; cursor:pointer; font-size:10px; font-weight:700; color:var(--accent);
+      font-family:inherit; transition:background .12s;
+    }
+    .cal-today-btn:hover { background:#f5f5f3; }
     .cal-dow { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); padding:0 10px; }
     .cal-dow-cell { text-align:center; font-size:10px; font-weight:600; color:#b0b0ac; padding:3px 0; }
     /* ── Calendar grid (week-row based) ── */
@@ -716,6 +722,14 @@
     }
     .modal-tag.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
     .modal-recurring-note { margin-top:6px; font-size:var(--fs-xs); color:#a0a09c; }
+    .modal-day-picker { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+    .modal-day-btn {
+      width:28px; height:28px; border-radius:6px; border:1px solid #e0e0de;
+      background:#fff; cursor:pointer; font-size:11px; font-weight:500;
+      color:#4a4a48; font-family:inherit; transition:all .12s;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .modal-day-btn.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
     .modal-actions { display:flex; gap:8px; margin-top:18px; }
     .modal-cancel {
       flex:1; padding:12px; border:1px solid #e0e0de; border-radius:10px;
@@ -806,6 +820,31 @@
       cursor:pointer; text-align:left; font-family:inherit; letter-spacing:.1px;
     }
     .todo-add-row:active { background:#f5f5f3; }
+    .trash-open-btn {
+      display:flex; align-items:center; gap:6px;
+      width:100%; padding:10px 16px;
+      background:transparent; border:none; border-top:1px solid #f0f0ee;
+      color:#a0a09c; font-size:var(--fs-sm); font-weight:500;
+      cursor:pointer; text-align:left; font-family:inherit;
+    }
+    .trash-open-btn:active { background:#f5f5f3; }
+    .trash-count {
+      background:#c8c8c4; color:#fff; font-size:10px; font-weight:700;
+      border-radius:10px; padding:1px 6px;
+    }
+    .trash-item {
+      display:flex; align-items:center; gap:8px; padding:10px 16px;
+      border-bottom:1px solid #f0f0ee; cursor:pointer;
+    }
+    .trash-item:hover { background:#f5f5f3; }
+    .trash-item-info { flex:1; min-width:0; }
+    .trash-item-title { font-size:13px; color:#1a1a18; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .trash-restore-btn {
+      flex-shrink:0; padding:4px 10px; border-radius:6px;
+      border:1px solid #e0e0de; background:#fff;
+      color:var(--accent); font-size:11px; font-weight:600;
+      cursor:pointer; font-family:inherit;
+    }
     .ideas-add-row {
       display:flex; align-items:center; justify-content:center; gap:6px;
       margin:12px 16px; padding:12px;
@@ -1051,6 +1090,13 @@
     .app.dark .todo-coin-reward { color:#ffd54f; background:rgba(255,213,79,.12); }
     .app.dark .item-copy-btn { background:#1e1e21; border-color:#2e2e32; color:#5a5a58; }
     .app.dark .todo-add-row { border-color:#2e2e32; background:transparent; }
+    .app.dark .trash-open-btn { border-color:#2e2e32; color:#5a5a58; }
+    .app.dark .trash-item { border-color:#2e2e32; }
+    .app.dark .trash-item:hover { background:#28282c; }
+    .app.dark .trash-item-title { color:#f0f0ee; }
+    .app.dark .trash-restore-btn { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .modal-day-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .cal-today-btn { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .section-head-label { color:#5a5a58; }
     .app.dark .divider { background:#2e2e32; }
     .app.dark .undated-arrow { color:#5a5a58; }
