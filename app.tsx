@@ -47,6 +47,7 @@ type Settings = {
   memoMonVisible?: boolean;
   hiddenMons?: string[];
   memoMonSize?: 'small' | 'medium' | 'large';
+  usedGiftCodes?: string[];
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
@@ -65,6 +66,7 @@ type TodoDraft = {
   tags: string[];
   done?: boolean;
   coinReward?: number;
+  recurring?: 'daily' | 'weekly' | 'monthly';
 };
 type IdeaDraft = {
   id?: number | string;
@@ -806,6 +808,37 @@ function nextWeekday(from: Date, target: number) {
 }
 function lastDayOfMonth(year: number, month1: number) { return new Date(year, month1, 0).getDate(); }
 
+function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
+  if (!draft.recurring || !draft.startDate) {
+    return [{
+      id: stamp + Math.random(), title: draft.title,
+      startDate: draft.startDate, endDate: draft.endDate,
+      time: draft.time, tags: draft.tags,
+      done: false, addedAt: stamp, coinReward: draft.coinReward,
+    }];
+  }
+  const start = new Date(draft.startDate + 'T00:00:00');
+  const maxEnd = new Date(start);
+  maxEnd.setMonth(maxEnd.getMonth() + 6);
+  const declaredEnd = draft.endDate ? new Date(draft.endDate + 'T00:00:00') : null;
+  const end = declaredEnd && declaredEnd < maxEnd ? declaredEnd : maxEnd;
+  const todos: Todo[] = [];
+  const cur = new Date(start);
+  while (cur <= end && todos.length < 500) {
+    const ds = cur.toISOString().slice(0, 10);
+    todos.push({
+      id: stamp + Math.random(), title: draft.title,
+      startDate: ds, endDate: ds,
+      time: draft.time, tags: draft.tags,
+      done: false, addedAt: stamp, coinReward: draft.coinReward,
+    });
+    if (draft.recurring === 'daily') cur.setDate(cur.getDate() + 1);
+    else if (draft.recurring === 'weekly') cur.setDate(cur.getDate() + 7);
+    else cur.setMonth(cur.getMonth() + 1);
+  }
+  return todos;
+}
+
 function parseRelative(rawText: string): { startDate: string; endDate: string } {
   const text = normalizeDateChars(rawText);
   const dowMap: Record<string, number> = { '日':0,'月':1,'火':2,'水':3,'木':4,'金':5,'土':6 };
@@ -1089,9 +1122,14 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `   - 160〜200: 大型プロジェクト・困難なタスク\n` +
     `7. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
     `8. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
-    `9. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n\n` +
+    `9. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n` +
+    `10. 定期的な予定（毎日・毎週・毎月など）は recurring フィールドを設定:\n` +
+    `   - 毎日 → recurring="daily"、startDate=開始日、endDate=終了日（最大6ヶ月後）\n` +
+    `   - 毎週 → recurring="weekly"、startDate=最初の日、endDate=最後の週の日\n` +
+    `   - 毎月 → recurring="monthly"、startDate=最初の日、endDate=最後の月の同日\n` +
+    `   - 定期でない場合は recurring="" か省略\n\n` +
     `形式（JSONのみ）:\n` +
-    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
+    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":""}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
     `メモ:\n${text}`;
 
   const tryParseJson = (res: string): ParseResult | null => {
@@ -1670,7 +1708,12 @@ function ConfirmSheet({
                   {t.startDate && (
                     <span className="todo-date-str">
                       <IcoCalSm />
-                      {t.startDate}{t.endDate ? ` — ${t.endDate}` : ''}{t.time ? `  ${t.time}` : ''}
+                      {t.startDate}{t.endDate && t.endDate !== t.startDate ? ` — ${t.endDate}` : ''}{t.time ? `  ${t.time}` : ''}
+                    </span>
+                  )}
+                  {(t as any).recurring && (
+                    <span className="tag-pill" style={{ background: '#e8f4fd', color: '#1565c0' }}>
+                      ↻ {(t as any).recurring === 'daily' ? '毎日' : (t as any).recurring === 'weekly' ? '毎週' : '毎月'}
                     </span>
                   )}
                   {(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
@@ -2004,15 +2047,24 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       const ideas = result.ideas || [];
 
       const ts = Date.now();
-      const todoDrafts = todos.map((t, i) => ({
-        title: t.title || 'タスク',
-        startDate: t.startDate || '',
-        endDate: t.endDate || '',
-        time: t.time || '',
-        tags: t.tags || [],
-        id: `t_${ts}_${i}`,
-        done: false as const,
-      }));
+      const todoDrafts = todos.map((t, i) => {
+        const sd = t.startDate || '';
+        const ed = t.endDate || '';
+        const autoSD = sd || ed || todayStr;
+        const autoED = ed || sd || todayStr;
+        const rec = (t.recurring === 'daily' || t.recurring === 'weekly' || t.recurring === 'monthly') ? t.recurring : undefined;
+        return {
+          title: t.title || 'タスク',
+          startDate: autoSD,
+          endDate: autoED,
+          time: t.time || '',
+          tags: t.tags || [],
+          id: `t_${ts}_${i}`,
+          done: false as const,
+          coinReward: t.coinReward,
+          recurring: rec,
+        };
+      });
       const ideaDrafts = ideas.map((i, idx) => ({
         projectName: i.projectName || 'メモ',
         summary: i.summary || '',
@@ -2037,16 +2089,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
     const total = pending.todos.length + pending.ideas.length;
     setTimeout(() => {
       const stamp = Date.now();
-      const newTodos: Todo[] = pending.todos.map(t => ({
-        id: stamp + Math.random(),
-        title: t.title,
-        startDate: t.startDate,
-        endDate: t.endDate,
-        time: t.time,
-        tags: t.tags,
-        done: false,
-        addedAt: stamp,
-      }));
+      const newTodos: Todo[] = pending.todos.flatMap(t => expandRecurringDraft(t, stamp));
       const newIdeas: IdeaDraft[] = pending.ideas.map(i => ({
         projectName: i.projectName,
         summary: i.summary,
@@ -2054,7 +2097,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         tags: i.tags,
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
-      showToast(`${total}件を追加しました`);
+      showToast(`${newTodos.length + newIdeas.length}件を追加しました`);
       setText(''); setImgPrev(null); setPending(null); setSwooshing(false);
     }, 320);
   }
@@ -2549,6 +2592,8 @@ function SettingsTab({ settings, onChange, memoMons }: {
   const [keyVisible, setKeyVisible]     = useState(false);
   const [apiStatus, setApiStatus]       = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
   const [showMonSelector, setShowMonSelector] = useState(false);
+  const [giftCode, setGiftCode]             = useState('');
+  const [giftMsg, setGiftMsg]               = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
 
   useEffect(() => { setKeyInput(geminiApiKey || ''); }, [geminiApiKey]);
 
@@ -2580,6 +2625,25 @@ function SettingsTab({ settings, onChange, memoMons }: {
     onChange('customTags', [...(settings.customTags || []), trimmed]);
     setNewTag('');
   };
+
+  const GIFT_CODES: Record<string, number> = { metameta: 50000 };
+  function redeemGift() {
+    const code = giftCode.trim().toLowerCase();
+    const reward = GIFT_CODES[code];
+    if (reward == null) {
+      setGiftMsg({ kind: 'ng', msg: '無効なコードです' });
+      return;
+    }
+    if ((settings.usedGiftCodes || []).includes(code)) {
+      setGiftMsg({ kind: 'ng', msg: 'このコードはすでに使用済みです' });
+      return;
+    }
+    onChange('coins', (settings.coins || 0) + reward);
+    onChange('usedGiftCodes', [...(settings.usedGiftCodes || []), code]);
+    setGiftCode('');
+    setGiftMsg({ kind: 'ok', msg: `🎁 ${reward.toLocaleString()}コインをゲットしました！` });
+    setTimeout(() => setGiftMsg({ kind: 'idle', msg: '' }), 4000);
+  }
 
   return (
     <div className="settings-tab tab-pane">
@@ -2871,6 +2935,27 @@ function SettingsTab({ settings, onChange, memoMons }: {
           </div>
         </div>
       )}
+
+      <div className="settings-section-title">プレゼントコード</div>
+      <div className="settings-card">
+        <div className="api-row">
+          <div className="settings-row-label">コードを入力</div>
+          <div className="settings-row-sub">プレゼントコードを入力してコインをゲット！</div>
+          <div className="api-input-row">
+            <input
+              type="text"
+              value={giftCode}
+              onChange={e => { setGiftCode(e.target.value); setGiftMsg({ kind: 'idle', msg: '' }); }}
+              placeholder="コードを入力"
+              autoComplete="off"
+              spellCheck={false}
+              onKeyDown={e => { if (e.key === 'Enter') redeemGift(); }}
+            />
+            <button onClick={redeemGift} disabled={!giftCode.trim()}>使用</button>
+          </div>
+          {giftMsg.msg && <div className={`api-status ${giftMsg.kind}`}>{giftMsg.msg}</div>}
+        </div>
+      </div>
 
       <div className="settings-section-title">アプリ情報</div>
       <div className="about-card">
