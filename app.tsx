@@ -3588,7 +3588,7 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
           facing: 'r',
           state: startSleep ? 'idle' : 'walk',
           stateUntil: now + 2000 + Math.random() * 3000,
-          animState: startSleep ? 'sleep' : 'sit',
+          animState: startSleep ? 'sleep' : (def.sprites ? 'walk' : 'sit'),
           frame: 0, frameTime: 0, tapCount: 0,
           personality,
         };
@@ -3726,6 +3726,7 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
               m.vx = (Math.random() > 0.5 ? 1 : -1) * speed;
               m.vy = (Math.random() - 0.5) * vyAmp;
               m.stateUntil = now + walkMinMs + Math.random() * walkRandMs;
+              if (def.sprites && m.animState !== 'walk') { m.animState = 'walk'; m.frameTime = 0; }
             }
           } else {
             m.state = 'walk';
@@ -3737,6 +3738,7 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
           }
         }
 
+        if (m.animState !== 'walk') { m.vx = 0; m.vy = 0; }
         m.x += m.vx * dt; m.y += m.vy * dt;
         if (m.x < 0) { m.x = 0; m.vx = Math.abs(m.vx); }
         if (m.x > W - mw) { m.x = W - mw; m.vx = -Math.abs(m.vx); }
