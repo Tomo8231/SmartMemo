@@ -66,7 +66,7 @@ type TodoDraft = {
   tags: string[];
   done?: boolean;
   coinReward?: number;
-  recurring?: 'daily' | 'weekly' | 'monthly';
+  recurring?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
 };
 type IdeaDraft = {
   id?: number | string;
@@ -834,6 +834,7 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
     });
     if (draft.recurring === 'daily') cur.setDate(cur.getDate() + 1);
     else if (draft.recurring === 'weekly') cur.setDate(cur.getDate() + 7);
+    else if (draft.recurring === 'biweekly') cur.setDate(cur.getDate() + 14);
     else cur.setMonth(cur.getMonth() + 1);
   }
   return todos;
@@ -1123,9 +1124,10 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `7. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
     `8. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
     `9. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n` +
-    `10. 定期的な予定（毎日・毎週・毎月など）は recurring フィールドを設定:\n` +
+    `10. 定期的な予定（毎日・毎週・隔週・毎月など）は recurring フィールドを設定:\n` +
     `   - 毎日 → recurring="daily"、startDate=開始日、endDate=終了日（最大6ヶ月後）\n` +
     `   - 毎週 → recurring="weekly"、startDate=最初の日、endDate=最後の週の日\n` +
+    `   - 隔週 → recurring="biweekly"、startDate=最初の日、endDate=最後の日\n` +
     `   - 毎月 → recurring="monthly"、startDate=最初の日、endDate=最後の月の同日\n` +
     `   - 定期でない場合は recurring="" か省略\n\n` +
     `形式（JSONのみ）:\n` +
@@ -1459,17 +1461,26 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
   onClose: () => void;
   customTags?: string[];
 }) {
+  type RecurringVal = 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  const RECURRING_OPTS: { value: RecurringVal | ''; label: string }[] = [
+    { value: '', label: 'なし' },
+    { value: 'daily', label: '毎日' },
+    { value: 'weekly', label: '毎週' },
+    { value: 'biweekly', label: '隔週' },
+    { value: 'monthly', label: '毎月' },
+  ];
   const tagOptions = getTodoTagOptions(customTags);
-  const [title,    setTitle]    = useState(todo.title);
-  const [startDate,setStartDate]= useState(todo.startDate);
-  const [endDate,  setEndDate]  = useState(todo.endDate);
-  const [time,     setTime]     = useState(todo.time);
-  const [tags,     setTags]     = useState<string[]>(todo.tags || []);
+  const [title,     setTitle]     = useState(todo.title);
+  const [startDate, setStartDate] = useState(todo.startDate);
+  const [endDate,   setEndDate]   = useState(todo.endDate);
+  const [time,      setTime]      = useState(todo.time);
+  const [tags,      setTags]      = useState<string[]>(todo.tags || []);
+  const [recurring, setRecurring] = useState<RecurringVal | ''>((todo as any).recurring || '');
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   function handleSave() {
     if (!title.trim()) return;
-    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags });
+    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined });
     onClose();
   }
 
@@ -1494,6 +1505,19 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
           </div>
         </div>
         <div className="modal-field">
+          <label>繰り返し</label>
+          <div className="modal-tags">
+            {RECURRING_OPTS.map(o => (
+              <button key={o.value} className={`modal-tag${recurring === o.value ? ' sel' : ''}`} onClick={() => setRecurring(o.value)}>{o.label}</button>
+            ))}
+          </div>
+          {recurring && (
+            <div className="modal-recurring-note">
+              {startDate ? `${startDate} から` : '開始日'} {endDate ? `${endDate} まで` : '（終了日未設定 → 最大6ヶ月）'}に展開されます
+            </div>
+          )}
+        </div>
+        <div className="modal-field">
           <label>時間</label>
           <input type="time" value={time} onChange={e => setTime(e.target.value)} />
         </div>
@@ -1507,7 +1531,7 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
         </div>
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
-          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? '追加' : '保存'}</button>
+          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (recurring ? '展開して保存' : '保存')}</button>
         </div>
       </div>
     </div>
@@ -1713,7 +1737,7 @@ function ConfirmSheet({
                   )}
                   {(t as any).recurring && (
                     <span className="tag-pill" style={{ background: '#e8f4fd', color: '#1565c0' }}>
-                      ↻ {(t as any).recurring === 'daily' ? '毎日' : (t as any).recurring === 'weekly' ? '毎週' : '毎月'}
+                      ↻ {(t as any).recurring === 'daily' ? '毎日' : (t as any).recurring === 'weekly' ? '毎週' : (t as any).recurring === 'biweekly' ? '隔週' : '毎月'}
                     </span>
                   )}
                   {(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
@@ -2052,7 +2076,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         const ed = t.endDate || '';
         const autoSD = sd || ed || todayStr;
         const autoED = ed || sd || todayStr;
-        const rec = (t.recurring === 'daily' || t.recurring === 'weekly' || t.recurring === 'monthly') ? t.recurring : undefined;
+        const rec = (['daily', 'weekly', 'biweekly', 'monthly'] as const).includes(t.recurring as any) ? t.recurring as TodoDraft['recurring'] : undefined;
         return {
           title: t.title || 'タスク',
           startDate: autoSD,
@@ -2248,8 +2272,25 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 
   return (
     <div className="todo-tab">
-      {editing && <EditModal todo={editing} onSave={onUpdate} onClose={() => setEditing(null)} customTags={customTags} />}
-      {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: '', time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => { onAdd(t); setAdding(false); }} onClose={() => setAdding(false)} customTags={customTags} />}
+      {editing && <EditModal todo={editing} onSave={t => {
+        if (t.recurring) {
+          onDelete(t.id);
+          const stamp = Date.now();
+          expandRecurringDraft(t, stamp).forEach(onAdd);
+        } else {
+          onUpdate(t);
+        }
+        setEditing(null);
+      }} onClose={() => setEditing(null)} customTags={customTags} />}
+      {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: '', time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
+        if (t.recurring) {
+          const stamp = Date.now();
+          expandRecurringDraft(t, stamp).forEach(onAdd);
+        } else {
+          onAdd(t);
+        }
+        setAdding(false);
+      }} onClose={() => setAdding(false)} customTags={customTags} />}
       <div className="todo-pane-left">
         <div className="todo-controls">
           <div className="filter-tags">
