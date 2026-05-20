@@ -180,22 +180,64 @@ async function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Image Lightbox (in-app fullscreen preview)
+// Attachment preview helpers
 // ─────────────────────────────────────────────────────────────
-function ImageLightbox({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
+function dataUrlToObjectUrl(dataUrl: string, mime: string): string {
+  const b64 = dataUrl.split(',')[1] || '';
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return URL.createObjectURL(new Blob([arr], { type: mime }));
+}
+
+function getLinkLabel(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); }
+  catch { return url.length > 28 ? url.slice(0, 28) + '…' : url; }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Unified Attachment Lightbox (image / PDF / text)
+// ─────────────────────────────────────────────────────────────
+function AttachmentLightbox({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
+  const [blobUrl,     setBlobUrl]     = useState('');
+  const [textContent, setTextContent] = useState('');
+  const isImage = attachment.mime.startsWith('image/');
+  const isPdf   = attachment.mime === 'application/pdf';
+  const isText  = (attachment.mime === 'text/plain' || attachment.mime === 'text/csv');
+
   useEffect(() => {
     const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', fn);
     return () => document.removeEventListener('keydown', fn);
   }, []);
+
+  useEffect(() => {
+    if (isPdf) {
+      const url = dataUrlToObjectUrl(attachment.data, attachment.mime);
+      setBlobUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    if (isText) {
+      try { setTextContent(atob(attachment.data.split(',')[1] || '')); }
+      catch { setTextContent('テキストの読み込みに失敗しました'); }
+    }
+  }, [attachment.id]);
+
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <div className="lightbox-header" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <span className="lightbox-name">{name}</span>
-        <button className="lightbox-close" onClick={onClose}>✕</button>
+        <span className="lightbox-name">{attachment.name}</span>
+        <div style={{ display:'flex', gap:8 }}>
+          {(isPdf || isText) && (
+            <button className="lightbox-dl-btn" onClick={() => downloadFile(attachment)} title="ダウンロード">↓</button>
+          )}
+          <button className="lightbox-close" onClick={onClose}>✕</button>
+        </div>
       </div>
-      <div className="lightbox-body" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <img src={src} alt={name} className="lightbox-img" />
+      <div className={`lightbox-body${isText ? ' text' : ''}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+        {isImage && <img src={attachment.data} alt={attachment.name} className="lightbox-img" />}
+        {isPdf && blobUrl && <iframe src={blobUrl} className="lightbox-iframe" title={attachment.name} />}
+        {isText && <pre className="lightbox-text">{textContent}</pre>}
       </div>
     </div>
   );
@@ -210,13 +252,34 @@ function downloadFile(a: Attachment) {
 // ─────────────────────────────────────────────────────────────
 // Attachment Section (reusable in modals)
 // ─────────────────────────────────────────────────────────────
+function canPreview(mime: string) {
+  return mime.startsWith('image/') || mime === 'application/pdf' || mime === 'text/plain' || mime === 'text/csv';
+}
+
+function openOrPreview(a: Attachment, setLightbox: (a: Attachment) => void) {
+  if (a.mime === 'text/x-url') { window.open(a.data, '_blank'); return; }
+  if (canPreview(a.mime)) { setLightbox(a); return; }
+  downloadFile(a);
+}
+
+function attFileIco(mime: string): string {
+  if (mime === 'application/pdf') return '📕';
+  if (mime === 'text/csv') return '📊';
+  if (mime.includes('sheet') || mime.includes('excel')) return '📊';
+  if (mime.includes('word') || mime.includes('document')) return '📝';
+  return '📄';
+}
+
 function AttachmentSection({ attachments, onChange, toast }: {
   attachments: Attachment[];
   onChange: (a: Attachment[]) => void;
   toast?: (msg: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
+  const linkInputRef = useRef<HTMLInputElement | null>(null);
+  const [lightbox,       setLightbox]       = useState<Attachment | null>(null);
+  const [showLinkInput,  setShowLinkInput]  = useState(false);
+  const [linkUrl,        setLinkUrl]        = useState('');
 
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -226,8 +289,7 @@ function AttachmentSection({ attachments, onChange, toast }: {
     const toAdd: Attachment[] = [];
     for (const file of files.slice(0, remaining)) {
       if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) {
-        toast?.(`${file.name} はサイズが大きすぎます（最大3MB）`);
-        continue;
+        toast?.(`${file.name} はサイズが大きすぎます（最大3MB）`); continue;
       }
       const raw = await readFileAsDataUrl(file);
       const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
@@ -236,32 +298,66 @@ function AttachmentSection({ attachments, onChange, toast }: {
     if (toAdd.length) onChange([...attachments, ...toAdd]);
   }
 
+  function addLink() {
+    const raw = linkUrl.trim();
+    if (!raw) return;
+    const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+    const label = getLinkLabel(url);
+    onChange([...attachments, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: label, mime: 'text/x-url', data: url }]);
+    setLinkUrl(''); setShowLinkInput(false);
+  }
+
+  const canAdd = attachments.length < MAX_ATTACHMENTS;
+
   return (
     <div className="modal-field">
-      <label>添付ファイル</label>
-      {lightbox && <ImageLightbox src={lightbox.src} name={lightbox.name} onClose={() => setLightbox(null)} />}
+      <label>添付ファイル・リンク</label>
+      {lightbox && <AttachmentLightbox attachment={lightbox} onClose={() => setLightbox(null)} />}
       <div className="attachment-list">
         {attachments.map(a => (
           <div key={a.id} className="attachment-chip">
             {a.mime.startsWith('image/')
-              ? <img src={a.data} className="attachment-thumb" onClick={() => setLightbox({ src: a.data, name: a.name })} alt={a.name} />
+              ? <img src={a.data} className="attachment-thumb" onClick={() => openOrPreview(a, setLightbox)} alt={a.name} />
+              : a.mime === 'text/x-url'
+              ? (
+                <div className="attachment-link-chip" onClick={() => window.open(a.data, '_blank')}>
+                  <span className="attachment-file-ico">🔗</span>
+                  <span className="attachment-file-label">{a.name || getLinkLabel(a.data)}</span>
+                </div>
+              )
               : (
-                <div className="attachment-file-chip" onClick={() => downloadFile(a)}>
-                  <span className="attachment-file-ico">📄</span>
+                <div className="attachment-file-chip" onClick={() => openOrPreview(a, setLightbox)}>
+                  <span className="attachment-file-ico">{attFileIco(a.mime)}</span>
                   <span className="attachment-file-label">{a.name}</span>
+                  {canPreview(a.mime) && <span className="attachment-preview-badge">プレビュー</span>}
                 </div>
               )
             }
             <button className="attachment-remove" onClick={() => onChange(attachments.filter(x => x.id !== a.id))}>✕</button>
           </div>
         ))}
-        {attachments.length < MAX_ATTACHMENTS && (
+        {canAdd && (
           <button className="attachment-add-btn" onClick={() => fileRef.current?.click()}>
             <span className="attachment-add-ico">📎</span>
-            <span className="attachment-add-label">追加</span>
+            <span className="attachment-add-label">ファイル</span>
+          </button>
+        )}
+        {canAdd && !showLinkInput && (
+          <button className="attachment-add-btn" onClick={() => { setShowLinkInput(true); setTimeout(() => linkInputRef.current?.focus(), 50); }}>
+            <span className="attachment-add-ico">🔗</span>
+            <span className="attachment-add-label">リンク</span>
           </button>
         )}
       </div>
+      {showLinkInput && (
+        <div className="attachment-link-input-row">
+          <input ref={linkInputRef} type="url" className="attachment-link-url" placeholder="https://..."
+            value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') addLink(); if (e.key === 'Escape') { setShowLinkInput(false); setLinkUrl(''); } }} />
+          <button className="attachment-link-confirm" onClick={addLink}>追加</button>
+          <button className="attachment-link-cancel" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>✕</button>
+        </div>
+      )}
       <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={handleFiles} />
     </div>
   );
@@ -271,20 +367,28 @@ function AttachmentSection({ attachments, onChange, toast }: {
 // Attachment thumbnails row (shown in todo/idea list items)
 // ─────────────────────────────────────────────────────────────
 function AttachmentRow({ attachments }: { attachments: Attachment[] }) {
-  const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
+  const [lightbox, setLightbox] = useState<Attachment | null>(null);
   if (!attachments || !attachments.length) return null;
   const imgs  = attachments.filter(a => a.mime.startsWith('image/'));
-  const files = attachments.filter(a => !a.mime.startsWith('image/'));
+  const files = attachments.filter(a => !a.mime.startsWith('image/') && a.mime !== 'text/x-url');
+  const links = attachments.filter(a => a.mime === 'text/x-url');
   return (
     <div className="attachment-row">
-      {lightbox && <ImageLightbox src={lightbox.src} name={lightbox.name} onClose={() => setLightbox(null)} />}
+      {lightbox && <AttachmentLightbox attachment={lightbox} onClose={() => setLightbox(null)} />}
       {imgs.slice(0, 3).map(a => (
         <img key={a.id} src={a.data} className="attachment-row-thumb" alt={a.name}
-          onClick={e => { e.stopPropagation(); setLightbox({ src: a.data, name: a.name }); }} />
+          onClick={e => { e.stopPropagation(); setLightbox(a); }} />
       ))}
       {imgs.length > 3 && <span className="attachment-row-more">+{imgs.length - 3}</span>}
       {files.slice(0, 2).map(a => (
-        <span key={a.id} className="attachment-row-file" onClick={e => { e.stopPropagation(); downloadFile(a); }}>{a.name}</span>
+        <span key={a.id} className="attachment-row-file" onClick={e => { e.stopPropagation(); openOrPreview(a, setLightbox); }}>
+          {attFileIco(a.mime)} {a.name}
+        </span>
+      ))}
+      {links.slice(0, 2).map(a => (
+        <span key={a.id} className="attachment-row-link" onClick={e => { e.stopPropagation(); window.open(a.data, '_blank'); }}>
+          🔗 {a.name || getLinkLabel(a.data)}
+        </span>
       ))}
     </div>
   );
@@ -2124,8 +2228,10 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   const [loadingMsg,  setLMsg]        = useState('');
   const [recording,   setRec]         = useState(false);
   const [imgPrev,     setImgPrev]     = useState<string | null>(null);
-  const [memoAttachments, setMemoAttachments] = useState<Attachment[]>([]);
-  const [memoAttLightbox, setMemoAttLightbox] = useState<{ src: string; name: string } | null>(null);
+  const [memoAttachments,  setMemoAttachments]  = useState<Attachment[]>([]);
+  const [memoAttLightbox,  setMemoAttLightbox]  = useState<Attachment | null>(null);
+  const [memoShowLink,     setMemoShowLink]     = useState(false);
+  const [memoLinkUrl,      setMemoLinkUrl]      = useState('');
   const [toast,       setToast]       = useState<string | null>(null);
   const [pending,     setPending]     = useState<Pending | null>(null);
   const [swooshing,   setSwooshing]   = useState(false);
@@ -2434,18 +2540,46 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           </div>
         )}
         <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e => setText(e.target.value)} />
-        {memoAttLightbox && <ImageLightbox src={memoAttLightbox.src} name={memoAttLightbox.name} onClose={() => setMemoAttLightbox(null)} />}
+        {memoAttLightbox && <AttachmentLightbox attachment={memoAttLightbox} onClose={() => setMemoAttLightbox(null)} />}
         {memoAttachments.length > 0 && (
           <div className="memo-att-list">
             {memoAttachments.map(a => (
               <div key={a.id} className="memo-att-chip">
                 {a.mime.startsWith('image/')
-                  ? <img src={a.data} className="memo-att-thumb" alt={a.name} onClick={() => setMemoAttLightbox({ src: a.data, name: a.name })} />
-                  : <div className="memo-att-file-chip" onClick={() => downloadFile(a)}><span>📄</span><span className="memo-att-file-name">{a.name}</span></div>
+                  ? <img src={a.data} className="memo-att-thumb" alt={a.name} onClick={() => setMemoAttLightbox(a)} />
+                  : a.mime === 'text/x-url'
+                  ? <div className="memo-att-file-chip" onClick={() => window.open(a.data, '_blank')}><span>🔗</span><span className="memo-att-file-name">{a.name || getLinkLabel(a.data)}</span></div>
+                  : <div className="memo-att-file-chip" onClick={() => openOrPreview(a, setMemoAttLightbox)}><span>{attFileIco(a.mime)}</span><span className="memo-att-file-name">{a.name}</span></div>
                 }
                 <button className="memo-att-remove" onClick={() => setMemoAttachments(p => p.filter(x => x.id !== a.id))}>✕</button>
               </div>
             ))}
+          </div>
+        )}
+        {memoShowLink && (
+          <div className="attachment-link-input-row" style={{ margin: '0 0 0', padding: '6px 12px', borderTop: '1px solid #ebebea' }}>
+            <input type="url" className="attachment-link-url" placeholder="https://..."
+              value={memoLinkUrl} onChange={e => setMemoLinkUrl(e.target.value)}
+              onKeyDown={(e: React.KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                  const raw = memoLinkUrl.trim();
+                  if (!raw) return;
+                  const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+                  setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
+                  setMemoLinkUrl(''); setMemoShowLink(false);
+                }
+                if (e.key === 'Escape') { setMemoShowLink(false); setMemoLinkUrl(''); }
+              }}
+              autoFocus
+            />
+            <button className="attachment-link-confirm" onClick={() => {
+              const raw = memoLinkUrl.trim();
+              if (!raw) return;
+              const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
+              setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
+              setMemoLinkUrl(''); setMemoShowLink(false);
+            }}>追加</button>
+            <button className="attachment-link-cancel" onClick={() => { setMemoShowLink(false); setMemoLinkUrl(''); }}>✕</button>
           </div>
         )}
         <div className="memo-actions">
@@ -2471,6 +2605,10 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
             }
             if (toAdd.length) setMemoAttachments(p => [...p, ...toAdd]);
           }} />
+          <button className="action-btn" onClick={() => {
+            if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
+            setMemoShowLink(true);
+          }}>🔗 リンク</button>
           <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory(true)}><IcoHistory />履歴</button>
         </div>
       </div>
