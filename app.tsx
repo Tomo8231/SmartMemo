@@ -1581,6 +1581,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
   const [direction, setDirection] = useState<'prev' | 'next' | null>(null);
+  const [entering,  setEntering]  = useState<'prev' | 'next' | null>(null);
   const swipeRef = useRef<{ x: number; y: number; time: number } | null>(null);
 
   const cells: { date: Date; cur: boolean }[] = [];
@@ -1616,34 +1617,40 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
     for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) dotSet.add(formatDate(new Date(d)));
   });
 
+  function doTransition(dir: 'prev' | 'next', update: () => void) {
+    setDirection(dir);
+    setTimeout(() => {
+      update();
+      setDirection(null);
+      setEntering(dir);
+      setTimeout(() => setEntering(null), 220);
+    }, 160);
+  }
+
   const prev = () => {
     if (mode === 'week') {
-      // 週表示：7日前にジャンプ
-      const prevDate = new Date(selectedDate + 'T00:00:00');
-      prevDate.setDate(prevDate.getDate() - 7);
-      onSelect(formatDate(prevDate));
+      doTransition('prev', () => {
+        const d = new Date(selectedDate + 'T00:00:00');
+        d.setDate(d.getDate() - 7);
+        onSelect(formatDate(d));
+      });
     } else {
-      // 月表示：前月に移動
-      setDirection('prev');
-      setTimeout(() => {
+      doTransition('prev', () => {
         vm === 0 ? (setVm(11), setVy(y => y - 1)) : setVm(m => m - 1);
-        setDirection(null);
-      }, 200);
+      });
     }
   };
   const next = () => {
     if (mode === 'week') {
-      // 週表示：7日後にジャンプ
-      const nextDate = new Date(selectedDate + 'T00:00:00');
-      nextDate.setDate(nextDate.getDate() + 7);
-      onSelect(formatDate(nextDate));
+      doTransition('next', () => {
+        const d = new Date(selectedDate + 'T00:00:00');
+        d.setDate(d.getDate() + 7);
+        onSelect(formatDate(d));
+      });
     } else {
-      // 月表示：翌月に移動
-      setDirection('next');
-      setTimeout(() => {
-        vm === 11 ? (setVm(0),  setVy(y => y + 1)) : setVm(m => m + 1);
-        setDirection(null);
-      }, 200);
+      doTransition('next', () => {
+        vm === 11 ? (setVm(0), setVy(y => y + 1)) : setVm(m => m + 1);
+      });
     }
   };
 
@@ -1671,24 +1678,24 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
           <button className={`mode-btn${mode === 'month' ? ' active' : ''}`} onClick={() => onModeChange?.('month')}>月</button>
           <button className={`mode-btn${mode === 'week' ? ' active' : ''}`} onClick={() => onModeChange?.('week')}>週</button>
         </div>
-        <span className="cal-month-label">{mode === 'month'
-          ? `${String(vy)}/${String(vm + 1).padStart(2, '0')}`
-          : (() => {
-              const sd = new Date(selectedDate + 'T00:00:00');
-              const ws = new Date(sd); ws.setDate(sd.getDate() - sd.getDay());
-              const we = new Date(ws); we.setDate(ws.getDate() + 6);
-              const f = (d: Date) => `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
-              return `${f(ws)}〜${f(we)}`;
-            })()
-        }</span>
-        <div className="cal-nav">
+        <div className="cal-nav-center">
           <button className="cal-nav-btn" onClick={prev}>‹</button>
-          <button className="cal-today-btn" onClick={() => { setVy(today.getFullYear()); setVm(today.getMonth()); onSelect(todayStr); }}>今日</button>
+          <span className="cal-month-label">{mode === 'month'
+            ? `${String(vy)}/${String(vm + 1).padStart(2, '0')}`
+            : (() => {
+                const sd = new Date(selectedDate + 'T00:00:00');
+                const ws = new Date(sd); ws.setDate(sd.getDate() - sd.getDay());
+                const we = new Date(ws); we.setDate(ws.getDate() + 6);
+                const f = (d: Date) => `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+                return `${f(ws)}〜${f(we)}`;
+              })()
+          }</span>
           <button className="cal-nav-btn" onClick={next}>›</button>
         </div>
+        <button className="cal-today-btn" onClick={() => { setVy(today.getFullYear()); setVm(today.getMonth()); onSelect(todayStr); }}>今日</button>
       </div>
       <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
-      <div className={`cal-grid-rows${direction ? ` cal-slide-${direction}` : ''}`}>
+      <div className={`cal-grid-rows${direction ? ` cal-slide-${direction}` : ''}${entering ? ` cal-enter-${entering}` : ''}`}>
         {((): React.ReactElement[] => {
           const MAX_LANES = 3;
           type LaneSlot = { cs: number; ce: number };
