@@ -1418,39 +1418,105 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
         </div>
       </div>
       <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
-      <div className={`cal-grid${direction ? ` cal-slide-${direction}` : ''}`}>
-        {cells.map((c, i) => {
-          const ds = formatDate(c.date), isTd = ds === todayStr, isSel = ds === selectedDate, hasDot = dotSet.has(ds);
-          const cellTodos = todos.filter(t => {
-            if (!t.startDate) return false;
-            return ds >= t.startDate && ds <= (t.endDate || t.startDate);
-          });
-          return (
-            <div key={i} className={`cal-cell${!c.cur ? ' other-month' : ''}${isTd && !isSel ? ' today' : ''}${isSel ? ' selected' : ''}`} onClick={() => onSelect(ds)}>
-              <span className="cal-num">{c.date.getDate()}</span>
-              {cellTodos.length > 0 && (
-                <div className="cal-todos">
-                  {cellTodos.slice(0, 2).map((t, idx) => {
-                    const multi = t.startDate && t.endDate && t.startDate !== t.endDate;
-                    const spanCls = multi
-                      ? ds === t.startDate ? 'span-start'
-                      : ds === t.endDate   ? 'span-end'
-                      : 'span-middle'
-                      : '';
+      <div className={`cal-grid-rows${direction ? ` cal-slide-${direction}` : ''}`}>
+        {((): React.ReactElement[] => {
+          const MAX_LANES = 3;
+          type LaneSlot = { cs: number; ce: number };
+          type Placement = { todo: Todo; lane: number; cs: number; ce: number; isStart: boolean; isEnd: boolean };
+          const rows: { date: Date; cur: boolean }[][] = [];
+          for (let r = 0; r < cells.length / 7; r++) rows.push(cells.slice(r * 7, (r + 1) * 7));
+
+          return rows.map((row, rowIdx) => {
+            const rowStart = formatDate(row[0].date);
+            const rowEnd   = formatDate(row[6].date);
+
+            const rowTodos = todos.filter(t => {
+              if (!t.startDate) return false;
+              const e = t.endDate || t.startDate;
+              return t.startDate <= rowEnd && e >= rowStart;
+            }).sort((a, b) => {
+              const aS = a.startDate < rowStart ? rowStart : a.startDate;
+              const bS = b.startDate < rowStart ? rowStart : b.startDate;
+              const aE = (a.endDate || a.startDate) > rowEnd ? rowEnd : (a.endDate || a.startDate);
+              const bE = (b.endDate || b.startDate) > rowEnd ? rowEnd : (b.endDate || b.startDate);
+              const aSpan = row.findIndex(c => formatDate(c.date) === aE) - row.findIndex(c => formatDate(c.date) === aS);
+              const bSpan = row.findIndex(c => formatDate(c.date) === bE) - row.findIndex(c => formatDate(c.date) === bS);
+              if (bSpan !== aSpan) return bSpan - aSpan;
+              return aS.localeCompare(bS);
+            });
+
+            const laneSlots: LaneSlot[][] = [];
+            const placements: Placement[] = [];
+            for (const t of rowTodos) {
+              const effS = t.startDate < rowStart ? rowStart : t.startDate;
+              const effE = (t.endDate || t.startDate) > rowEnd ? rowEnd : (t.endDate || t.startDate);
+              const ci0 = row.findIndex(c => formatDate(c.date) === effS);
+              const ci1 = row.findIndex(c => formatDate(c.date) === effE);
+              if (ci0 < 0 || ci1 < 0) continue;
+              const cs = ci0 + 1, ce = ci1 + 2;
+              let lane = 0;
+              for (;;) {
+                if (!laneSlots[lane]) { laneSlots[lane] = []; break; }
+                if (!laneSlots[lane].some(s => cs < s.ce && ce > s.cs)) break;
+                lane++;
+              }
+              laneSlots[lane] = laneSlots[lane] || [];
+              laneSlots[lane].push({ cs, ce });
+              placements.push({ todo: t, lane, cs, ce, isStart: t.startDate >= rowStart, isEnd: (t.endDate || t.startDate) <= rowEnd });
+            }
+
+            const visible = placements.filter(p => p.lane < MAX_LANES);
+            const moreCounts = Array(7).fill(0);
+            placements.filter(p => p.lane >= MAX_LANES).forEach(p => {
+              for (let ci = p.cs - 1; ci < p.ce - 1; ci++) moreCounts[ci]++;
+            });
+            const hasMore = moreCounts.some(n => n > 0);
+
+            return (
+              <div key={rowIdx} className="cal-week-row">
+                <div className="cal-week-cells">
+                  {row.map((c, ci) => {
+                    const ds = formatDate(c.date), isTd = ds === todayStr, isSel = ds === selectedDate;
                     return (
-                      <div key={idx} className={`cal-todo-item${spanCls ? ` ${spanCls}` : ''}`} title={t.title}>
-                        {spanCls === 'span-middle' || spanCls === 'span-end' ? '' :
-                          t.title.length > 10 ? t.title.substring(0, 10) + '…' : t.title}
+                      <div key={ci}
+                        className={`cal-cell${!c.cur ? ' other-month' : ''}${isTd && !isSel ? ' today' : ''}${isSel ? ' selected' : ''}`}
+                        onClick={() => onSelect(ds)}
+                      >
+                        <span className="cal-num">{c.date.getDate()}</span>
                       </div>
                     );
                   })}
-                  {cellTodos.length > 2 && <div className="cal-more">+{cellTodos.length - 2}</div>}
                 </div>
-              )}
-              {hasDot && cellTodos.length === 0 && <div className="cal-dot"/>}
-            </div>
-          );
-        })}
+                {(visible.length > 0 || hasMore) && (
+                  <div className="cal-event-layer">
+                    {visible.map(p => {
+                      const multi = p.ce - p.cs > 1;
+                      const showLabel = p.isStart || p.cs === 1;
+                      return (
+                        <div
+                          key={`${p.todo.id}-${rowIdx}`}
+                          className={`cal-span-bar${multi ? ' multi' : ' single'}${!p.isStart ? ' no-l' : ''}${!p.isEnd ? ' no-r' : ''}`}
+                          style={{ gridColumn: `${p.cs}/${p.ce}`, gridRow: `${p.lane + 1}` }}
+                          onClick={ev => { ev.stopPropagation(); onSelect(formatDate(row[p.cs - 1].date)); }}
+                        >
+                          {showLabel && <span className="cal-span-label">{p.todo.title}</span>}
+                        </div>
+                      );
+                    })}
+                    {hasMore && moreCounts.map((n, ci) => n > 0 ? (
+                      <div
+                        key={`more-${rowIdx}-${ci}`}
+                        className="cal-bar-more"
+                        style={{ gridColumn: `${ci + 1}/${ci + 2}`, gridRow: `${MAX_LANES + 1}` }}
+                        onClick={ev => { ev.stopPropagation(); onSelect(formatDate(row[ci].date)); }}
+                      >+{n}</div>
+                    ) : null)}
+                  </div>
+                )}
+              </div>
+            );
+          });
+        })()}
       </div>
     </div>
   );
