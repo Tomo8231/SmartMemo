@@ -747,6 +747,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'super',
     desc: '青いとんがり帽子をかぶった謎のマジシャン。手品でメモをサプライズしてくれる。',
     monW: 65, monH: 65,
+    spriteFacing: 'l',
     sprites: MJ_SPRITES,
   },
   {
@@ -755,6 +756,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     rarity: 'ultra',
     desc: '漆黒のドラゴン。めったに姿を現さないが、一度懐くと絶対的な忠誠を誓う。',
     monW: 65, monH: 65,
+    spriteFacing: 'l',
     sprites: DR_SPRITES,
   },
 ];
@@ -3586,13 +3588,13 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         const sc = scaleRef.current;
         const startSleep = initSleep && !!def.sprites;
         const personality: 'active' | 'lazy' = m.activity ?? (Math.random() < 0.5 ? 'active' : 'lazy');
-        const initSpeed = personality === 'active' ? 60 : 22;
+        const initSpeed = personality === 'active' ? 45 : 18;
         liveRef.current[m.uid] = {
           ...m, hunger,
           x: Math.random() * Math.max(0, W - def.monW * sc),
           y: 60 + Math.random() * Math.max(0, H * 0.3),
           vx: startSleep ? 0 : (Math.random() > 0.5 ? 1 : -1) * initSpeed,
-          vy: startSleep ? 0 : (Math.random() - 0.5) * (personality === 'active' ? 25 : 10),
+          vy: startSleep ? 0 : (Math.random() - 0.5) * (personality === 'active' ? 18 : 8),
           facing: 'r',
           state: startSleep ? 'idle' : 'walk',
           stateUntil: now + 2000 + Math.random() * 3000,
@@ -3717,13 +3719,13 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         // Movement state machine — personality-driven
         if (now > m.stateUntil) {
           const active = m.personality === 'active';
-          const speed  = active ? 60 : 22;
-          const vyAmp  = active ? 25 : 10;
-          const idleChance    = active ? 0.15 : 0.60;
-          const walkMinMs     = active ? 3000 : 800;
-          const walkRandMs    = active ? 5000 : 1500;
-          const idleMinMs     = active ? 400  : 2500;
-          const idleRandMs    = active ? 800  : 4000;
+          const speed  = active ? 45 : 18;
+          const vyAmp  = active ? 18 : 8;
+          const idleChance    = active ? 0.45 : 0.75;
+          const walkMinMs     = active ? 1500 : 600;
+          const walkRandMs    = active ? 2000 : 1000;
+          const idleMinMs     = active ? 1500 : 3000;
+          const idleRandMs    = active ? 2000 : 5000;
           if (m.state === 'walk') {
             if (Math.random() < idleChance) {
               m.state = 'idle'; m.vx = 0; m.vy = 0;
