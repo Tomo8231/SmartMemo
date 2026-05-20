@@ -313,7 +313,7 @@ const FONT_SIZE_OPTS = [
 
 const GACHA_COST = 50;
 const GACHA_COST_TEN = 500;
-const GACHA_COST_MON = 500;
+const GACHA_COST_MON = 300;
 const BG_PRESETS = [
   { name: 'デフォルト', bg: '#fafaf9' },
   { name: 'クリーム',   bg: '#fdf8f0' },
@@ -527,6 +527,10 @@ function pickGacha(pool = GACHA_ITEMS): GachaPrize {
 function pickGachaMon(): GachaPrize {
   return pickGacha(GACHA_ITEMS.filter(i => i.type === 'memomon'));
 }
+function pickGachaUltra(): GachaPrize {
+  const ultras = GACHA_ITEMS.filter(i => i.rarity === 'ultra');
+  return pickGacha(ultras.length ? ultras : GACHA_ITEMS);
+}
 
 const IcoCoin = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)">
@@ -634,9 +638,10 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
     setPhase('spinning');
     setTimeout(() => {
       if (mode === 'ten') {
-        const results = Array.from({ length: 10 }, () => {
-          const r = pickGacha(); return { prize: r, dup: isDup(r) };
-        });
+        const picks = Array.from({ length: 10 }, () => pickGacha());
+        const hasUltra = picks.some(r => r.rarity === 'ultra');
+        if (!hasUltra) picks[picks.length - 1] = pickGachaUltra();
+        const results = picks.map(r => ({ prize: r, dup: isDup(r) }));
         const refund = results.filter(r => r.dup).length * 10;
         if (refund && !infinite) setLocalCoins(c => c + refund);
         setTenResults(results);
