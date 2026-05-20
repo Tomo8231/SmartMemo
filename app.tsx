@@ -1435,6 +1435,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
               const e = t.endDate || t.startDate;
               return t.startDate <= rowEnd && e >= rowStart;
             }).sort((a, b) => {
+              if (a.done !== b.done) return a.done ? 1 : -1;
               const aS = a.startDate < rowStart ? rowStart : a.startDate;
               const bS = b.startDate < rowStart ? rowStart : b.startDate;
               const aE = (a.endDate || a.startDate) > rowEnd ? rowEnd : (a.endDate || a.startDate);
@@ -1495,7 +1496,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
                       return (
                         <div
                           key={`${p.todo.id}-${rowIdx}`}
-                          className={`cal-span-bar${multi ? ' multi' : ' single'}${!p.isStart ? ' no-l' : ''}${!p.isEnd ? ' no-r' : ''}`}
+                          className={`cal-span-bar${multi ? ' multi' : ' single'}${p.todo.done ? ' done' : ''}${!p.isStart ? ' no-l' : ''}${!p.isEnd ? ' no-r' : ''}`}
                           style={{ gridColumn: `${p.cs}/${p.ce}`, gridRow: `${p.lane + 1}` }}
                           onClick={ev => { ev.stopPropagation(); onSelect(formatDate(row[p.cs - 1].date)); }}
                         >
@@ -2983,7 +2984,7 @@ function SettingsTab({ settings, onChange, memoMons }: {
                   {memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId)).length} / {memoMons.length} 体表示中
                 </div>
               </div>
-              <button onClick={() => setShowMonSelector(true)}>選択</button>
+              <button className="font-size-opt" onClick={() => setShowMonSelector(true)}>選択</button>
             </div>
           </>}
         </div>
