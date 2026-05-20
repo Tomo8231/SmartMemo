@@ -1880,11 +1880,19 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
         <div className="modal-row">
           <div className="modal-field">
             <label>開始日</label>
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+            <input type="date" value={startDate} onChange={e => {
+              const sd = e.target.value;
+              setStartDate(sd);
+              if (endDate && sd > endDate) setEndDate(sd);
+            }} />
           </div>
           <div className="modal-field">
             <label>終了日</label>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+            <input type="date" value={endDate} onChange={e => {
+              const ed = e.target.value;
+              setEndDate(ed);
+              if (startDate && ed < startDate) setStartDate(ed);
+            }} />
           </div>
         </div>
         <div className="modal-field">
