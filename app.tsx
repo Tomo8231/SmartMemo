@@ -53,7 +53,7 @@ type Settings = {
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; };
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
   label: string; rarity: string; stars: string; color: string;
@@ -70,6 +70,7 @@ type TodoDraft = {
   coinReward?: number;
   recurring?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
   recurringDay?: number;
+  attachments?: Attachment[];
 };
 type TrashedTodo = Todo & { trashedAt: number };
 type IdeaDraft = {
@@ -79,6 +80,7 @@ type IdeaDraft = {
   details: string[];
   tags: string[];
   subTab?: string;
+  attachments?: Attachment[];
 };
 type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
@@ -1090,6 +1092,7 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
       startDate: draft.startDate, endDate: draft.endDate,
       time: draft.time, tags: draft.tags,
       done: false, addedAt: stamp, coinReward: draft.coinReward,
+      attachments: draft.attachments?.length ? draft.attachments : undefined,
     }];
   }
   const start = new Date(draft.startDate + 'T00:00:00');
@@ -1120,6 +1123,7 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
       startDate: ds, endDate: ds,
       time: draft.time, tags: draft.tags,
       done: false, addedAt: stamp, coinReward: draft.coinReward,
+      attachments: draft.attachments?.length ? draft.attachments : undefined,
     });
     if (draft.recurring === 'daily') cur.setDate(cur.getDate() + 1);
     else if (draft.recurring === 'weekly') cur.setDate(cur.getDate() + 7);
@@ -1371,6 +1375,9 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
         if (d && !newDetails.includes(d)) newDetails.push(d);
       }
       const newTags = Array.from(new Set([...cur.tags, ...((inc.tags) || [])]));
+      const mergedAtts = inc.attachments?.length
+        ? [...(cur.attachments || []), ...inc.attachments.filter(a => !(cur.attachments || []).some(ca => ca.id === a.id))]
+        : cur.attachments;
       result[idx] = {
         ...cur,
         summary: cur.summary || inc.summary || '',
@@ -1378,6 +1385,7 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
         tags: newTags,
         updatedAt: todayDate,
         addedAt: Date.now(),
+        attachments: mergedAtts?.length ? mergedAtts : undefined,
       };
     } else {
       result.push({
@@ -1389,6 +1397,7 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
         createdAt: todayDate,
         updatedAt: todayDate,
         addedAt: Date.now(),
+        attachments: inc.attachments?.length ? inc.attachments : undefined,
       });
     }
   }
@@ -2479,6 +2488,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       const ideas = result.ideas || [];
 
       const ts = Date.now();
+      const sharedAtts = memoAttachments.length ? memoAttachments : undefined;
       const todoDrafts = todos.map((t, i) => {
         const sd = t.startDate || '';
         const ed = t.endDate || '';
@@ -2495,6 +2505,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           done: false as const,
           coinReward: t.coinReward,
           recurring: rec,
+          attachments: sharedAtts,
         };
       });
       const ideaDrafts = ideas.map((i, idx) => ({
@@ -2503,6 +2514,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         details: i.details || [],
         tags: (i.tags && i.tags.length ? i.tags : ['アイデア']),
         id: `i_${ts}_${idx}`,
+        attachments: sharedAtts,
       }));
 
       if (!todoDrafts.length && !ideaDrafts.length) throw new Error('empty');
@@ -2527,6 +2539,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         summary: i.summary,
         details: i.details,
         tags: i.tags,
+        attachments: i.attachments,
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
       showToast(`${newTodos.length + newIdeas.length}件を追加しました`);
@@ -3540,6 +3553,7 @@ type LiveMon = MemoMonInstance & {
   frame: number;
   frameTime: number;
   tapCount: number;
+  personality: 'active' | 'lazy';
 };
 
 function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; onTapReward: () => void }) {
@@ -3563,17 +3577,20 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         const hunger = Math.max(0, m.hunger - hoursElapsed * 10);
         const sc = scaleRef.current;
         const startSleep = initSleep && !!def.sprites;
+        const personality: 'active' | 'lazy' = m.activity ?? (Math.random() < 0.5 ? 'active' : 'lazy');
+        const initSpeed = personality === 'active' ? 60 : 22;
         liveRef.current[m.uid] = {
           ...m, hunger,
           x: Math.random() * Math.max(0, W - def.monW * sc),
           y: 60 + Math.random() * Math.max(0, H * 0.3),
-          vx: startSleep ? 0 : (Math.random() > 0.5 ? 1 : -1) * 40,
-          vy: startSleep ? 0 : (Math.random() - 0.5) * 20,
+          vx: startSleep ? 0 : (Math.random() > 0.5 ? 1 : -1) * initSpeed,
+          vy: startSleep ? 0 : (Math.random() - 0.5) * (personality === 'active' ? 25 : 10),
           facing: 'r',
           state: startSleep ? 'idle' : 'walk',
           stateUntil: now + 2000 + Math.random() * 3000,
           animState: startSleep ? 'sleep' : 'sit',
           frame: 0, frameTime: 0, tapCount: 0,
+          personality,
         };
       }
     });
@@ -3689,24 +3706,32 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
           return;
         }
 
-        // Movement state machine
+        // Movement state machine — personality-driven
         if (now > m.stateUntil) {
+          const active = m.personality === 'active';
+          const speed  = active ? 60 : 22;
+          const vyAmp  = active ? 25 : 10;
+          const idleChance    = active ? 0.15 : 0.60;
+          const walkMinMs     = active ? 3000 : 800;
+          const walkRandMs    = active ? 5000 : 1500;
+          const idleMinMs     = active ? 400  : 2500;
+          const idleRandMs    = active ? 800  : 4000;
           if (m.state === 'walk') {
-            if (Math.random() < 0.3) {
+            if (Math.random() < idleChance) {
               m.state = 'idle'; m.vx = 0; m.vy = 0;
-              m.stateUntil = now + 1000 + Math.random() * 2000;
+              m.stateUntil = now + idleMinMs + Math.random() * idleRandMs;
               if (def.sprites) { m.animState = 'sit'; m.frameTime = 0; }
               else { const img = imgRefs.current[m.uid]; if (img) img.style.animation = 'none'; }
             } else {
-              m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
-              m.vy = (Math.random() - 0.5) * 20;
-              m.stateUntil = now + 2000 + Math.random() * 4000;
+              m.vx = (Math.random() > 0.5 ? 1 : -1) * speed;
+              m.vy = (Math.random() - 0.5) * vyAmp;
+              m.stateUntil = now + walkMinMs + Math.random() * walkRandMs;
             }
           } else {
             m.state = 'walk';
-            m.vx = (Math.random() > 0.5 ? 1 : -1) * 40;
-            m.vy = (Math.random() - 0.5) * 20;
-            m.stateUntil = now + 2000 + Math.random() * 4000;
+            m.vx = (Math.random() > 0.5 ? 1 : -1) * speed;
+            m.vy = (Math.random() - 0.5) * vyAmp;
+            m.stateUntil = now + walkMinMs + Math.random() * walkRandMs;
             if (def.sprites) { m.animState = 'walk'; m.frameTime = 0; }
             else { const img = imgRefs.current[m.uid]; if (img) img.style.animation = 'monBob 0.6s ease-in-out infinite'; }
           }
@@ -3858,13 +3883,13 @@ function SmartMemoApp() {
     infiniteCoins: false, gachaUnlocked: { sounds: [], bgs: [] },
   });
   const [memoMons, setMemoMons] = usePersistedState<MemoMonInstance[]>('smartmemo:memomons', [
-    { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now() },
+    { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now(), activity: Math.random() < 0.5 ? 'active' : 'lazy' },
   ]);
 
   useEffect(() => {
     if (!memoMons.find(m => m.defId === 'kuroneko')) {
       setMemoMons(prev => [
-        { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now() },
+        { uid: 'kuroneko-default', defId: 'kuroneko', hunger: 100, lastFed: Date.now(), activity: Math.random() < 0.5 ? 'active' : 'lazy' },
         ...prev,
       ]);
     }
@@ -4063,6 +4088,7 @@ function SmartMemoApp() {
                   defId: prize.monDefId!,
                   hunger: 100,
                   lastFed: Date.now(),
+                  activity: Math.random() < 0.5 ? 'active' : 'lazy',
                 }]);
               }
             });
