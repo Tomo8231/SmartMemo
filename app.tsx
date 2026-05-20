@@ -599,6 +599,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🐕 しばいぬ',   rarity: 'super', stars: '★★★★',  color: '#e65100', monDefId: 'shibainu',    weight: 3 },
   { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3 },
   { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2 },
+  { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3 },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -676,6 +677,7 @@ const YF_SPRITES = makeSprites('yf');
 const SB_SPRITES = makeSprites('sb');
 const MJ_SPRITES = makeSprites('mj');
 const DR_SPRITES = makeSprites('dr');
+const PY_SPRITES = makeSprites('py');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -758,6 +760,14 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     monW: 65, monH: 65,
     spriteFacing: 'l',
     sprites: DR_SPRITES,
+  },
+  {
+    id: 'pylar', name: 'パイラーくん',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: '青いボディのがっちり系マスコット。指を立てて「いいね！」をしてくれる頼れるやつ。',
+    monW: 65, monH: 70,
+    sprites: PY_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
