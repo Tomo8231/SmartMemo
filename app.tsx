@@ -1080,6 +1080,8 @@ const TAG_KEYWORDS: Record<string, string[]> = {
 
 const ACTION_VERB_RE = /(買う|購入|やる|行く|来る|帰る|完了|終わ(る|らせる)|確認|チェック|送る|送付|提出|連絡|電話|メール|会う|参加|準備|予約|予定|出発|到着|出張|締切|片付け|掃除|洗濯)/;
 const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
+const RECURRING_RE   = /(毎日|毎週|毎月|隔週|週\d?回|月\d?回|定期|ルーティン|習慣)/;
+const DEADLINE_RE    = /(\d{1,2}[月\/]\d{1,2}日?まで|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}まで|来週まで|今月中|月末まで|までに|まで[にの])/;
 const TIME_TOKEN_RE  = /\d{1,2}[:時]\d{0,2}分?(に|から|まで)?/;
 const IDEA_HINT_RE   = /(アイデア|構想|企画|思いつき|について|案$|コンセプト)/;
 
@@ -1257,6 +1259,7 @@ const inferTagsForIdea = (text: string) => {
 };
 
 const isTodoLine = (line: string) => {
+  if (RECURRING_RE.test(line) || DEADLINE_RE.test(line)) return true;
   if (IDEA_HINT_RE.test(line) && !ACTION_VERB_RE.test(line)) return false;
   return ACTION_VERB_RE.test(line) || DATE_TOKEN_RE.test(line);
 };
@@ -1419,34 +1422,43 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
 async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = ''): Promise<ParseResult> {
   const prompt =
     `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「アイデア」に分類し、JSONのみを返してください。\n\n` +
-    `ルール:\n` +
-    `1. TODO: 実行可能なタスク・予定・買い物・連絡など、行動動詞または日付/期限のあるもの\n` +
-    `2. アイデア: 思いつき・構想・企画・コンセプト・将来やりたいこと\n` +
-    `3. 複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」は日付なのでタイトルに含めずstartDateに）\n` +
-    `4. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
-    `   - 「8月中」      → startDate=yyyy-08-01, endDate=yyyy-08-31\n` +
-    `   - 「7月1日〜15日」 → startDate=yyyy-07-01, endDate=yyyy-07-15\n` +
-    `   - 「7月1日〜8月15日」→ startDate=yyyy-07-01, endDate=yyyy-08-15\n` +
-    `   - 「明日から来週水曜まで」→ 期間で記述\n` +
-    `5. 時間は HH:MM か ""。\n` +
-    `   - TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」は使わない）\n` +
-    `   - アイデアのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
-    `6. TODOのcoinReward: タスクの難易度・手間・所要時間をもとに10〜200の整数で設定（10の倍数推奨）\n` +
-    `   - 10〜30: 買い物・連絡など数分でできる簡単なもの\n` +
-    `   - 40〜80: 家事・軽い仕事など30分〜1時間程度\n` +
-    `   - 90〜150: 複雑な仕事・長時間の作業・勉強など\n` +
-    `   - 160〜200: 大型プロジェクト・困難なタスク\n` +
-    `7. アイデアは projectName で分類。下記の既存プロジェクトと類似する場合、必ずその名前を使用すること\n` +
-    `8. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
-    `9. 本日: ${todayStr}（年が指定されていない月日は${today.getFullYear()}年として扱う）\n` +
-    `10. 定期的な予定（毎日・毎週・隔週・毎月など）は recurring フィールドを設定:\n` +
-    `   - 毎日 → recurring="daily"、startDate=開始日、endDate=終了日（最大6ヶ月後）\n` +
-    `   - 毎週 → recurring="weekly"、startDate=最初の日、endDate=最後の週の日\n` +
-    `   - 隔週 → recurring="biweekly"、startDate=最初の日、endDate=最後の日\n` +
-    `   - 毎月 → recurring="monthly"、startDate=最初の日、endDate=最後の月の同日\n` +
-    `   - 定期でない場合は recurring="" か省略\n\n` +
-    `形式（JSONのみ）:\n` +
-    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":""}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
+    `【TODO vs アイデア 判定ルール】\n` +
+    `TODO（以下のいずれかに該当すれば必ずTODO）:\n` +
+    `  - 行動動詞がある（買う・連絡する・送る・提出する・行く・やる・確認する 等）\n` +
+    `  - 日付・期限・締め切りがある（〇〇までに・来週・〇月〇日・明日 等）\n` +
+    `  - 定期的・繰り返しの予定（毎日・毎週・毎月・隔週・週1 等）→ 必ずTODO\n` +
+    `  - 習慣・ルーティン（朝ランニング・週次レビュー 等）→ 必ずTODO\n` +
+    `アイデア（具体的な行動・日程・期限がなく、将来的な構想・着想のもの）:\n` +
+    `  - 「〜したい」「〜はどうか」「〜を考えている」（実行日未定）\n` +
+    `  - 企画・コンセプト・仕様検討など\n` +
+    `  ※ 「〜のアイデアを考える」のように行動自体はTODO\n\n` +
+    `【各フィールドのルール】\n` +
+    `1. 複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」はstartDateへ）\n` +
+    `2. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
+    `   - 「8月中」         → startDate=${today.getFullYear()}-08-01, endDate=${today.getFullYear()}-08-31\n` +
+    `   - 「7月1日〜15日」  → startDate=${today.getFullYear()}-07-01, endDate=${today.getFullYear()}-07-15\n` +
+    `   - 「〇月〇日まで」  → endDate=その日, startDate=本日\n` +
+    `3. 時間は HH:MM か ""\n` +
+    `4. TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」タグは使わない）\n` +
+    `   アイデアのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
+    `5. coinReward（TODOのみ）: 難易度・手間・所要時間で10〜200の整数（10の倍数）\n` +
+    `   10〜30=数分の簡単タスク、40〜80=30分〜1時間、90〜150=複雑な作業、160〜200=大型タスク\n` +
+    `6. アイデアは projectName で分類。既存プロジェクトと類似なら必ずその名前を使用\n` +
+    `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
+    `8. 本日: ${todayStr}（年未指定の月日は${today.getFullYear()}年とする）\n` +
+    `9. 定期予定（毎日・毎週・隔週・毎月）は recurring + recurringDay を設定:\n` +
+    `   recurring値: "daily" / "weekly" / "biweekly" / "monthly" / ""（非定期）\n` +
+    `   recurringDay（曜日・日を指定している場合のみ設定）:\n` +
+    `   - weekly/biweekly: 曜日番号 0=日 1=月 2=火 3=水 4=木 5=金 6=土\n` +
+    `     例「毎週月曜日」→ recurring="weekly", recurringDay=1\n` +
+    `     例「隔週金曜」  → recurring="biweekly", recurringDay=5\n` +
+    `   - monthly: 日番号 1〜31\n` +
+    `     例「毎月1日」   → recurring="monthly", recurringDay=1\n` +
+    `     例「毎月15日」  → recurring="monthly", recurringDay=15\n` +
+    `   - daily: recurringDay不要\n` +
+    `   startDate=本日（または指定の開始日）、endDate=6ヶ月後（または指定の終了日）\n\n` +
+    `形式（JSONのみ、コードブロック不要）:\n` +
+    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
     `メモ:\n${text}`;
 
   const tryParseJson = (res: string): ParseResult | null => {
@@ -2515,6 +2527,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         const autoSD = sd || ed || todayStr;
         const autoED = ed || sd || todayStr;
         const rec = (['daily', 'weekly', 'biweekly', 'monthly'] as const).includes(t.recurring as any) ? t.recurring as TodoDraft['recurring'] : undefined;
+        const rd = typeof t.recurringDay === 'number' && !isNaN(t.recurringDay) ? t.recurringDay : undefined;
         return {
           title: t.title || 'タスク',
           startDate: autoSD,
@@ -2525,6 +2538,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           done: false as const,
           coinReward: t.coinReward,
           recurring: rec,
+          recurringDay: rec ? rd : undefined,
           attachments: sharedAtts,
         };
       });
