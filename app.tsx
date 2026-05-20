@@ -15,6 +15,7 @@ type Todo = {
   done: boolean;
   addedAt?: number;
   coinReward?: number;
+  attachments?: Attachment[];
 };
 type Idea = {
   id: number | string;
@@ -26,6 +27,7 @@ type Idea = {
   updatedAt?: string;
   addedAt?: number;
   subTab?: string;
+  attachments?: Attachment[];
 };
 type Settings = {
   colorIdx: number;
@@ -82,7 +84,8 @@ type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
 type Tab = 'memo' | 'todo' | 'idea' | 'settings';
-type MemoHistoryItem = { id: number; text: string; savedAt: number };
+type Attachment = { id: string; name: string; mime: string; data: string };
+type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?: Attachment[] };
 
 const { useState, useRef, useEffect } = React;
 
@@ -145,6 +148,119 @@ function blobToBase64(blob: Blob): Promise<string> {
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+}
+
+const MAX_ATTACHMENTS = 5;
+const MAX_FILE_BYTES  = 3 * 1024 * 1024; // 3 MB for non-image files
+
+function compressImage(dataUrl: string, maxW = 1400): Promise<string> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      (canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.78));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+async function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Attachment Section (reusable in modals)
+// ─────────────────────────────────────────────────────────────
+function AttachmentSection({ attachments, onChange, toast }: {
+  attachments: Attachment[];
+  onChange: (a: Attachment[]) => void;
+  toast?: (msg: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    const remaining = MAX_ATTACHMENTS - attachments.length;
+    if (remaining <= 0) { toast?.('添付ファイルは最大5件です'); return; }
+    const toAdd: Attachment[] = [];
+    for (const file of files.slice(0, remaining)) {
+      if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) {
+        toast?.(`${file.name} はサイズが大きすぎます（最大3MB）`);
+        continue;
+      }
+      const raw = await readFileAsDataUrl(file);
+      const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
+      toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
+    }
+    if (toAdd.length) onChange([...attachments, ...toAdd]);
+  }
+
+  function openAttachment(a: Attachment) {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    if (a.mime.startsWith('image/')) {
+      win.document.write(`<html><body style="margin:0;background:#000"><img src="${a.data}" style="max-width:100%;max-height:100vh;display:block;margin:auto"></body></html>`);
+    } else {
+      const link = win.document.createElement('a');
+      link.href = a.data; link.download = a.name; link.click(); win.close();
+    }
+  }
+
+  return (
+    <div className="modal-field">
+      <label>添付ファイル</label>
+      <div className="attachment-list">
+        {attachments.map(a => (
+          <div key={a.id} className="attachment-chip">
+            {a.mime.startsWith('image/')
+              ? <img src={a.data} className="attachment-thumb" onClick={() => openAttachment(a)} alt={a.name} />
+              : <span className="attachment-file-name" onClick={() => openAttachment(a)}>{a.name}</span>
+            }
+            <button className="attachment-remove" onClick={() => onChange(attachments.filter(x => x.id !== a.id))}>✕</button>
+          </div>
+        ))}
+        {attachments.length < MAX_ATTACHMENTS && (
+          <button className="attachment-add-btn" onClick={() => fileRef.current?.click()}>
+            ＋ 添付
+          </button>
+        )}
+      </div>
+      <input ref={fileRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={handleFiles} />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Attachment thumbnails row (shown in todo/idea list items)
+// ─────────────────────────────────────────────────────────────
+function AttachmentRow({ attachments }: { attachments: Attachment[] }) {
+  if (!attachments || !attachments.length) return null;
+  const imgs  = attachments.filter(a => a.mime.startsWith('image/'));
+  const files = attachments.filter(a => !a.mime.startsWith('image/'));
+  return (
+    <div className="attachment-row">
+      {imgs.slice(0, 3).map(a => (
+        <img key={a.id} src={a.data} className="attachment-row-thumb" alt={a.name}
+          onClick={e => { e.stopPropagation(); const w = window.open('', '_blank'); if (w) w.document.write(`<html><body style="margin:0;background:#000"><img src="${a.data}" style="max-width:100%;max-height:100vh;display:block;margin:auto"></body></html>`); }} />
+      ))}
+      {imgs.length > 3 && <span className="attachment-row-more">+{imgs.length - 3}</span>}
+      {files.slice(0, 2).map(a => (
+        <span key={a.id} className="attachment-row-file" onClick={e => { e.stopPropagation(); const w = window.open('', '_blank'); if (w) { const l = w.document.createElement('a'); l.href = a.data; l.download = a.name; l.click(); w.close(); } }}>{a.name}</span>
+      ))}
+    </div>
+  );
 }
 
 // Sound types for task completion.
@@ -1565,19 +1681,22 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
     { value: 'monthly', label: '毎月' },
   ];
   const tagOptions = getTodoTagOptions(customTags);
-  const [title,     setTitle]     = useState(todo.title);
-  const [startDate, setStartDate] = useState(todo.startDate);
-  const [endDate,   setEndDate]   = useState(todo.endDate);
-  const [time,      setTime]      = useState(todo.time);
-  const [tags,      setTags]      = useState<string[]>(todo.tags || []);
-  const [recurring, setRecurring] = useState<RecurringVal | ''>((todo as any).recurring || '');
+  const [title,       setTitle]       = useState(todo.title);
+  const [startDate,   setStartDate]   = useState(todo.startDate);
+  const [endDate,     setEndDate]     = useState(todo.endDate);
+  const [time,        setTime]        = useState(todo.time);
+  const [tags,        setTags]        = useState<string[]>(todo.tags || []);
+  const [recurring,   setRecurring]   = useState<RecurringVal | ''>((todo as any).recurring || '');
   const [recurringDay, setRecurringDay] = useState<number | undefined>((todo as any).recurringDay);
+  const [attachments, setAttachments] = useState<Attachment[]>((todo as any).attachments || []);
+  const [attToast,    setAttToast]    = useState('');
   const DOW_LABELS = ['日','月','火','水','木','金','土'];
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
+  function showAttToast(msg: string) { setAttToast(msg); setTimeout(() => setAttToast(''), 2500); }
   function handleSave() {
     if (!title.trim()) return;
-    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined });
+    onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined, attachments: attachments.length ? attachments : undefined });
     onClose();
   }
 
@@ -1646,6 +1765,8 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
             ))}
           </div>
         </div>
+        <AttachmentSection attachments={attachments} onChange={setAttachments} toast={showAttToast} />
+        {attToast && <div className="modal-att-toast">{attToast}</div>}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
           <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (recurring ? '展開して保存' : '保存')}</button>
@@ -1673,8 +1794,11 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
   const [details,     setDetails]     = useState((idea.details || []).join('\n'));
   const [tags,        setTags]        = useState<string[]>(idea.tags || []);
   const [subTab,      setSubTab]      = useState((idea as any).subTab || '');
+  const [attachments, setAttachments] = useState<Attachment[]>((idea as any).attachments || []);
+  const [attToast,    setAttToast]    = useState('');
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
+  function showAttToast(msg: string) { setAttToast(msg); setTimeout(() => setAttToast(''), 2500); }
   function handleSave() {
     if (!projectName.trim()) return;
     onSave({
@@ -1684,6 +1808,7 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
       details: details.split('\n').map(s => s.trim()).filter(Boolean),
       tags,
       subTab: subTab || undefined,
+      attachments: attachments.length ? attachments : undefined,
     });
   }
 
@@ -1725,6 +1850,8 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
             </select>
           </div>
         )}
+        <AttachmentSection attachments={attachments} onChange={setAttachments} toast={showAttToast} />
+        {attToast && <div className="modal-att-toast">{attToast}</div>}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
           <button className="modal-save" onClick={handleSave}>{mode === 'add' ? '追加' : '保存'}</button>
@@ -1797,6 +1924,7 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
             <span className="todo-coin-reward">🪙 +{todo.coinReward}</span>
           )}
         </div>
+        <AttachmentRow attachments={todo.attachments || []} />
       </div>
       <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildTodoCopyText(todo)); }} title="コピー"><IcoCopy /></button>
       <button className="todo-del" onClick={() => onDelete(todo.id)}>✕</button>
@@ -1962,18 +2090,20 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   micTrigger?: number;
   onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[]; unlockCoins?: boolean }) => void;
 }) {
-  const [text,       setText]       = usePersistedState<string>('smartmemo:memo:draft', '');
+  const [text,        setText]        = usePersistedState<string>('smartmemo:memo:draft', '');
   const [memoHistory, setMemoHistory] = usePersistedState<MemoHistoryItem[]>('smartmemo:memoHistory', []);
   const [showHistory, setShowHistory] = useState(false);
-  const [loading,    setLoading]    = useState(false);
-  const [loadingMsg, setLMsg]       = useState('');
-  const [recording,  setRec]        = useState(false);
-  const [imgPrev,    setImgPrev]    = useState<string | null>(null);
-  const [toast,      setToast]      = useState<string | null>(null);
-  const [pending,    setPending]    = useState<Pending | null>(null);
-  const [swooshing,  setSwooshing]  = useState(false);
-  const [burst,      setBurst]      = useState<{ x: number; y: number; key: number } | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [loadingMsg,  setLMsg]        = useState('');
+  const [recording,   setRec]         = useState(false);
+  const [imgPrev,     setImgPrev]     = useState<string | null>(null);
+  const [memoAttachments, setMemoAttachments] = useState<Attachment[]>([]);
+  const [toast,       setToast]       = useState<string | null>(null);
+  const [pending,     setPending]     = useState<Pending | null>(null);
+  const [swooshing,   setSwooshing]   = useState(false);
+  const [burst,       setBurst]       = useState<{ x: number; y: number; key: number } | null>(null);
   const fileRef         = useRef<HTMLInputElement | null>(null);
+  const memoAttRef      = useRef<HTMLInputElement | null>(null);
   const recRef          = useRef<any>(null);
   const tRef            = useRef<number | undefined>(undefined);
   const baseTextRef     = useRef('');
@@ -2179,7 +2309,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 
   async function reflect(originX: number, originY: number) {
     if (!text.trim()) { showToast('メモを入力してください'); return; }
-    setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now() }, ...h].slice(0, 100));
+    setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now(), attachments: memoAttachments.length ? memoAttachments : undefined }, ...h].slice(0, 100));
     setLoading(true);
     setLMsg('AI で TODO とアイデアに自動分類中');
     try {
@@ -2239,7 +2369,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
       showToast(`${newTodos.length + newIdeas.length}件を追加しました`);
-      setText(''); setImgPrev(null); setPending(null); setSwooshing(false);
+      setText(''); setImgPrev(null); setMemoAttachments([]); setPending(null); setSwooshing(false);
     }, 320);
   }
 
@@ -2276,12 +2406,42 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           </div>
         )}
         <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e => setText(e.target.value)} />
+        {memoAttachments.length > 0 && (
+          <div className="memo-att-list">
+            {memoAttachments.map(a => (
+              <div key={a.id} className="memo-att-chip">
+                {a.mime.startsWith('image/')
+                  ? <img src={a.data} className="memo-att-thumb" alt={a.name} onClick={() => { const w = window.open('', '_blank'); if (w) w.document.write(`<html><body style="margin:0;background:#000"><img src="${a.data}" style="max-width:100%;max-height:100vh;display:block;margin:auto"></body></html>`); }} />
+                  : <span className="memo-att-file">{a.name}</span>
+                }
+                <button className="memo-att-remove" onClick={() => setMemoAttachments(p => p.filter(x => x.id !== a.id))}>✕</button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="memo-actions">
           <button className={`action-btn${recording ? ' recording' : ''}`} onClick={toggleRec}>
             {recording ? <><span className="pulse-dot"/>録音停止</> : <><IcoMic />音声入力</>}
           </button>
           <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg />画像から入力</button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImg} />
+          <button className="action-btn" onClick={async () => {
+            if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
+            memoAttRef.current?.click();
+          }}>📎 添付</button>
+          <input ref={memoAttRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={async e => {
+            const files = Array.from(e.target.files || []);
+            e.target.value = '';
+            const remaining = MAX_ATTACHMENTS - memoAttachments.length;
+            const toAdd: Attachment[] = [];
+            for (const file of files.slice(0, remaining)) {
+              if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) { showToast(`${file.name} はサイズが大きすぎます（最大3MB）`); continue; }
+              const raw = await readFileAsDataUrl(file);
+              const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
+              toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
+            }
+            if (toAdd.length) setMemoAttachments(p => [...p, ...toAdd]);
+          }} />
           <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory(true)}><IcoHistory />履歴</button>
         </div>
       </div>
@@ -2316,9 +2476,9 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
             ) : (
               <div className="memo-history-list">
                 {memoHistory.map(item => (
-                  <div key={item.id} className="memo-history-item" onClick={() => { setText(item.text); setShowHistory(false); }}>
+                  <div key={item.id} className="memo-history-item" onClick={() => { setText(item.text); if (item.attachments?.length) setMemoAttachments(item.attachments); setShowHistory(false); }}>
                     <div className="memo-history-info">
-                      <div className="memo-history-date">{formatHistoryDate(item.savedAt)}</div>
+                      <div className="memo-history-date">{formatHistoryDate(item.savedAt)}{item.attachments?.length ? ` · 📎${item.attachments.length}` : ''}</div>
                       <div className="memo-history-text">{item.text.length > 100 ? item.text.slice(0, 100) + '…' : item.text}</div>
                     </div>
                     <button className="memo-history-del" onClick={(e: React.MouseEvent) => { e.stopPropagation(); setMemoHistory(h => h.filter(x => x.id !== item.id)); }}>✕</button>
@@ -2738,6 +2898,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
             {(i.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
             {i.updatedAt && <span className="idea-updated">{i.updatedAt}</span>}
           </div>
+          <AttachmentRow attachments={i.attachments || []} />
         </div>
         <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildIdeaCopyText(i)); }} title="コピー"><IcoCopy /></button>
         <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
