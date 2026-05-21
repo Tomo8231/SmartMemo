@@ -3188,10 +3188,11 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange, memoMons }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
+  onInsights: () => void;
 }) {
   const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
@@ -3391,6 +3392,24 @@ function SettingsTab({ settings, onChange, memoMons }: {
         </div>
       </div>
 
+      <div className="settings-section-title">AI 分析</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">傾向を分析する</div>
+            <div className="settings-row-sub">TODO・アイデア・削除履歴からAIが傾向とアドバイスを生成します</div>
+          </div>
+          <button
+            className="insights-run-btn"
+            onClick={onInsights}
+            disabled={!geminiApiKey}
+            title={geminiApiKey ? 'AI分析を実行' : 'Gemini APIキーを設定してください'}
+          >
+            {geminiApiKey ? '🔍 分析する' : '🔒 要APIキー'}
+          </button>
+        </div>
+      </div>
+
       <div className="settings-section-title">AI 設定</div>
       <div className="settings-card">
         <div className="settings-row">
@@ -3569,6 +3588,160 @@ function SettingsTab({ settings, onChange, memoMons }: {
       <div className="about-card">
         <div className="about-app-name">SmartMemo</div>
         <div className="about-version">Version 1.1.0 (TypeScript)</div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// AI Insights
+// ─────────────────────────────────────────────────────────────
+function buildInsightsSummary(todos: Todo[], ideas: Idea[], trash: TrashedTodo[]): string {
+  const now = Date.now();
+  const thirtyDaysAgo = now - 30 * 86400000;
+  const ninetyDaysAgo = now - 90 * 86400000;
+
+  const done = todos.filter(t => t.done);
+  const undone = todos.filter(t => !t.done);
+  const recent = todos.filter(t => (t.addedAt || 0) > thirtyDaysAgo);
+  const recentDone = done.filter(t => (t.addedAt || 0) > thirtyDaysAgo);
+
+  const tagCount = (arr: Todo[]) => {
+    const m: Record<string, number> = {};
+    arr.forEach(t => (t.tags || []).forEach(g => { m[g] = (m[g] || 0) + 1; }));
+    return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}:${v}`).join(', ');
+  };
+
+  const recurring = todos.filter(t => (t as any).recurring);
+  const overdue = undone.filter(t => t.endDate && t.endDate < new Date().toISOString().slice(0, 10));
+
+  const ideaProjects = [...new Set(ideas.map(i => i.projectName))];
+  const ideaTagCount: Record<string, number> = {};
+  ideas.forEach(i => (i.tags || []).forEach(g => { ideaTagCount[g] = (ideaTagCount[g] || 0) + 1; }));
+  const topIdeaTags = Object.entries(ideaTagCount).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k}:${v}`).join(', ');
+
+  const trashRecent = trash.filter(t => (t.trashedAt || 0) > ninetyDaysAgo);
+  const trashTagCount: Record<string, number> = {};
+  trashRecent.forEach(t => (t.tags || []).forEach(g => { trashTagCount[g] = (trashTagCount[g] || 0) + 1; }));
+  const trashTopTags = Object.entries(trashTagCount).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => `${k}:${v}`).join(', ');
+
+  const completionRate = todos.length > 0 ? Math.round(done.length / todos.length * 100) : 0;
+  const recentCompletionRate = recent.length > 0 ? Math.round(recentDone.length / recent.length * 100) : 0;
+
+  return [
+    `【TODO統計】`,
+    `総数: ${todos.length}件（完了: ${done.length}件, 未完了: ${undone.length}件）`,
+    `完了率: ${completionRate}%（直近30日: ${recentCompletionRate}%）`,
+    `期限切れ未完了: ${overdue.length}件`,
+    `定期予定: ${recurring.length}件`,
+    `未完了タグ内訳: ${tagCount(undone) || 'なし'}`,
+    `完了済みタグ内訳: ${tagCount(done) || 'なし'}`,
+    `直近30日に追加したTODO: ${recent.length}件`,
+    `未完了タイトルサンプル（最大10件）: ${undone.slice(0, 10).map(t => t.title).join(' / ')}`,
+    ``,
+    `【アイデア統計】`,
+    `総数: ${ideas.length}件（プロジェクト数: ${ideaProjects.length}）`,
+    `プロジェクト: ${ideaProjects.slice(0, 12).join(', ')}`,
+    `タグ内訳: ${topIdeaTags || 'なし'}`,
+    `アイデアサンプル（最大8件）: ${ideas.slice(0, 8).map(i => i.projectName + (i.summary ? `「${i.summary.slice(0, 20)}」` : '')).join(' / ')}`,
+    ``,
+    `【ゴミ箱（直近90日）】`,
+    `削除されたTODO: ${trashRecent.length}件`,
+    `削除が多いタグ: ${trashTopTags || 'なし'}`,
+    `削除されたタイトルサンプル（最大8件）: ${trashRecent.slice(0, 8).map(t => t.title).join(' / ')}`,
+  ].join('\n');
+}
+
+function renderInsightText(text: string): React.ReactNode[] {
+  return text.split('\n').map((line, i) => {
+    if (/^#{1,3}\s/.test(line)) {
+      return <div key={i} className="insight-heading">{line.replace(/^#+\s/, '')}</div>;
+    }
+    if (/^\*\*(.+)\*\*$/.test(line)) {
+      return <div key={i} className="insight-bold">{line.replace(/\*\*/g, '')}</div>;
+    }
+    // Bold inline **text**
+    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+    const rendered = parts.map((p, j) =>
+      /^\*\*[^*]+\*\*$/.test(p)
+        ? <strong key={j}>{p.replace(/\*\*/g, '')}</strong>
+        : p
+    );
+    if (line.startsWith('- ') || line.startsWith('• ')) {
+      return <div key={i} className="insight-bullet">{rendered}</div>;
+    }
+    if (line.match(/^\d+\.\s/)) {
+      return <div key={i} className="insight-numbered">{rendered}</div>;
+    }
+    if (line.trim() === '') return <div key={i} className="insight-spacer" />;
+    return <div key={i} className="insight-line">{rendered}</div>;
+  });
+}
+
+function InsightsModal({ todos, ideas, trash, apiKey, onClose }: {
+  todos: Todo[];
+  ideas: Idea[];
+  trash: TrashedTodo[];
+  apiKey: string;
+  onClose: () => void;
+}) {
+  const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
+  const [result, setResult] = useState('');
+
+  useEffect(() => {
+    (async () => {
+      const summary = buildInsightsSummary(todos, ideas, trash);
+      const prompt =
+        `あなたは生産性コーチです。以下のユーザーのタスク・アイデア・削除履歴データを分析し、日本語で傾向とアドバイスを出力してください。\n\n` +
+        `${summary}\n\n` +
+        `以下の構成で出力してください（見出しは ## を使用）:\n` +
+        `## 📊 傾向分析\n（TODOの完了率・カテゴリ傾向・アイデアの偏りなど、3〜5点を箇条書き）\n\n` +
+        `## ✅ 継続できていること\n（うまくいっている点を2〜3点）\n\n` +
+        `## 💡 改善のアドバイス\n（具体的で実践しやすい改善提案を3〜5点）\n\n` +
+        `## 🎯 今すぐできるアクション\n（今週中に試せる具体的な行動を2〜3点）\n\n` +
+        `データが少ない場合は推測で補完せず「データが不足しています」と記載してください。出力は日本語のみ。`;
+
+      try {
+        let out = '';
+        if (apiKey) {
+          out = await callGeminiText(apiKey, prompt);
+        }
+        if (!out) throw new Error('no response');
+        setResult(out);
+        setStatus('done');
+      } catch {
+        setStatus('error');
+      }
+    })();
+  }, []);
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-sheet insights-sheet">
+        <div className="modal-handle" />
+        <div className="insights-header">
+          <span className="insights-title">🔍 AI 傾向分析</span>
+          <button className="insights-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="insights-body">
+          {status === 'loading' && (
+            <div className="insights-loading">
+              <div className="spinner" />
+              <div className="loading-text">データを分析中...</div>
+              <div className="loading-sub">少々お待ちください</div>
+            </div>
+          )}
+          {status === 'error' && (
+            <div className="insights-error">
+              <div style={{ fontSize: 32 }}>⚠️</div>
+              <div style={{ marginTop: 8 }}>分析に失敗しました</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>設定でGemini APIキーを確認してください</div>
+            </div>
+          )}
+          {status === 'done' && (
+            <div className="insights-content">{renderInsightText(result)}</div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -3898,6 +4071,7 @@ function SmartMemoApp() {
   const [pulseTabs, setPulseTabs] = useState<Set<Tab>>(new Set());
   const [micTrigger, setMicTrigger] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -4085,7 +4259,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
@@ -4160,6 +4334,15 @@ function SmartMemoApp() {
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
         return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
+      {showInsights && (
+        <InsightsModal
+          todos={todos}
+          ideas={ideas}
+          trash={trash}
+          apiKey={settings.geminiApiKey || ''}
+          onClose={() => setShowInsights(false)}
+        />
+      )}
     </div>
   );
 }
