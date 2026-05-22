@@ -604,7 +604,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
   'メモを書いてAI解析してみよ！',
-  'アイデアを新しく1つ追加せよ！',
+  'ナレッジを新しく1つ追加せよ！',
   'ガチャを1回引け！',
   'タスクを新しく追加してみよ！',
   '週表示でカレンダーを確認せよ！',
@@ -1421,14 +1421,14 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
 
 async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = ''): Promise<ParseResult> {
   const prompt =
-    `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「アイデア」に分類し、JSONのみを返してください。\n\n` +
-    `【TODO vs アイデア 判定ルール】\n` +
+    `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「ナレッジ」に分類し、JSONのみを返してください。\n\n` +
+    `【TODO vs ナレッジ 判定ルール】\n` +
     `TODO（以下のいずれかに該当すれば必ずTODO）:\n` +
     `  - 行動動詞がある（買う・連絡する・送る・提出する・行く・やる・確認する 等）\n` +
     `  - 日付・期限・締め切りがある（〇〇までに・来週・〇月〇日・明日 等）\n` +
     `  - 定期的・繰り返しの予定（毎日・毎週・毎月・隔週・週1 等）→ 必ずTODO\n` +
     `  - 習慣・ルーティン（朝ランニング・週次レビュー 等）→ 必ずTODO\n` +
-    `アイデア（具体的な行動・日程・期限がなく、将来的な構想・着想のもの）:\n` +
+    `ナレッジ（具体的な行動・日程・期限がなく、将来的な構想・着想のもの）:\n` +
     `  - 「〜したい」「〜はどうか」「〜を考えている」（実行日未定）\n` +
     `  - 企画・コンセプト・仕様検討など\n` +
     `  ※ 「〜のアイデアを考える」のように行動自体はTODO\n\n` +
@@ -1440,10 +1440,10 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `   - 「〇月〇日まで」  → endDate=その日, startDate=本日\n` +
     `3. 時間は HH:MM か ""\n` +
     `4. TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」タグは使わない）\n` +
-    `   アイデアのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
+    `   ナレッジのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
     `5. coinReward（TODOのみ）: 難易度・手間・所要時間で10〜200の整数（10の倍数）\n` +
     `   10〜30=数分の簡単タスク、40〜80=30分〜1時間、90〜150=複雑な作業、160〜200=大型タスク\n` +
-    `6. アイデアは projectName で分類。既存プロジェクトと類似なら必ずその名前を使用\n` +
+    `6. ナレッジは projectName で分類。既存プロジェクトと類似なら必ずその名前を使用\n` +
     `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
     `8. 本日: ${todayStr}（年未指定の月日は${today.getFullYear()}年とする）\n` +
     `9. 定期予定（毎日・毎週・隔週・毎月）は recurring + recurringDay を設定:\n` +
@@ -2015,7 +2015,7 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
         <div className="modal-handle"/>
-        <div className="modal-title">{mode === 'add' ? 'アイデアを追加' : 'アイデアを編集'}</div>
+        <div className="modal-title">{mode === 'add' ? 'ナレッジを追加' : 'ナレッジを編集'}</div>
 
         <div className="modal-field">
           <label>プロジェクト</label>
@@ -2026,7 +2026,7 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
         </div>
         <div className="modal-field">
           <label>概要</label>
-          <input value={summary} onChange={e => setSummary(e.target.value)} placeholder="アイデアの概要" />
+          <input value={summary} onChange={e => setSummary(e.target.value)} placeholder="ナレッジの概要" />
         </div>
         <div className="modal-field">
           <label>詳細（1行1項目）</label>
@@ -2161,7 +2161,7 @@ function ConfirmSheet({
         <div className="confirm-header">
           <div className="confirm-title">追加内容を確認</div>
           <div className="confirm-sub">
-            TODO {pending.todos.length}件・アイデア {pending.ideas.length}件 を抽出しました。タップで編集、✕で除外できます。
+            TODO {pending.todos.length}件・ナレッジ {pending.ideas.length}件 を抽出しました。タップで編集、✕で除外できます。
           </div>
         </div>
         <div className="confirm-list">
@@ -2194,7 +2194,7 @@ function ConfirmSheet({
             </div>
           ))}
 
-          {pending.ideas.length > 0 && <div className="confirm-section-head">アイデア（{pending.ideas.length}）</div>}
+          {pending.ideas.length > 0 && <div className="confirm-section-head">ナレッジ（{pending.ideas.length}）</div>}
           {pending.ideas.map(i => {
             const isExisting = existingProjects.includes(i.projectName);
             return (
@@ -2513,7 +2513,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
     if (!text.trim()) { showToast('メモを入力してください'); return; }
     setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now(), attachments: memoAttachments.length ? memoAttachments : undefined }, ...h].slice(0, 100));
     setLoading(true);
-    setLMsg('AI で TODO とアイデアに自動分類中');
+    setLMsg('AI で TODO とナレッジに自動分類中');
     try {
       const result = await parseMemoToItems(text, existingProjects, geminiApiKey);
       const todos = result.todos || [];
@@ -2699,7 +2699,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
           }}
           disabled={loading}
         >
-          <IcoSparkle /> AI で TODO・アイデアに反映
+          <IcoSparkle /> AI で TODO・ナレッジに反映
         </button>
       </div>
       {showHistory && (
@@ -2960,7 +2960,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
   }
   function deleteTab(tab: string) {
     if (!onUpdateIdeaTabs) return;
-    if (!window.confirm(`「${tab}」タブを削除しますか？\nこのタブのアイデアは未分類になります。`)) return;
+    if (!window.confirm(`「${tab}」タブを削除しますか？\nこのタブのナレッジは未分類になります。`)) return;
     onUpdateIdeaTabs(ideaTabs.filter(t => t !== tab));
     if (activeSubTab === tab) setActiveSubTab('all');
     ideas.forEach(i => { if (i.subTab === tab) onUpdate({ ...i, subTab: undefined }); });
@@ -3174,11 +3174,11 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
       {subtabInput}
       <div className={`ideas-tab tab-pane${touchDragId != null ? ' touch-dragging' : ''}`}>
         {filteredIdeas.length === 0
-          ? <div className="ideas-empty">まだアイデアがありません</div>
+          ? <div className="ideas-empty">まだナレッジがありません</div>
           : ideaCards
         }
         <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
-          ＋ 新しいアイデアを追加
+          ＋ 新しいナレッジを追加
         </button>
       </div>
     </div>
@@ -3397,7 +3397,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
         <div className="settings-row">
           <div>
             <div className="settings-row-label">傾向を分析する</div>
-            <div className="settings-row-sub">TODO・アイデア・削除履歴からAIが傾向とアドバイスを生成します</div>
+            <div className="settings-row-sub">TODO・ナレッジ・削除履歴からAIが傾向とアドバイスを生成します</div>
           </div>
           <button
             className="insights-run-btn"
@@ -3432,7 +3432,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
       <div className="settings-card">
         <div className="tag-row">
           <div className="settings-row-label">既定タグ</div>
-          <div className="settings-row-sub">削除はできません。アイデア用は「アイデア」のみ</div>
+          <div className="settings-row-sub">ナレッジ用の既定タグは「アイデア」のみ</div>
           <div className="tag-chip-list">
             {BUILTIN_IDEA_TAGS.map(t => (
               <span key={t} className="tag-chip tag-chip-builtin">{t}</span>
@@ -3441,7 +3441,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
         </div>
         <div className="tag-row">
           <div className="settings-row-label">カスタムタグ</div>
-          <div className="settings-row-sub">独自のタグを追加・削除できます（TODO・アイデア両方で使用可能）</div>
+          <div className="settings-row-sub">独自のタグを追加・削除できます（TODO・ナレッジ両方で使用可能）</div>
           {(settings.customTags || []).length > 0 && (
             <div className="tag-chip-list">
               {(settings.customTags || []).map(t => (
@@ -3639,11 +3639,11 @@ function buildInsightsSummary(todos: Todo[], ideas: Idea[], trash: TrashedTodo[]
     `直近30日に追加したTODO: ${recent.length}件`,
     `未完了タイトルサンプル（最大10件）: ${undone.slice(0, 10).map(t => t.title).join(' / ')}`,
     ``,
-    `【アイデア統計】`,
+    `【ナレッジ統計】`,
     `総数: ${ideas.length}件（プロジェクト数: ${ideaProjects.length}）`,
     `プロジェクト: ${ideaProjects.slice(0, 12).join(', ')}`,
     `タグ内訳: ${topIdeaTags || 'なし'}`,
-    `アイデアサンプル（最大8件）: ${ideas.slice(0, 8).map(i => i.projectName + (i.summary ? `「${i.summary.slice(0, 20)}」` : '')).join(' / ')}`,
+    `ナレッジサンプル（最大8件）: ${ideas.slice(0, 8).map(i => i.projectName + (i.summary ? `「${i.summary.slice(0, 20)}」` : '')).join(' / ')}`,
     ``,
     `【ゴミ箱（直近90日）】`,
     `削除されたTODO: ${trashRecent.length}件`,
@@ -3692,10 +3692,10 @@ function InsightsModal({ todos, ideas, trash, apiKey, onClose }: {
     (async () => {
       const summary = buildInsightsSummary(todos, ideas, trash);
       const prompt =
-        `あなたは生産性コーチです。以下のユーザーのタスク・アイデア・削除履歴データを分析し、日本語で傾向とアドバイスを出力してください。\n\n` +
+        `あなたは生産性コーチです。以下のユーザーのタスク・ナレッジ・削除履歴データを分析し、日本語で傾向とアドバイスを出力してください。\n\n` +
         `${summary}\n\n` +
         `以下の構成で出力してください（見出しは ## を使用）:\n` +
-        `## 📊 傾向分析\n（TODOの完了率・カテゴリ傾向・アイデアの偏りなど、3〜5点を箇条書き）\n\n` +
+        `## 📊 傾向分析\n（TODOの完了率・カテゴリ傾向・ナレッジの偏りなど、3〜5点を箇条書き）\n\n` +
         `## ✅ 継続できていること\n（うまくいっている点を2〜3点）\n\n` +
         `## 💡 改善のアドバイス\n（具体的で実践しやすい改善提案を3〜5点）\n\n` +
         `## 🎯 今すぐできるアクション\n（今週中に試せる具体的な行動を2〜3点）\n\n` +
@@ -4242,7 +4242,7 @@ function SmartMemoApp() {
   const navItems: { key: Tab; label: string; Icon: React.FC<{ active: boolean }> }[] = [
     { key: 'memo',     label: 'メモ入力', Icon: IcoMemoNav     },
     { key: 'todo',     label: 'TODO',     Icon: IcoTodoNav     },
-    { key: 'idea',     label: 'アイデア', Icon: IcoIdeaNav     },
+    { key: 'idea',     label: 'ナレッジ', Icon: IcoIdeaNav     },
     { key: 'settings', label: '設定',     Icon: IcoSettingsNav },
   ];
 
