@@ -88,6 +88,8 @@ type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: stri
 type Tab = 'memo' | 'todo' | 'idea' | 'settings';
 type Attachment = { id: string; name: string; mime: string; data: string };
 type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?: Attachment[] };
+type TodoSetItem = { title: string; tags: string[]; coinReward?: number; };
+type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: number; };
 
 const { useState, useRef, useEffect } = React;
 
@@ -98,6 +100,7 @@ const LS_TODOS    = 'smartmemo:todos';
 const LS_IDEAS    = 'smartmemo:ideas';
 const LS_SETTINGS = 'smartmemo:settings';
 const LS_TRASH    = 'smartmemo:trash';
+const LS_TODO_SETS = 'smartmemo:todosets';
 
 function loadStored<T>(key: string, fallback: T): T {
   try {
@@ -2776,7 +2779,208 @@ function TrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags }: {
+// ─────────────────────────────────────────────────────────────
+// TodoSet Modals
+// ─────────────────────────────────────────────────────────────
+function TodoSetItemEditor({ item, onChange, onDelete, customTags }: {
+  item: TodoSetItem;
+  onChange: (item: TodoSetItem) => void;
+  onDelete: () => void;
+  customTags: string[];
+}) {
+  const tagOptions = getTodoTagOptions(customTags);
+  const toggleTag = (t: string) =>
+    onChange({ ...item, tags: item.tags.includes(t) ? item.tags.filter(x => x !== t) : [...item.tags, t] });
+  return (
+    <div className="ts-item-row">
+      <input
+        className="ts-item-input"
+        value={item.title}
+        onChange={e => onChange({ ...item, title: e.target.value })}
+        placeholder="タスク名"
+      />
+      <div className="ts-item-tags">
+        {tagOptions.map(t => (
+          <button key={t} className={`ts-tag-btn${item.tags.includes(t) ? ' sel' : ''}`} onClick={() => toggleTag(t)}>{t}</button>
+        ))}
+      </div>
+      <button className="ts-item-del" onClick={onDelete}>✕</button>
+    </div>
+  );
+}
+
+function TodoSetPickerModal({ todos, selectedIds, onToggle, onClose }: {
+  todos: Todo[];
+  selectedIds: Set<string>;
+  onToggle: (id: string, title: string, tags: string[]) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-sheet">
+        <div className="modal-handle" />
+        <div className="modal-title">既存のTODOから選択</div>
+        <div className="ts-picker-list">
+          {todos.length === 0 && <div className="todo-empty">TODOがありません</div>}
+          {todos.map(t => {
+            const sid = String(t.id);
+            const checked = selectedIds.has(sid);
+            return (
+              <div key={t.id} className={`ts-picker-row${checked ? ' sel' : ''}`} onClick={() => onToggle(sid, t.title, t.tags || [])}>
+                <span className="ts-picker-check">{checked ? '✓' : ''}</span>
+                <span className="ts-picker-title">{t.title}</span>
+                <span className="ts-picker-tags">{(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className="modal-actions">
+          <button className="modal-save" style={{ width:'100%' }} onClick={onClose}>完了</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TodoSetEditModal({ set, allTodos, onSave, onClose, customTags }: {
+  set?: TodoSet;
+  allTodos: Todo[];
+  onSave: (s: TodoSet) => void;
+  onClose: () => void;
+  customTags: string[];
+}) {
+  const [name, setName] = useState(set?.name ?? '');
+  const [items, setItems] = useState<TodoSetItem[]>(set?.items ?? []);
+  const [showPicker, setShowPicker] = useState(false);
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+
+  function addBlank() {
+    setItems(p => [...p, { title: '', tags: [] }]);
+  }
+  function updateItem(idx: number, item: TodoSetItem) {
+    setItems(p => p.map((x, i) => i === idx ? item : x));
+  }
+  function deleteItem(idx: number) {
+    setItems(p => p.filter((_, i) => i !== idx));
+  }
+  function togglePicked(id: string, title: string, tags: string[]) {
+    setPickedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+        setItems(p => p.filter(x => x.title !== title));
+      } else {
+        next.add(id);
+        setItems(p => [...p, { title, tags: [...tags] }]);
+      }
+      return next;
+    });
+  }
+  function handleSave() {
+    if (!name.trim()) return;
+    const validItems = items.filter(x => x.title.trim());
+    if (validItems.length === 0) return;
+    onSave({
+      id: set?.id ?? `ts-${Date.now()}`,
+      name: name.trim(),
+      items: validItems,
+      createdAt: set?.createdAt ?? Date.now(),
+    });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-sheet">
+        <div className="modal-handle" />
+        <div className="modal-title">{set ? 'セットを編集' : '新しいセットを作成'}</div>
+        <div className="modal-field">
+          <label>セット名</label>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="例：朝のルーティン" />
+        </div>
+        <div className="modal-field">
+          <label>タスク一覧</label>
+          <div className="ts-items-list">
+            {items.map((item, idx) => (
+              <TodoSetItemEditor key={idx} item={item} onChange={it => updateItem(idx, it)} onDelete={() => deleteItem(idx)} customTags={customTags} />
+            ))}
+          </div>
+          <div className="ts-add-btns">
+            <button className="ts-add-btn" onClick={addBlank}>＋ タスクを追加</button>
+            <button className="ts-add-btn ts-add-btn-pick" onClick={() => setShowPicker(true)}>📋 既存TODOから選択</button>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="modal-cancel" onClick={onClose}>キャンセル</button>
+          <button className="modal-save" onClick={handleSave} disabled={!name.trim() || items.filter(x => x.title.trim()).length === 0}>保存</button>
+        </div>
+      </div>
+      {showPicker && (
+        <TodoSetPickerModal
+          todos={allTodos}
+          selectedIds={pickedIds}
+          onToggle={togglePicked}
+          onClose={() => setShowPicker(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function TodoSetListModal({ sets, allTodos, onApply, onSave, onDelete, onClose, customTags }: {
+  sets: TodoSet[];
+  allTodos: Todo[];
+  onApply: (s: TodoSet) => void;
+  onSave: (s: TodoSet) => void;
+  onDelete: (id: string) => void;
+  onClose: () => void;
+  customTags: string[];
+}) {
+  const [editing, setEditing] = useState<TodoSet | undefined>(undefined);
+  const [creating, setCreating] = useState(false);
+
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="modal-sheet ts-list-sheet">
+        <div className="modal-handle" />
+        <div className="modal-title">TODOセット</div>
+        {sets.length === 0 && (
+          <div className="todo-empty" style={{ padding:'24px 0' }}>セットがまだありません</div>
+        )}
+        <div className="ts-set-list">
+          {sets.map(s => (
+            <div key={s.id} className="ts-set-card">
+              <div className="ts-set-info">
+                <span className="ts-set-name">📋 {s.name}</span>
+                <span className="ts-set-count">{s.items.length}件</span>
+              </div>
+              <div className="ts-set-preview">
+                {s.items.slice(0, 3).map((it, i) => <span key={i} className="ts-set-preview-item">{it.title}</span>)}
+                {s.items.length > 3 && <span className="ts-set-preview-more">+{s.items.length - 3}件</span>}
+              </div>
+              <div className="ts-set-actions">
+                <button className="ts-apply-btn" onClick={() => { onApply(s); onClose(); }}>適用</button>
+                <button className="ts-edit-btn" onClick={() => setEditing(s)}>編集</button>
+                <button className="ts-del-btn" onClick={() => { if (window.confirm(`「${s.name}」を削除しますか？`)) onDelete(s.id); }}>削除</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="ts-create-btn" onClick={() => setCreating(true)}>＋ 新しいセットを作成</button>
+      </div>
+      {(creating || editing) && (
+        <TodoSetEditModal
+          set={editing}
+          allTodos={allTodos}
+          customTags={customTags}
+          onSave={s => { onSave(s); setEditing(undefined); setCreating(false); }}
+          onClose={() => { setEditing(undefined); setCreating(false); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -2792,6 +2996,9 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   soundEnabled: boolean;
   soundType?: string;
   customTags: string[];
+  todoSets: TodoSet[];
+  onSaveTodoSet: (s: TodoSet) => void;
+  onDeleteTodoSet: (id: string) => void;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editing,      setEditing]    = useState<Todo | null>(null);
@@ -2801,6 +3008,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   const [selTagsArr,   setSelTagsArr] = usePersistedState<string[]>('smartmemo:ui:tags', []);
   const [calendarMode, setCalendarMode] = usePersistedState<'month' | 'week'>('smartmemo:ui:calMode', 'month');
   const [undatedOpen,  setUndatedOpen]  = useState(true);
+  const [showSets,     setShowSets]    = useState(false);
 
   const selectedTags = new Set(selTagsArr);
   const tagOptions = getTodoTagOptions(customTags);
@@ -2906,12 +3114,37 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           <button className="todo-add-row" onClick={() => setAdding(true)}>
             ＋ タスクを追加
           </button>
+          <button className="todo-set-open-btn" onClick={() => setShowSets(true)}>
+            📋 TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
+          </button>
           <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
             🗑 ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
           </button>
         </div>
       </div>
       {showTrash && <TrashModal trash={trash} onRestore={onTrashRestore} onDelete={onTrashDelete} onEmpty={onTrashEmpty} onClose={() => setShowTrash(false)} />}
+      {showSets && (
+        <TodoSetListModal
+          sets={todoSets}
+          allTodos={todos}
+          customTags={customTags}
+          onApply={s => {
+            const stamp = Date.now();
+            s.items.forEach((item, i) => onAdd({
+              id: stamp + i,
+              title: item.title,
+              startDate: '', endDate: '', time: '',
+              tags: item.tags,
+              done: false,
+              addedAt: stamp + i,
+              coinReward: item.coinReward,
+            }));
+          }}
+          onSave={onSaveTodoSet}
+          onDelete={onDeleteTodoSet}
+          onClose={() => setShowSets(false)}
+        />
+      )}
     </div>
   );
 }
@@ -4086,6 +4319,7 @@ function SmartMemoApp() {
     { id: 2, title: '牛乳を購入する',     startDate: todayStr, endDate: '', time: '',      tags: ['買い物'], done: false },
     { id: 3, title: '部屋の片付け',       startDate: '',       endDate: '', time: '',      tags: ['家事'],   done: false },
   ]);
+  const [todoSets, setTodoSets] = usePersistedState<TodoSet[]>(LS_TODO_SETS, []);
   const [ideas, setIdeas] = usePersistedState<Idea[]>(LS_IDEAS, []);
   const [settings, setSettings] = usePersistedState<Settings>(LS_SETTINGS, {
     colorIdx: 0, fontIdx: 1, notifEnabled: true, autoTag: true, autoDate: true,
@@ -4236,6 +4470,8 @@ function SmartMemoApp() {
   const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
   const addIdea    = (item: Idea)          => setIdeas(p => [...p, item]);
   const setSetting = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings(p => ({ ...p, [k]: v }));
+  const saveTodoSet    = (s: TodoSet) => setTodoSets(p => { const i = p.findIndex(x => x.id === s.id); return i >= 0 ? p.map(x => x.id === s.id ? s : x) : [...p, s]; });
+  const deleteTodoSet  = (id: string) => setTodoSets(p => p.filter(x => x.id !== id));
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
@@ -4257,7 +4493,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
       </div>
