@@ -3188,12 +3188,22 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
   const [touchDragOverId,setTouchDragOverId]= useState<string | null>(null);
   const touchTimerRef    = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const touchActiveRef   = React.useRef(false);
+  const ideasListRef     = React.useRef<HTMLDivElement | null>(null);
+
+  // Non-passive touchmove listener so e.preventDefault() actually blocks scroll during drag
+  useEffect(() => {
+    const el = ideasListRef.current;
+    if (!el) return;
+    const handler = (e: TouchEvent) => { if (touchActiveRef.current) e.preventDefault(); };
+    el.addEventListener('touchmove', handler, { passive: false });
+    return () => el.removeEventListener('touchmove', handler);
+  }, []);
   const justDraggedRef   = React.useRef(false);
   const [dropTabTarget,  setDropTabTarget]  = useState<string | null>(null);
   const projectNames = ideas.map(i => i.projectName);
 
   const filteredIdeas = activeSubTab === 'all'
-    ? ideas
+    ? ideas.filter(i => !i.subTab)
     : ideas.filter(i => i.subTab === activeSubTab);
 
   function addTab() {
@@ -3305,7 +3315,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
         onDragOver={e => { if (dragIdeaId != null) { e.preventDefault(); setDropTabTarget('all'); } }}
         onDragLeave={() => setDropTabTarget(null)}
         onDrop={e => dropIdeaOnTab(e, 'all')}
-      >すべて</span>
+      >未分類</span>
       {ideaTabs.map((t, idx) => (
         <span
           key={t}
@@ -3418,7 +3428,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
       )}
       {subtabBar}
       {subtabInput}
-      <div className={`ideas-tab tab-pane${touchDragId != null ? ' touch-dragging' : ''}`}>
+      <div ref={ideasListRef} className={`ideas-tab tab-pane${touchDragId != null ? ' touch-dragging' : ''}`}>
         {filteredIdeas.length === 0
           ? <div className="ideas-empty">まだナレッジがありません</div>
           : ideaCards
