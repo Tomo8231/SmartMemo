@@ -124,22 +124,21 @@
       width:180px; height:180px; flex-shrink:0; z-index:1;
     }
     .gacha-sprite-wrap {
-      position:relative; display:flex; align-items:center; justify-content:center;
-      width:200px; height:200px; flex-shrink:0; z-index:1; overflow:hidden; border-radius:14px;
+      position:relative; flex-shrink:0; z-index:1;
+      display:flex; align-items:center; justify-content:center;
     }
     .gacha-sprite-img {
-      width:200px; height:200px;
-      object-fit:cover; object-position:center 50%;
+      width:200px; height:auto;
       image-rendering:pixelated;
     }
     .gacha-sprite-overlay {
-      position:absolute; inset:0; display:flex; flex-direction:column;
-      align-items:center; justify-content:center; pointer-events:none;
+      position:absolute; top:54%; left:50%;
+      transform:translateX(-50%) translateY(-50%) scale(0.05) rotate(-180deg);
+      display:flex; flex-direction:column; align-items:center; pointer-events:none;
       animation:gacha-overlay-appear .45s cubic-bezier(.17,.67,.34,1.4) forwards;
     }
     @keyframes gacha-overlay-appear {
-      from { transform:scale(0.05) rotate(-180deg); opacity:0; }
-      to   { transform:scale(1) rotate(0deg); opacity:1; }
+      to { transform:translateX(-50%) translateY(-50%) scale(1) rotate(0deg); opacity:1; }
     }
     .gacha-capsule {
       width:145px; height:145px; border-radius:50%;
