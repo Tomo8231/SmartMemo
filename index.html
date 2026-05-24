@@ -1291,6 +1291,39 @@
     .api-status.ng   { color:#c0392b; }
     .api-status.idle { color:#a0a09c; }
 
+    /* Notification settings */
+    .notif-perm-row {
+      display:flex; align-items:center; flex-wrap:wrap; gap:8px;
+      padding:10px 16px; border-bottom:1px solid #f0f0ee;
+      font-size:var(--fs-sm);
+    }
+    .notif-perm-label { color:#6a6a68; white-space:nowrap; }
+    .notif-perm-badge { font-size:var(--fs-xs); font-weight:600; border-radius:8px; padding:3px 8px; }
+    .notif-perm-badge.ok { background:#e6f9ee; color:#1a7f4a; }
+    .notif-perm-badge.ng { background:#fdecea; color:#c0392b; }
+    .notif-perm-btn {
+      padding:5px 12px; border-radius:8px; border:none;
+      background:var(--accent); color:#fff; font-size:var(--fs-xs);
+      font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap;
+    }
+    .notif-perm-btn:active { opacity:.8; }
+    .notif-select {
+      padding:5px 8px; border-radius:8px; border:1px solid #d4d4d0;
+      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-family:inherit; cursor:pointer; flex-shrink:0;
+    }
+    .notif-time-input {
+      padding:5px 8px; border-radius:8px; border:1px solid #d4d4d0;
+      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-family:inherit; flex-shrink:0; width:90px;
+    }
+    .notif-test-btn {
+      padding:5px 14px; border-radius:8px; border:1px solid var(--accent);
+      background:var(--accent-light); color:var(--accent); font-size:var(--fs-xs);
+      font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; flex-shrink:0;
+    }
+    .notif-test-btn:active { opacity:.8; }
+
     /* AI Insights */
     .insights-run-btn {
       flex-shrink:0; padding:8px 14px; border-radius:20px; border:none;
@@ -1491,6 +1524,10 @@
     .app.dark .settings-section-title { color:#6a6a68; }
     .app.dark .sound-type-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .api-input-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .notif-perm-row { border-color:#2e2e32; }
+    .app.dark .notif-perm-label { color:#8a8a88; }
+    .app.dark .notif-select { background:#28282c; border-color:#3e3e42; color:#f0f0ee; }
+    .app.dark .notif-time-input { background:#28282c; border-color:#3e3e42; color:#f0f0ee; }
     .app.dark .tag-chip-builtin { background:#2e2e32; color:#8a8a88; }
     .app.dark .tag-add-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
     .app.dark .about-card { background:#1e1e21; border-color:#2e2e32; }

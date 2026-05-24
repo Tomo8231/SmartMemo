@@ -50,6 +50,8 @@ type Settings = {
   hiddenMons?: string[];
   memoMonSize?: 'small' | 'medium' | 'large';
   usedGiftCodes?: string[];
+  notifAdvanceMin?: number;  // minutes before task time (0/15/30/60)
+  notifDailyTime?: string;   // "HH:MM" for todos without a time
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
@@ -3427,7 +3429,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   memoMons: MemoMonInstance[];
   onInsights: () => void;
 }) {
-  const { colorIdx, fontIdx, notifEnabled, autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
+  const { colorIdx, fontIdx, notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00', autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
   const [newTag, setNewTag]             = useState('');
   const [keyInput, setKeyInput]         = useState(geminiApiKey || '');
@@ -3436,6 +3438,20 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   const [showMonSelector, setShowMonSelector] = useState(false);
   const [giftCode, setGiftCode]             = useState('');
   const [giftMsg, setGiftMsg]               = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
+  const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
+    typeof Notification !== 'undefined' ? (Notification as any).permission : 'denied'
+  );
+
+  async function requestNotifPermission() {
+    if (typeof Notification === 'undefined') return;
+    const result = await (Notification as any).requestPermission();
+    setNotifPerm(result);
+    if (result === 'granted') onChange('notifEnabled', true);
+  }
+
+  async function sendTestNotif() {
+    await showSWNotification('SmartMemo テスト', '通知が正常に動作しています！', 'test-' + Date.now());
+  }
 
   useEffect(() => { setKeyInput(geminiApiKey || ''); }, [geminiApiKey]);
 
@@ -3554,13 +3570,72 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
 
       <div className="settings-section-title">通知・サウンド</div>
       <div className="settings-card">
+        {/* Permission status */}
+        <div className="notif-perm-row">
+          <span className="notif-perm-label">通知の許可状態：</span>
+          {notifPerm === 'granted' && <span className="notif-perm-badge ok">許可済み ✓</span>}
+          {notifPerm === 'denied'  && <span className="notif-perm-badge ng">拒否（ブラウザ設定から変更）</span>}
+          {notifPerm === 'default' && (
+            <button className="notif-perm-btn" onClick={requestNotifPermission}>通知を許可する</button>
+          )}
+        </div>
+
         <div className="settings-row">
           <div>
             <div className="settings-row-label">タスク通知</div>
-            <div className="settings-row-sub">期限前にリマインド</div>
+            <div className="settings-row-sub">
+              {notifPerm === 'granted'
+                ? 'アプリ起動中に期限前リマインドを送信'
+                : '通知を許可すると有効になります'}
+            </div>
           </div>
-          <button className={`toggle${notifEnabled ? ' on' : ' off'}`} onClick={() => onChange('notifEnabled', !notifEnabled)} />
+          <button
+            className={`toggle${notifEnabled ? ' on' : ' off'}`}
+            onClick={() => {
+              if (!notifEnabled && notifPerm !== 'granted') { requestNotifPermission(); return; }
+              onChange('notifEnabled', !notifEnabled);
+            }}
+          />
         </div>
+
+        {notifEnabled && notifPerm === 'granted' && (<>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">事前通知</div>
+              <div className="settings-row-sub">時刻設定済みタスクを何分前に通知するか</div>
+            </div>
+            <select
+              className="notif-select"
+              value={notifAdvanceMin}
+              onChange={e => onChange('notifAdvanceMin', Number(e.target.value))}
+            >
+              <option value={0}>時刻ちょうど</option>
+              <option value={15}>15分前</option>
+              <option value={30}>30分前</option>
+              <option value={60}>1時間前</option>
+            </select>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">デフォルト通知時刻</div>
+              <div className="settings-row-sub">時刻未設定タスクをこの時間に通知</div>
+            </div>
+            <input
+              type="time"
+              className="notif-time-input"
+              value={notifDailyTime}
+              onChange={e => onChange('notifDailyTime', e.target.value)}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">テスト通知</div>
+              <div className="settings-row-sub">通知が届くか確認する</div>
+            </div>
+            <button className="notif-test-btn" onClick={sendTestNotif}>テスト送信</button>
+          </div>
+        </>)}
+
         <div className="settings-row">
           <div>
             <div className="settings-row-label">完了サウンド</div>
@@ -4297,6 +4372,75 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
 }
 
 // ─────────────────────────────────────────────────────────────
+// Notification scheduler
+// ─────────────────────────────────────────────────────────────
+async function showSWNotification(title: string, body: string, tag: string) {
+  try {
+    if (navigator.serviceWorker) {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, { body, icon: './icon.svg', badge: './icon.svg', tag, vibrate: [200, 100, 200] });
+      return;
+    }
+  } catch {}
+  try { new (window as any).Notification(title, { body, icon: './icon.svg', tag }); } catch {}
+}
+
+function useNotificationScheduler(todos: Todo[], settings: Settings) {
+  const { notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00' } = settings;
+
+  useEffect(() => {
+    if (!notifEnabled) return;
+    if (typeof Notification === 'undefined') return;
+    if ((Notification as any).permission !== 'granted') return;
+
+    const now = Date.now();
+    const d   = new Date();
+    const yy  = d.getFullYear();
+    const mm  = d.getMonth();
+    const dd  = d.getDate();
+    const todStr = `${yy}-${String(mm+1).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+
+    const notifiedKey = `smartmemo:notified:${todStr}`;
+    const notified    = new Set<string>(loadStored<string[]>(notifiedKey, []));
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    todos.forEach(todo => {
+      if (todo.done || !todo.startDate) return;
+      // Only notify for today (or overdue range that includes today)
+      const inRange = todo.startDate <= todStr && (todo.endDate || todo.startDate) >= todStr;
+      if (!inRange) return;
+
+      const sid = String(todo.id);
+      if (notified.has(sid)) return;
+
+      let notifyAt: number;
+      if (todo.time) {
+        const [h, m] = todo.time.split(':').map(Number);
+        notifyAt = new Date(yy, mm, dd, h, m, 0).getTime() - notifAdvanceMin * 60_000;
+      } else {
+        const [h, m] = notifDailyTime.split(':').map(Number);
+        notifyAt = new Date(yy, mm, dd, h, m, 0).getTime();
+      }
+
+      const ms = notifyAt - now;
+      if (ms < 0 || ms > 24 * 3600_000) return;
+
+      const body = todo.time
+        ? `${todo.time}${notifAdvanceMin > 0 ? ` の${notifAdvanceMin}分前` : ''} — ${todo.title}`
+        : todo.title;
+
+      timeouts.push(setTimeout(async () => {
+        await showSWNotification('SmartMemo', body, sid);
+        const prev = loadStored<string[]>(notifiedKey, []);
+        if (!prev.includes(sid)) saveStored(notifiedKey, [...prev, sid]);
+      }, ms));
+    });
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [todos, notifEnabled, notifAdvanceMin, notifDailyTime]);
+}
+
+// ─────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
@@ -4388,6 +4532,8 @@ function SmartMemoApp() {
     setSettings(p => ({ ...p, coins: (p.coins || 0) + 50 }));
     showAppToast('👑 ボスミッション達成！ 🪙 +50コイン！');
   }
+
+  useNotificationScheduler(todos, settings);
 
   const color = COLOR_PRESETS[settings.colorIdx];
   const font  = FONT_SIZE_OPTS[settings.fontIdx];
