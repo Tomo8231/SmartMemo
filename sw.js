@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v53';
+const CACHE = 'smartmemo-v54';
 const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'];
 const KN_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`));
 const SL_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`));
@@ -10,7 +10,7 @@ const SB_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sp
 const MJ_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/mj_${a}_${i}.png`));
 const DR_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/dr_${a}_${i}.png`));
 const PY_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/py_${a}_${i}.png`));
-const GACHA_ANIM = Array.from({length:12}, (_, i) => `./sprites/gacha_anim_${i}.png`);
+const GACHA_ANIM = Array.from({length:20}, (_, i) => `./sprites/gacha_anim_${i}.png`);
 const SHELL = [
   './',
   './index.html',

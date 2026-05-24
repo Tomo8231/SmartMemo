@@ -904,17 +904,19 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   useEffect(() => {
     if (phase !== 'spinning') return;
     setGachaFrame(0);
-    const id = setInterval(() => setGachaFrame(f => (f + 1) % 9), 178);
+    const id = setInterval(() => setGachaFrame(f => (f + 1) % 15), 110);
     return () => clearInterval(id);
   }, [phase]);
 
   useEffect(() => {
     if (phase !== 'flashing') return;
-    setGachaFrame(9);
-    const t1 = setTimeout(() => setGachaFrame(10), 220);
-    const t2 = setTimeout(() => setGachaFrame(11), 440);
-    const t3 = setTimeout(() => { setFlashRarity(null); setPhase('result'); }, 900);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    setGachaFrame(15);
+    const t1 = setTimeout(() => setGachaFrame(16), 180);
+    const t2 = setTimeout(() => setGachaFrame(17), 360);
+    const t3 = setTimeout(() => setGachaFrame(18), 540);
+    const t4 = setTimeout(() => setGachaFrame(19), 720);
+    const t5 = setTimeout(() => { setFlashRarity(null); setPhase('result'); }, 1050);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
   }, [phase]);
 
   const cost = mode === 'single' ? GACHA_COST : mode === 'ten' ? GACHA_COST_TEN : GACHA_COST_MON;
