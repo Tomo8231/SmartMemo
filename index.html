@@ -206,7 +206,7 @@
     }
     .gacha-result-area {
       min-height:80px; display:flex; flex-direction:column;
-      align-items:center; justify-content:center; gap:6px; width:100%; position:relative; z-index:1;
+      align-items:center; justify-content:flex-start; gap:6px; width:100%; position:relative; z-index:1;
     }
     .gacha-result { display:flex; flex-direction:column; align-items:center; gap:4px; }
     .gacha-result-rarity { font-size:18px; letter-spacing:5px; animation:star-glow-anim 1.2s ease-in-out infinite alternate; }
@@ -218,6 +218,12 @@
     @keyframes result-pop { from { transform:scale(0) rotate(-18deg); } to { transform:scale(1) rotate(0deg); } }
     .gacha-result-name { font-size:15px; font-weight:700; text-align:center; color:#fff; }
     .gacha-result-desc { font-size:12px; text-align:center; background:rgba(255,255,255,.1); border-radius:8px; padding:6px 14px; width:100%; color:rgba(255,255,255,.6); }
+    .gacha-flavor-box {
+      width:100%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.13);
+      border-radius:10px; padding:10px 14px; margin-top:6px;
+      font-size:12px; line-height:1.7; color:rgba(255,255,255,.75);
+      text-align:left; max-height:80px; overflow-y:auto;
+    }
     .gacha-coin-display { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.4); position:relative; z-index:1; }
     /* Pull button with shimmer */
     .gacha-pull-btn {
