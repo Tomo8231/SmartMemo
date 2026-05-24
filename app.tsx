@@ -911,12 +911,15 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   useEffect(() => {
     if (phase !== 'flashing') return;
     setGachaFrame(15);
-    const t1 = setTimeout(() => setGachaFrame(16), 180);
-    const t2 = setTimeout(() => setGachaFrame(17), 360);
-    const t3 = setTimeout(() => setGachaFrame(18), 540);
-    const t4 = setTimeout(() => setGachaFrame(19), 720);
-    const t5 = setTimeout(() => { setFlashRarity(null); setPhase('result'); }, 1050);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
+    const t1 = setTimeout(() => setGachaFrame(16), 200);
+    const t2 = setTimeout(() => setGachaFrame(17), 400);
+    const t3 = setTimeout(() => setGachaFrame(18), 600);
+    const t4 = setTimeout(() => {
+      setGachaFrame(19);
+      setFlashRarity(null);
+      setPhase('result');
+    }, 800);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
   }, [phase]);
 
   const cost = mode === 'single' ? GACHA_COST : mode === 'ten' ? GACHA_COST_TEN : GACHA_COST_MON;
