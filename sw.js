@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v48';
+const CACHE = 'smartmemo-v49';
 const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'];
 const KN_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`));
 const SL_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`));
@@ -46,6 +46,20 @@ self.addEventListener('activate', e => {
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
+  );
+});
+
+// Open the app when a notification is tapped
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+      if (clients.length > 0) {
+        const c = clients.find(c => c.focused) || clients[0];
+        return c.focus();
+      }
+      return self.clients.openWindow('./');
+    })
   );
 });
 
