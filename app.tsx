@@ -60,6 +60,7 @@ type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
   label: string; rarity: string; stars: string; color: string;
   soundType?: string; bgIdx?: number; monDefId?: string;
+  flavor?: string;
 };
 type TodoDraft = {
   id?: number | string;
@@ -581,30 +582,30 @@ const BG_PRESETS = [
   { name: 'ローズ',     bg: '#fff0f5' },
 ];
 const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
-  { type: 'sound', label: '🔔 チャイム',         rarity: 'common', stars: '★★',    color: '#777',    soundType: 'chime',   weight: 20 },
-  { type: 'sound', label: '💥 ポップ',           rarity: 'common', stars: '★★',    color: '#777',    soundType: 'pop',     weight: 18 },
-  { type: 'sound', label: '🎮 8ビット',          rarity: 'common', stars: '★★',    color: '#777',    soundType: '8bit',    weight: 16 },
-  { type: 'bg',    label: '🎨 クリーム背景',     rarity: 'common', stars: '★★',    color: '#c8860a', bgIdx: 1,             weight: 14 },
-  { type: 'sound', label: '🎹 ドレミ',           rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'doremi',  weight: 10 },
-  { type: 'sound', label: '🪙 コイン音',         rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'coin',    weight: 8  },
-  { type: 'bg',    label: '🌿 ミント背景',       rarity: 'rare',   stars: '★★★',   color: '#27ae60', bgIdx: 2,             weight: 8  },
-  { type: 'bg',    label: '🌸 スカイ背景',       rarity: 'rare',   stars: '★★★',   color: '#1a88d0', bgIdx: 4,             weight: 6  },
-  { type: 'sound', label: '🍄 マリオ音',         rarity: 'super',  stars: '★★★★',  color: '#e53935', soundType: 'mario',   weight: 5  },
-  { type: 'sound', label: '🎺 ファンファーレ',   rarity: 'super',  stars: '★★★★',  color: '#9c27b0', soundType: 'fanfare', weight: 4  },
-  { type: 'bg',    label: '💜 ラベンダー背景',   rarity: 'super',  stars: '★★★★',  color: '#8e24aa', bgIdx: 3,             weight: 4  },
-  { type: 'bg',    label: '🌙 ナイト背景',       rarity: 'super',  stars: '★★★★',  color: '#546e7a', bgIdx: 5,             weight: 3  },
-  { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2  },
-  { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1  },
-  { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1 },
-  { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2 },
-  { type: 'memomon', label: '💧 スライム', rarity: 'super',  stars: '★★★★',  color: '#0288d1', monDefId: 'slime',    weight: 3 },
-  { type: 'memomon', label: '🐥 ひよこ',   rarity: 'super',  stars: '★★★★',  color: '#f9a825', monDefId: 'hiyoko',   weight: 3 },
-  { type: 'memomon', label: '👻 おばけ',      rarity: 'ultra', stars: '★★★★★', color: '#616161', monDefId: 'obake',       weight: 2 },
-  { type: 'memomon', label: '🦊 ゆきぎつね', rarity: 'ultra', stars: '★★★★★', color: '#90caf9', monDefId: 'yukigitsune', weight: 2 },
-  { type: 'memomon', label: '🐕 しばいぬ',   rarity: 'super', stars: '★★★★',  color: '#e65100', monDefId: 'shibainu',    weight: 3 },
-  { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3 },
-  { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2 },
-  { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3 },
+  { type: 'sound', label: '🔔 チャイム',         rarity: 'common', stars: '★★',    color: '#777',    soundType: 'chime',   weight: 20, flavor: '澄んだチーン音。学校の授業終わりみたいな「終わった！」解放感を、タスク完了のたびに味わえる。' },
+  { type: 'sound', label: '💥 ポップ',           rarity: 'common', stars: '★★',    color: '#777',    soundType: 'pop',     weight: 18, flavor: '弾けるポン！という音。地味なタスクも、これが鳴ればなんかちょっと楽しくなる気がする。テンションが確実に上がる。' },
+  { type: 'sound', label: '🎮 8ビット',          rarity: 'common', stars: '★★',    color: '#777',    soundType: '8bit',    weight: 16, flavor: 'レトロゲームの効果音。思い出補正で妙に懐かしい気分になる。タスク完了がRPGのレベルアップ感覚になって、不思議と達成感が増す。' },
+  { type: 'bg',    label: '🎨 クリーム背景',     rarity: 'common', stars: '★★',    color: '#c8860a', bgIdx: 1,             weight: 14, flavor: '温かみのあるクリーム色。コーヒーでも飲みながらゆっくりタスクを整理したい気分になる。肩の力が抜ける、落ち着く一枚。' },
+  { type: 'sound', label: '🎹 ドレミ',           rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'doremi',  weight: 10, flavor: '音楽室のピアノみたいな音。繰り返し聞いても全然うるさくない。落ち着きとちゃんとした達成感が共存する、バランス型サウンド。' },
+  { type: 'sound', label: '🪙 コイン音',         rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'coin',    weight: 8,  flavor: 'チャリン！とコインが積み上がる音。財布が重くなった気がしてくる（しない）。でもテンションは本当に上がるから不思議。' },
+  { type: 'bg',    label: '🌿 ミント背景',       rarity: 'rare',   stars: '★★★',   color: '#27ae60', bgIdx: 2,             weight: 8,  flavor: '爽やかなミントグリーン。これを背景にすると、なぜか集中できる気がする。朝のTODOリストが清々しく見えてくる不思議な色。' },
+  { type: 'bg',    label: '🌸 スカイ背景',       rarity: 'rare',   stars: '★★★',   color: '#1a88d0', bgIdx: 4,             weight: 6,  flavor: '晴れた空みたいな青。タスクがどれだけ詰まっていても、見上げるような開放感がある。前向きな気持ちになれる一枚。' },
+  { type: 'sound', label: '🍄 マリオ音',         rarity: 'super',  stars: '★★★★',  color: '#e53935', soundType: 'mario',   weight: 5,  flavor: 'あのゲームのコイン取得音。脳が一瞬子どもに戻る感覚がある。「牛乳を買う」を完了しただけでも、なんかヒーローになった気分になれる。' },
+  { type: 'sound', label: '🎺 ファンファーレ',   rarity: 'super',  stars: '★★★★',  color: '#9c27b0', soundType: 'fanfare', weight: 4,  flavor: '堂々たる鼓舞系サウンド。「ゴミ出し」が終わっただけで式典になる。それが案外、毎日のやる気に効く。' },
+  { type: 'bg',    label: '💜 ラベンダー背景',   rarity: 'super',  stars: '★★★★',  color: '#8e24aa', bgIdx: 3,             weight: 4,  flavor: 'やわらかい紫に包まれると落ち着く。夜中に積み上がったTODOを眺めるのに不思議と向いている色。' },
+  { type: 'bg',    label: '🌙 ナイト背景',       rarity: 'super',  stars: '★★★★',  color: '#546e7a', bgIdx: 5,             weight: 3,  flavor: '深夜の静けさを切り取ったような色合い。目が疲れにくく、集中力が増す感じがする。夜型の人間のためのモードかもしれない。' },
+  { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2,  flavor: 'どこか懐かしく、でも初めて聞く不思議な旋律。落ち着きとワクワクが同居していて、長く使っていると愛着が湧いてくる。' },
+  { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1,  flavor: '透き通ったベルの音は、雑念をすっと消してくれる。「やった」という純粋な感覚だけが残る。シンプルなのに一番気持ちいいかもしれない。' },
+  { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1, flavor: '情熱的なローズレッド。これを見たら「やる気ない」とは言えなくなる。テンションをブチ上げたいときのための一枚。' },
+  { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2, flavor: '【生態】骨格のみからなる謎のモンスター。食事の記録は一切なし。タップされても平気なふりをしているが、実はちゃんと感じている。おばけとは幼なじみ。' },
+  { type: 'memomon', label: '💧 スライム', rarity: 'super',  stars: '★★★★',  color: '#0288d1', monDefId: 'slime',    weight: 3, flavor: '【生態】液体と固体の中間に存在する不思議な生命体。体温は常に室温と同じ。メモに触れると若干粘度が上がる。ノートのすみっこで寝ているのをよく目撃される。' },
+  { type: 'memomon', label: '🐥 ひよこ',   rarity: 'super',  stars: '★★★★',  color: '#f9a825', monDefId: 'hiyoko',   weight: 3, flavor: '【生態】生後3日で自力でスマホを操作できる知能を持つ。鳴き声は「ぴよ」のみだが、抑揚で複雑な感情を表現する。タスクが増えるほど元気になる珍しい性質。' },
+  { type: 'memomon', label: '👻 おばけ',      rarity: 'ultra', stars: '★★★★★', color: '#616161', monDefId: 'obake',       weight: 2, flavor: '【生態】体長不定（伸縮自在）。正体不明。ドクロンとは幼なじみで、二匹が揃うと謎のダンスを踊り始める報告がある。TODO画面に出没しやすい。' },
+  { type: 'memomon', label: '🦊 ゆきぎつね', rarity: 'ultra', stars: '★★★★★', color: '#90caf9', monDefId: 'yukigitsune', weight: 2, flavor: '【生態】9本の尾を持つ幻の狐の末裔。目撃確率はメモモン中最低クラス。現れた日のタスク完了率が統計的に高いという報告がある。' },
+  { type: 'memomon', label: '🐕 しばいぬ',   rarity: 'super', stars: '★★★★',  color: '#e65100', monDefId: 'shibainu',    weight: 3, flavor: '【生態】メモの数に比例して元気になる珍しい性質を持つ。一日にTODO一覧の端から端まで何十往復もする。尻尾は常に高速回転中。' },
+  { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3, flavor: '【生態】青い三角帽子を絶対に脱がない。帽子の中に何が入っているかは未解明。使うマジックはすべてメモに関連しており、忘れていたタスクを突然思い出させることがある。' },
+  { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2, flavor: '【生態】本来の姿は伝説の大型龍とされるが、スマホに収まるよう自ら縮んでいる。炎は吐けないが、代わりに完了済みTODOを丁寧に整理してくれる。一度懐くと絶対的な忠誠を誓う。' },
+  { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -963,12 +964,12 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const capsuleBg   = revealed && singleResult ? (rarityBg[singleResult.rarity] || rarityBg.common) : 'linear-gradient(135deg, #ffd700 0%, #ff6b35 50%, #e91e63 100%)';
   const capsuleGlow = revealed && singleResult ? (rarityGlow[singleResult.rarity] || rarityGlow.common) : '0 0 30px rgba(255,215,0,0.5), 0 0 60px rgba(255,107,53,0.3)';
 
-  const singleDesc = singleResult
-    ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
-    : singleResult.type === 'memomon' ? `${singleResult.label} がメモ画面を歩き回り始めた！`
-    : `${singleResult.label} をゲット！設定に反映されました`
-    : '';
   const labelParts = singleResult ? singleResult.label.split(' ') : [];
+  const singleObtainedMsg = singleResult
+    ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
+    : singleResult.type === 'memomon' ? `${labelParts.slice(1).join(' ')} がメモ画面を歩き回り始めた！`
+    : `${labelParts.slice(1).join(' ')} をゲット！設定に反映されました`
+    : '';
   const modeCostLabel: Record<GachaMode, string> = {
     single:  `${GACHA_COST}コインで1回`,
     ten:     `${GACHA_COST_TEN}コインで10連`,
@@ -1047,7 +1048,10 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
               </div>
               <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
                 <div className="gacha-result-name">{labelParts.slice(1).join(' ') || singleResult?.label || ' '}</div>
-                <div className="gacha-result-desc">{singleDesc || ' '}</div>
+                <div className="gacha-result-desc">{singleObtainedMsg || ' '}</div>
+                {singleResult?.flavor && (
+                  <div className="gacha-flavor-box">{singleResult.flavor}</div>
+                )}
               </div>
             </>
           )}
