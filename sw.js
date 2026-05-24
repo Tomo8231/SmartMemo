@@ -1,4 +1,4 @@
-const CACHE = 'smartmemo-v49';
+const CACHE = 'smartmemo-v50';
 const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'];
 const KN_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`));
 const SL_SPRITES = MON_ANIMS.flatMap(a => Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`));

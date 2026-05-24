@@ -2569,7 +2569,9 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
   function confirmPending() {
     if (!pending) return;
     setSwooshing(true);
-    const total = pending.todos.length + pending.ideas.length;
+    const textSnapshot = text;
+    // Clear memo immediately so it persists to localStorage before tab may switch
+    setText(''); setImgPrev(null); setMemoAttachments([]);
     setTimeout(() => {
       const stamp = Date.now();
       const newTodos: Todo[] = pending.todos.flatMap(t => expandRecurringDraft(t, stamp));
@@ -2580,9 +2582,9 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         tags: i.tags,
         attachments: i.attachments,
       }));
-      onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: text.includes('coinzackzack') });
+      onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: textSnapshot.includes('coinzackzack') });
       showToast(`${newTodos.length + newIdeas.length}件を追加しました`);
-      setText(''); setImgPrev(null); setMemoAttachments([]); setPending(null); setSwooshing(false);
+      setPending(null); setSwooshing(false);
     }, 320);
   }
 
@@ -2618,7 +2620,16 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
             <button className="img-clear" onClick={() => setImgPrev(null)}>✕</button>
           </div>
         )}
-        <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e => setText(e.target.value)} />
+        <div className="memo-textarea-wrap">
+          <textarea className="memo-textarea" placeholder={"思いついたことを自由に入力\n例：来週月曜から水曜まで出張。にんじん・じゃがいも・玉ねぎを買う"} value={text} onChange={e => setText(e.target.value)} />
+          {text.trim() && (
+            <button
+              className="memo-clear-btn"
+              onClick={() => { setText(''); setImgPrev(null); setMemoAttachments([]); }}
+              title="メモをクリア"
+            >✕</button>
+          )}
+        </div>
         {memoAttLightbox && <AttachmentLightbox attachment={memoAttLightbox} onClose={() => setMemoAttLightbox(null)} />}
         {memoAttachments.length > 0 && (
           <div className="memo-att-list">
