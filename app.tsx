@@ -693,7 +693,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     id: 'kuroneko', name: 'クロネコ',
     pixels: [], palette: {},
     rarity: 'ultra',
-    desc: 'メモのすみっこに住む神出鬼没な黒猫。タップされると喜ぶが、しつこいと怒って逃げる。',
+    desc: '真夜中のメモ画面に突如現れる謎の黒猫。足音はなく、影すら落とさない。タップされると一瞬だけ目を細めるが、それ以上しつこくすると全力で逃げる。どこから来てどこへ去るのか、いまだ解明されていない。',
     monW: 56, monH: 60,
     spriteFacing: 'l',
     sprites: KN_SPRITES,
@@ -3519,6 +3519,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   const [keyVisible, setKeyVisible]     = useState(false);
   const [apiStatus, setApiStatus]       = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
   const [showMonSelector, setShowMonSelector] = useState(false);
+  const [monInfoId,       setMonInfoId]       = useState<string | null>(null);
   const [giftCode, setGiftCode]             = useState('');
   const [giftMsg, setGiftMsg]               = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
@@ -3914,13 +3915,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
                 return (
                   <div
                     key={m.uid}
-                    onClick={() => {
-                      const current = settings.hiddenMons || [];
-                      onChange('hiddenMons', hidden
-                        ? current.filter(id => id !== m.defId)
-                        : [...current, m.defId]
-                      );
-                    }}
+                    onClick={() => setMonInfoId(m.defId)}
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center',
                       gap: 8, padding: '16px 8px',
@@ -3953,6 +3948,44 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
           </div>
         </div>
       )}
+      {monInfoId && (() => {
+        const def = MEMOMON_DEFS.find(d => d.id === monInfoId);
+        const gachaItem = GACHA_ITEMS.find(g => g.type === 'memomon' && g.monDefId === monInfoId);
+        if (!def) return null;
+        const hidden = (settings.hiddenMons || []).includes(monInfoId);
+        const ecology = gachaItem?.flavor || def.desc;
+        const stars = gachaItem?.stars || (def.rarity === 'ultra' ? '★★★★★' : '★★★★');
+        const rarityColor = def.rarity === 'ultra' ? '#e040fb' : def.rarity === 'super' ? '#f9a825' : '#4caf50';
+        return (
+          <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}
+            onClick={() => setMonInfoId(null)}>
+            <div style={{ width:'100%', maxWidth:340, background:'var(--card-bg,#fff)', borderRadius:22, padding:'28px 20px 20px', boxShadow:'0 8px 32px rgba(0,0,0,0.18)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, marginBottom:16 }}>
+                <img src={MEMOMON_IMGS[def.id]} alt={def.name}
+                  style={{ width: def.monW * 2.2, height: def.monH * 2.2, imageRendering:'pixelated', marginBottom:4 }} />
+                <div style={{ fontWeight:700, fontSize:20 }}>{def.name}</div>
+                <div style={{ color: rarityColor, fontSize:16, letterSpacing:2 }}>{stars}</div>
+              </div>
+              <div style={{ fontSize:14, lineHeight:1.8, color:'var(--text-sub,#666)', background:'rgba(0,0,0,0.04)', borderRadius:14, padding:'14px 16px', marginBottom:18, whiteSpace:'pre-wrap' }}>
+                {ecology.replace(/^【生態】/, '').trim()}
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => {
+                  const current = settings.hiddenMons || [];
+                  onChange('hiddenMons', hidden ? current.filter(id => id !== monInfoId) : [...current, monInfoId]);
+                }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'2px solid var(--accent,#4f46e5)', color:'var(--accent,#4f46e5)', background:'transparent', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+                  {hidden ? '表示する' : '非表示にする'}
+                </button>
+                <button onClick={() => setMonInfoId(null)}
+                  style={{ flex:1, padding:'11px 0', borderRadius:12, background:'var(--accent,#4f46e5)', color:'#fff', border:'none', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="settings-section-title">プレゼントコード</div>
       <div className="settings-card">
