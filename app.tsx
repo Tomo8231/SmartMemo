@@ -15,6 +15,9 @@ type Todo = {
   done: boolean;
   addedAt?: number;
   coinReward?: number;
+  recurring?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
+  recurringDay?: number;
+  recurringGroupId?: string;
   attachments?: Attachment[];
 };
 type Idea = {
@@ -1112,7 +1115,11 @@ function nextWeekday(from: Date, target: number) {
 }
 function lastDayOfMonth(year: number, month1: number) { return new Date(year, month1, 0).getDate(); }
 
-function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
+function localDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function expandRecurringDraft(draft: TodoDraft, stamp: number, groupId?: string): Todo[] {
   if (!draft.recurring || !draft.startDate) {
     return [{
       id: stamp + Math.random(), title: draft.title,
@@ -1122,6 +1129,7 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
       attachments: draft.attachments?.length ? draft.attachments : undefined,
     }];
   }
+  const gid = groupId || `rg-${stamp}`;
   const start = new Date(draft.startDate + 'T00:00:00');
   const maxEnd = new Date(start);
   maxEnd.setMonth(maxEnd.getMonth() + 6);
@@ -1144,12 +1152,14 @@ function expandRecurringDraft(draft: TodoDraft, stamp: number): Todo[] {
   }
 
   while (cur <= end && todos.length < 500) {
-    const ds = cur.toISOString().slice(0, 10);
+    const ds = localDateStr(cur);
     todos.push({
       id: stamp + Math.random(), title: draft.title,
       startDate: ds, endDate: ds,
       time: draft.time, tags: draft.tags,
       done: false, addedAt: stamp, coinReward: draft.coinReward,
+      recurring: draft.recurring, recurringDay: draft.recurringDay,
+      recurringGroupId: gid,
       attachments: draft.attachments?.length ? draft.attachments : undefined,
     });
     if (draft.recurring === 'daily') cur.setDate(cur.getDate() + 1);
@@ -1869,10 +1879,11 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
+function EditModal({ todo, mode = 'edit', onSave, onSaveAll, onClose, customTags = [] }: {
   todo: Todo | (TodoDraft & { id: string });
   mode?: 'add' | 'edit';
   onSave: (t: any) => void;
+  onSaveAll?: (patch: { title: string; time: string; tags: string[]; coinReward?: number }, groupId: string) => void;
   onClose: () => void;
   customTags?: string[];
 }) {
@@ -1894,12 +1905,20 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
   const [recurringDay, setRecurringDay] = useState<number | undefined>((todo as any).recurringDay);
   const [attachments, setAttachments] = useState<Attachment[]>((todo as any).attachments || []);
   const [attToast,    setAttToast]    = useState('');
+  const [editScope,   setEditScope]   = useState<'single' | 'all'>('single');
   const DOW_LABELS = ['日','月','火','水','木','金','土'];
+  const hasGroup = mode === 'edit' && !!(todo as any).recurringGroupId;
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   function showAttToast(msg: string) { setAttToast(msg); setTimeout(() => setAttToast(''), 2500); }
   function handleSave() {
     if (!title.trim()) return;
+    const groupId = (todo as any).recurringGroupId;
+    if (editScope === 'all' && groupId && onSaveAll) {
+      onSaveAll({ title: title.trim(), time, tags, coinReward: (todo as any).coinReward }, groupId);
+      onClose();
+      return;
+    }
     onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined, attachments: attachments.length ? attachments : undefined });
     onClose();
   }
@@ -1979,9 +1998,18 @@ function EditModal({ todo, mode = 'edit', onSave, onClose, customTags = [] }: {
         </div>
         <AttachmentSection attachments={attachments} onChange={setAttachments} toast={showAttToast} />
         {attToast && <div className="modal-att-toast">{attToast}</div>}
+        {hasGroup && (
+          <div className="modal-field">
+            <label>編集範囲</label>
+            <div className="modal-tags">
+              <button className={`modal-tag${editScope === 'single' ? ' sel' : ''}`} onClick={() => setEditScope('single')}>この予定のみ</button>
+              <button className={`modal-tag${editScope === 'all' ? ' sel' : ''}`} onClick={() => setEditScope('all')}>シリーズ全体</button>
+            </div>
+          </div>
+        )}
         <div className="modal-actions">
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
-          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (recurring ? '展開して保存' : '保存')}</button>
+          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (editScope === 'all' ? '全て保存' : (recurring ? '展開して保存' : '保存'))}</button>
         </div>
       </div>
     </div>
@@ -3071,6 +3099,9 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         } else {
           onUpdate(t);
         }
+        setEditing(null);
+      }} onSaveAll={(patch, groupId) => {
+        todos.filter(t => t.recurringGroupId === groupId).forEach(t => onUpdate({ ...t, ...patch }));
         setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
