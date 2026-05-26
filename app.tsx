@@ -1584,6 +1584,11 @@ const IcoChevronUp = () => (
     <polyline points="18 15 12 9 6 15"/>
   </svg>
 );
+const IcoTrash = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+  </svg>
+);
 const IcoCalendar = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
     <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z"/>
@@ -1919,7 +1924,14 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
         <div className="modal-handle"/>
-        <div className="modal-title">{mode === 'add' ? 'タスクを追加' : 'タスクを編集'}</div>
+        <div className="modal-title-row">
+          <div className="modal-title">{mode === 'add' ? 'タスクを追加' : 'タスクを編集'}</div>
+          {onDelete && (
+            <button className="modal-title-delete" onClick={onDelete} aria-label="削除" title="削除">
+              <IcoTrash />
+            </button>
+          )}
+        </div>
 
         <div className="modal-field">
           <label>タイトル</label>
@@ -1991,7 +2003,6 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
         <AttachmentSection attachments={attachments} onChange={setAttachments} toast={showAttToast} />
         {attToast && <div className="modal-att-toast">{attToast}</div>}
         <div className="modal-actions">
-          {onDelete && <button className="modal-delete" onClick={onDelete}>削除</button>}
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
           <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (recurring ? '展開して保存' : '保存')}</button>
         </div>
@@ -3091,14 +3102,14 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             <div className="modal-title">編集方法を選択</div>
             <div style={{ display:'flex', flexDirection:'column', gap:10, padding:'8px 0 16px' }}>
               <button className="modal-save" onClick={() => { setEditing({ todo: editPicking, scope: 'single' }); setEditPicking(null); }}>この予定のみ編集</button>
-              <button className="modal-save" style={{ background:'var(--accent2,#7c6af5)' }} onClick={() => {
+              <button className="modal-save" onClick={() => {
                 const groupId = editPicking.recurringGroupId!;
                 const groupTodos = todos.filter(t => t.recurringGroupId === groupId);
                 const startDate = groupTodos.map(t => t.startDate).sort()[0] || editPicking.startDate;
                 const endDate = groupTodos.map(t => t.endDate).sort().reverse()[0] || editPicking.endDate;
                 setEditing({ todo: { ...editPicking, startDate, endDate }, scope: 'all' });
                 setEditPicking(null);
-              }}>シリーズ全体を編集</button>
+              }}>繰り返し全体を編集</button>
               <button className="modal-cancel" onClick={() => setEditPicking(null)}>キャンセル</button>
             </div>
           </div>

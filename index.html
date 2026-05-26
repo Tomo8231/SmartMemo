@@ -759,6 +759,17 @@
     @keyframes sheetUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
     .modal-handle { width:36px; height:4px; border-radius:2px; background:#d0d0cc; margin:0 auto 18px; }
     .modal-title { font-size:15px; font-weight:700; margin-bottom:16px; letter-spacing:-.3px; }
+    .modal-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .modal-title-row .modal-title { margin-bottom:16px; }
+    .modal-title-delete {
+      background:transparent; border:none; cursor:pointer;
+      padding:6px; border-radius:8px; color:#a0a09c;
+      display:flex; align-items:center; justify-content:center;
+      font-family:inherit; margin:-6px -6px 0 0;
+      transition:background .12s, color .12s;
+    }
+    .modal-title-delete:hover { background:#ffeae9; color:#ff4d4f; }
+    .modal-title-delete:active { background:#ffd6d4; }
     .modal-field { margin-bottom:12px; }
     .modal-field label { display:block; font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
     .modal-field input, .modal-field select {
@@ -1588,6 +1599,9 @@
     .app.dark .modal-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .modal-cancel { background:#1e1e21; border-color:#2e2e32; color:#f0f0ee; }
     .app.dark .modal-delete { background:#c0392b; }
+    .app.dark .modal-title-delete { color:#6a6a68; }
+    .app.dark .modal-title-delete:hover { background:rgba(255,77,79,.18); color:#ff6b6d; }
+    .app.dark .modal-title-delete:active { background:rgba(255,77,79,.28); }
     .app.dark .confirm-sheet { background:#1e1e21; }
     .app.dark .confirm-title { color:#f0f0ee; }
     .app.dark .confirm-sub { color:#6a6a68; }
