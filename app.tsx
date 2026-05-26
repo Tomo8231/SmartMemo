@@ -1879,11 +1879,11 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, mode = 'edit', onSave, onSaveAll, onClose, customTags = [] }: {
+function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags = [] }: {
   todo: Todo | (TodoDraft & { id: string });
   mode?: 'add' | 'edit';
   onSave: (t: any) => void;
-  onSaveAll?: (patch: { title: string; time: string; tags: string[]; coinReward?: number }, groupId: string) => void;
+  onDelete?: () => void;
   onClose: () => void;
   customTags?: string[];
 }) {
@@ -1905,20 +1905,12 @@ function EditModal({ todo, mode = 'edit', onSave, onSaveAll, onClose, customTags
   const [recurringDay, setRecurringDay] = useState<number | undefined>((todo as any).recurringDay);
   const [attachments, setAttachments] = useState<Attachment[]>((todo as any).attachments || []);
   const [attToast,    setAttToast]    = useState('');
-  const [editScope,   setEditScope]   = useState<'single' | 'all'>('single');
   const DOW_LABELS = ['日','月','火','水','木','金','土'];
-  const hasGroup = mode === 'edit' && !!(todo as any).recurringGroupId;
 
   const toggleTag = (t: string) => setTags(p => p.includes(t) ? p.filter(x => x !== t) : [...p, t]);
   function showAttToast(msg: string) { setAttToast(msg); setTimeout(() => setAttToast(''), 2500); }
   function handleSave() {
     if (!title.trim()) return;
-    const groupId = (todo as any).recurringGroupId;
-    if (editScope === 'all' && groupId && onSaveAll) {
-      onSaveAll({ title: title.trim(), time, tags, coinReward: (todo as any).coinReward }, groupId);
-      onClose();
-      return;
-    }
     onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined, attachments: attachments.length ? attachments : undefined });
     onClose();
   }
@@ -1998,18 +1990,10 @@ function EditModal({ todo, mode = 'edit', onSave, onSaveAll, onClose, customTags
         </div>
         <AttachmentSection attachments={attachments} onChange={setAttachments} toast={showAttToast} />
         {attToast && <div className="modal-att-toast">{attToast}</div>}
-        {hasGroup && (
-          <div className="modal-field">
-            <label>編集範囲</label>
-            <div className="modal-tags">
-              <button className={`modal-tag${editScope === 'single' ? ' sel' : ''}`} onClick={() => setEditScope('single')}>この予定のみ</button>
-              <button className={`modal-tag${editScope === 'all' ? ' sel' : ''}`} onClick={() => setEditScope('all')}>シリーズ全体</button>
-            </div>
-          </div>
-        )}
         <div className="modal-actions">
+          {onDelete && <button className="modal-delete" onClick={onDelete}>削除</button>}
           <button className="modal-cancel" onClick={onClose}>キャンセル</button>
-          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (editScope === 'all' ? '全て保存' : (recurring ? '展開して保存' : '保存'))}</button>
+          <button className="modal-save" onClick={handleSave}>{mode === 'add' ? (recurring ? '展開して追加' : '追加') : (recurring ? '展開して保存' : '保存')}</button>
         </div>
       </div>
     </div>
@@ -3050,7 +3034,8 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   onDeleteTodoSet: (id: string) => void;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
-  const [editing,      setEditing]    = useState<Todo | null>(null);
+  const [editPicking,  setEditPicking] = useState<Todo | null>(null);
+  const [editing,      setEditing]    = useState<{todo: Todo; scope: 'single' | 'all'} | null>(null);
   const [adding,       setAdding]     = useState(false);
   const [showTrash,    setShowTrash]  = useState(false);
   const [showCalendar, setShowCalendar] = useState(true);
@@ -3089,10 +3074,43 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
     });
   };
 
+  function handleEditStart(todo: Todo) {
+    if (todo.recurringGroupId) {
+      setEditPicking(todo);
+    } else {
+      setEditing({ todo, scope: 'single' });
+    }
+  }
+
   return (
     <div className="todo-tab">
-      {editing && <EditModal todo={editing} onSave={t => {
-        if (t.recurring) {
+      {editPicking && (
+        <div className="modal-backdrop" onClick={() => setEditPicking(null)}>
+          <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle"/>
+            <div className="modal-title">編集方法を選択</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10, padding:'8px 0 16px' }}>
+              <button className="modal-save" onClick={() => { setEditing({ todo: editPicking, scope: 'single' }); setEditPicking(null); }}>この予定のみ編集</button>
+              <button className="modal-save" style={{ background:'var(--accent2,#7c6af5)' }} onClick={() => {
+                const groupId = editPicking.recurringGroupId!;
+                const groupTodos = todos.filter(t => t.recurringGroupId === groupId);
+                const startDate = groupTodos.map(t => t.startDate).sort()[0] || editPicking.startDate;
+                const endDate = groupTodos.map(t => t.endDate).sort().reverse()[0] || editPicking.endDate;
+                setEditing({ todo: { ...editPicking, startDate, endDate }, scope: 'all' });
+                setEditPicking(null);
+              }}>シリーズ全体を編集</button>
+              <button className="modal-cancel" onClick={() => setEditPicking(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editing && <EditModal todo={editing.todo} onSave={t => {
+        if (editing.scope === 'all') {
+          const groupId = editing.todo.recurringGroupId!;
+          todos.filter(u => u.recurringGroupId === groupId).forEach(u => onDelete(u.id));
+          const stamp = Date.now();
+          expandRecurringDraft(t, stamp, groupId).forEach(onAdd);
+        } else if (t.recurring) {
           onDelete(t.id);
           const stamp = Date.now();
           expandRecurringDraft(t, stamp).forEach(onAdd);
@@ -3100,8 +3118,13 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           onUpdate(t);
         }
         setEditing(null);
-      }} onSaveAll={(patch, groupId) => {
-        todos.filter(t => t.recurringGroupId === groupId).forEach(t => onUpdate({ ...t, ...patch }));
+      }} onDelete={() => {
+        if (editing.scope === 'all' && editing.todo.recurringGroupId) {
+          const groupId = editing.todo.recurringGroupId;
+          todos.filter(t => t.recurringGroupId === groupId).forEach(t => onDelete(t.id));
+        } else {
+          onDelete(editing.todo.id);
+        }
         setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
@@ -3145,12 +3168,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="section-head-label">期限切れ</span>
               <span className="section-count">{overdueTodos.length}</span>
             </div>
-            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} overdue />)}
+            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} overdue />)}
             <div className="divider"/>
           </>}
           {sortedDateTodos.length === 0
             ? <div className="todo-empty">この日のタスクはありません</div>
-            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)
+            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)
           }
           {sortedUndated.length > 0 && <>
             <div className="divider"/>
@@ -3160,7 +3183,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
             </div>
             <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
-              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={setEditing} soundEnabled={soundEnabled} soundType={soundType} />)}
+              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)}
             </div>
           </>}
           <button className="todo-add-row" onClick={() => setAdding(true)}>
