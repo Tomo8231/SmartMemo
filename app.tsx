@@ -55,6 +55,9 @@ type Settings = {
   usedGiftCodes?: string[];
   notifAdvanceMin?: number;  // minutes before task time (0/15/30/60)
   notifDailyTime?: string;   // "HH:MM" for todos without a time
+  holidayWeekends?: boolean;
+  holidayJpHolidays?: boolean;
+  customHolidays?: string[];
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
@@ -551,6 +554,29 @@ const formatDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${p
 const todayStr = formatDate(today);
 const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const DOW = ['日','月','火','水','木','金','土'];
+const JP_HOLIDAYS = new Set([
+  // 2024
+  '2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23',
+  '2024-03-20','2024-04-29','2024-05-03','2024-05-04','2024-05-05','2024-05-06',
+  '2024-07-15','2024-08-11','2024-08-12','2024-09-16','2024-09-22','2024-09-23',
+  '2024-10-14','2024-11-03','2024-11-04','2024-11-23',
+  // 2025
+  '2025-01-01','2025-01-13','2025-02-11','2025-02-23','2025-02-24',
+  '2025-03-20','2025-04-29','2025-05-03','2025-05-04','2025-05-05','2025-05-06',
+  '2025-07-21','2025-08-11','2025-09-15','2025-09-23',
+  '2025-10-13','2025-11-03','2025-11-23','2025-11-24',
+  // 2026
+  '2026-01-01','2026-01-12','2026-02-11','2026-02-23',
+  '2026-03-20','2026-04-29','2026-05-03','2026-05-04','2026-05-05','2026-05-06',
+  '2026-07-20','2026-08-11','2026-09-21','2026-09-23',
+  '2026-10-12','2026-11-03','2026-11-23',
+  // 2027
+  '2027-01-01','2027-01-11','2027-02-11','2027-02-23',
+  '2027-03-21','2027-03-22','2027-04-29','2027-05-03','2027-05-04','2027-05-05',
+  '2027-07-19','2027-08-11','2027-09-20','2027-09-23',
+  '2027-10-11','2027-11-03','2027-11-23',
+]);
+type HolidayConfig = { weekends: boolean; jpHolidays: boolean; custom: string[] };
 const BUILTIN_TODO_TAGS = ['買い物','仕事','家事','健康','勉強','その他'];
 const BUILTIN_IDEA_TAGS = ['アイデア','買い物','仕事','家事','健康','勉強','その他'];
 const IDEA_TAG = 'アイデア';
@@ -1658,7 +1684,7 @@ function BossItem({ boss, onComplete, onDismiss }: {
 // ─────────────────────────────────────────────────────────────
 // Calendar
 // ─────────────────────────────────────────────────────────────
-function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week'; onModeChange?: (m: 'month' | 'week') => void }) {
+function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange, holidayConfig }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week'; onModeChange?: (m: 'month' | 'week') => void; holidayConfig?: HolidayConfig }) {
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
   const [direction, setDirection] = useState<'prev' | 'next' | null>(null);
@@ -1775,7 +1801,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
         </div>
         <button className="cal-today-btn" onClick={() => { setVy(today.getFullYear()); setVm(today.getMonth()); onSelect(todayStr); }}>今日</button>
       </div>
-      <div className="cal-dow">{DOW.map(d => <div key={d} className="cal-dow-cell">{d}</div>)}</div>
+      <div className="cal-dow">{DOW.map((d, i) => <div key={d} className={`cal-dow-cell${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}`}>{d}</div>)}</div>
       <div className={`cal-grid-rows${direction ? ` cal-slide-${direction}` : ''}${entering ? ` cal-enter-${entering}` : ''}`}>
         {((): React.ReactElement[] => {
           const MAX_LANES = 3;
@@ -1836,9 +1862,16 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange 
                 <div className="cal-week-cells">
                   {row.map((c, ci) => {
                     const ds = formatDate(c.date), isTd = ds === todayStr, isSel = ds === selectedDate;
+                    const dow = c.date.getDay();
+                    const isHol = !!holidayConfig && (
+                      holidayConfig.custom.includes(ds) ||
+                      (holidayConfig.weekends && dow === 0) ||
+                      (holidayConfig.jpHolidays && JP_HOLIDAYS.has(ds))
+                    );
+                    const isSat = !!holidayConfig?.weekends && dow === 6;
                     return (
                       <div key={ci}
-                        className={`cal-cell${!c.cur ? ' other-month' : ''}${isTd && !isSel ? ' today' : ''}${isSel ? ' selected' : ''}`}
+                        className={`cal-cell${!c.cur ? ' other-month' : ''}${isTd && !isSel ? ' today' : ''}${isSel ? ' selected' : ''}${isHol ? ' holiday' : isSat ? ' sat' : ''}`}
                         onClick={() => onSelect(ds)}
                       >
                         <span className="cal-num">{c.date.getDate()}</span>
@@ -3024,7 +3057,7 @@ function TodoSetListModal({ sets, allTodos, onApply, onSave, onDelete, onClose, 
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet }: {
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -3043,6 +3076,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   todoSets: TodoSet[];
   onSaveTodoSet: (s: TodoSet) => void;
   onDeleteTodoSet: (id: string) => void;
+  holidayConfig?: HolidayConfig;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editPicking,  setEditPicking] = useState<Todo | null>(null);
@@ -3168,7 +3202,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           </button>
         </div>
         <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
-          <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} />
+          <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} holidayConfig={holidayConfig} />
         </div>
       </div>
       <div className="todo-pane-right">
@@ -3529,8 +3563,9 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   const [keyInput, setKeyInput]         = useState(geminiApiKey || '');
   const [keyVisible, setKeyVisible]     = useState(false);
   const [apiStatus, setApiStatus]       = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
-  const [showMonSelector, setShowMonSelector] = useState(false);
-  const [monInfoId,       setMonInfoId]       = useState<string | null>(null);
+  const [showMonSelector,  setShowMonSelector]  = useState(false);
+  const [monInfoId,        setMonInfoId]        = useState<string | null>(null);
+  const [newHolidayDate,   setNewHolidayDate]   = useState('');
   const [giftCode, setGiftCode]             = useState('');
   const [giftMsg, setGiftMsg]               = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
@@ -3648,6 +3683,55 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="settings-section-title">カレンダー・休日</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">土日を休日にする</div>
+            <div className="settings-row-sub">カレンダーで土曜・日曜を色付け</div>
+          </div>
+          <button className={`toggle${settings.holidayWeekends !== false ? ' on' : ' off'}`}
+            onClick={() => onChange('holidayWeekends', settings.holidayWeekends === false ? true : false)} />
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">日本の祝日を休日にする</div>
+            <div className="settings-row-sub">2024〜2027年の祝日に対応</div>
+          </div>
+          <button className={`toggle${settings.holidayJpHolidays !== false ? ' on' : ' off'}`}
+            onClick={() => onChange('holidayJpHolidays', settings.holidayJpHolidays === false ? true : false)} />
+        </div>
+        <div className="settings-row-label" style={{ padding: '4px 0 8px', marginTop: 4 }}>追加の休日</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <input
+            type="date"
+            value={newHolidayDate}
+            onChange={e => setNewHolidayDate(e.target.value)}
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e0e0de', fontSize: 14, fontFamily: 'inherit' }}
+          />
+          <button
+            onClick={() => {
+              if (!newHolidayDate) return;
+              const cur = settings.customHolidays || [];
+              if (!cur.includes(newHolidayDate)) onChange('customHolidays', [...cur, newHolidayDate].sort());
+              setNewHolidayDate('');
+            }}
+            style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+          >追加</button>
+        </div>
+        {(settings.customHolidays || []).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {(settings.customHolidays || []).map(d => (
+              <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fde8e8', color: '#c62828', fontSize: 13 }}>
+                {d}
+                <button onClick={() => onChange('customHolidays', (settings.customHolidays || []).filter(x => x !== d))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {settings.infiniteCoinsUnlocked && <>
@@ -4766,7 +4850,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
       </div>
