@@ -404,7 +404,7 @@
     .memo-actions {
       padding:8px 12px 10px; border-top:1px solid #f0f0ee; display:flex; gap:6px; flex-shrink:0;
     }
-    .reflect-actions { padding:10px 16px 28px; flex-shrink:0; }
+    .reflect-actions { padding:10px 16px 28px; flex-shrink:0; display:flex; gap:10px; }
     .memo-history-sheet {
       background:#fafaf9; border-radius:18px 18px 0 0;
       width:100%; max-height:75vh;
@@ -470,7 +470,7 @@
     }
 
     .reflect-btn {
-      width:100%; padding:15px; border:none; border-radius:12px;
+      flex:1; padding:15px; border:none; border-radius:12px;
       background:var(--accent); color:var(--accent-text);
       font-size:var(--fs-base); font-weight:600; letter-spacing:-0.2px;
       cursor:pointer; font-family:inherit;
@@ -490,6 +490,7 @@
       pointer-events:none;
     }
     .reflect-btn:hover::after { left:120%; }
+    .reflect-btn-idea { background:#7c6af5; }
 
     .hint-card { background:#fff; border:1px solid #ebebea; border-radius:12px; padding:12px 14px; }
     .hint-title { font-size:var(--fs-xs); font-weight:600; color:#4a4a48; margin-bottom:6px; }
