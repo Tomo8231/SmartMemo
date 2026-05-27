@@ -30,6 +30,7 @@ type Idea = {
   updatedAt?: string;
   addedAt?: number;
   subTab?: string;
+  coinReward?: number;
   attachments?: Attachment[];
 };
 type Settings = {
@@ -58,6 +59,7 @@ type Settings = {
   holidayWeekends?: boolean;
   holidayJpHolidays?: boolean;
   customHolidays?: string[];
+  splitReflectButtons?: boolean;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
@@ -89,6 +91,7 @@ type IdeaDraft = {
   details: string[];
   tags: string[];
   subTab?: string;
+  coinReward?: number;
   attachments?: Attachment[];
 };
 type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
@@ -1333,6 +1336,21 @@ function estimateCoinReward(title: string, tags: string[]): number {
   return Math.round(score / 10) * 10;
 }
 
+function estimateIdeaCoinReward(summary: string, details: string[], tags: string[]): number {
+  let score = 20;
+  if (summary.length > 30) score += 20;
+  else if (summary.length > 15) score += 10;
+  if (details.length >= 5) score += 40;
+  else if (details.length >= 3) score += 20;
+  else if (details.length >= 1) score += 10;
+  if (tags.includes('仕事')) score += 40;
+  else if (tags.includes('勉強')) score += 30;
+  if (/企画|設計|戦略|プロジェクト|計画|開発|実装|分析|調査|研究/.test(summary)) score += 50;
+  else if (/アイデア|構想|案|提案|改善/.test(summary)) score += 20;
+  score = Math.max(10, Math.min(200, score));
+  return Math.round(score / 10) * 10;
+}
+
 function extractTodosFromLine(line: string): TodoDraft[] {
   const dates = parseRelative(line);
   const time = parseTime(line);
@@ -1496,7 +1514,9 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `3. 時間は HH:MM か ""\n` +
     `4. TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」タグは使わない）\n` +
     `   ナレッジのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
-    `5. coinReward（TODOのみ）: 難易度・手間・所要時間で10〜200の整数（10の倍数）\n` +
+    `5. coinReward（TODO・ナレッジ共通）: 10〜200の整数（10の倍数）\n` +
+    `   TODO: 難易度・手間・所要時間で設定\n` +
+    `   ナレッジ: 内容の深さ・独自性・有用性で設定\n` +
     `   10〜30=数分の簡単タスク、40〜80=30分〜1時間、90〜150=複雑な作業、160〜200=大型タスク\n` +
     `6. ナレッジは projectName で分類。既存プロジェクトと類似なら必ずその名前を使用\n` +
     `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
@@ -1513,7 +1533,7 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `   - daily: recurringDay不要\n` +
     `   startDate=本日（または指定の開始日）、endDate=6ヶ月後（または指定の終了日）\n\n` +
     `形式（JSONのみ、コードブロック不要）:\n` +
-    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[]}]}\n\n` +
+    `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[],"coinReward":20}]}\n\n` +
     `メモ:\n${text}`;
 
   const tryParseJson = (res: string): ParseResult | null => {
@@ -2356,12 +2376,13 @@ function formatHistoryDate(ts: number): string {
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], micTrigger = 0, onCommit }: {
+function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], micTrigger = 0, splitReflectButtons = true, onCommit }: {
   existingProjects: string[];
   customTags: string[];
   geminiApiKey: string;
   ideaTabs?: string[];
   micTrigger?: number;
+  splitReflectButtons?: boolean;
   onCommit: (p: { todos: Todo[]; ideas: IdeaDraft[]; unlockCoins?: boolean }) => void;
 }) {
   const [text,        setText]        = usePersistedState<string>('smartmemo:memo:draft', '');
@@ -2651,6 +2672,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         details: i.details,
         tags: i.tags,
         attachments: i.attachments,
+        coinReward: i.coinReward,
       }));
       onCommit({ todos: newTodos, ideas: newIdeas, unlockCoins: textSnapshot.includes('coinzackzack') });
       showToast(`${newTodos.length + newIdeas.length}件を追加しました`);
@@ -2774,22 +2796,38 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       </div>
 
       <div className="reflect-actions">
-        {(['todo', 'idea'] as const).map(mode => (
-          <button
-            key={mode}
-            className={`reflect-btn${mode === 'idea' ? ' reflect-btn-idea' : ''}`}
-            onClick={(e) => {
-              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              const parent = (e.currentTarget.closest('.memo-tab') as HTMLElement | null)?.getBoundingClientRect();
-              const x = r.left + r.width / 2 - (parent?.left || 0);
-              const y = r.top  + r.height / 2 - (parent?.top  || 0);
-              reflect(x, y, mode);
-            }}
-            disabled={loading}
-          >
-            <IcoSparkle /> {mode === 'todo' ? 'TODOに反映' : 'ナレッジに反映'}
-          </button>
-        ))}
+        {splitReflectButtons
+          ? (['todo', 'idea'] as const).map(mode => (
+              <button
+                key={mode}
+                className={`reflect-btn${mode === 'idea' ? ' reflect-btn-idea' : ''}`}
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const parent = (e.currentTarget.closest('.memo-tab') as HTMLElement | null)?.getBoundingClientRect();
+                  const x = r.left + r.width / 2 - (parent?.left || 0);
+                  const y = r.top  + r.height / 2 - (parent?.top  || 0);
+                  reflect(x, y, mode);
+                }}
+                disabled={loading}
+              >
+                <IcoSparkle /> {mode === 'todo' ? 'TODOに反映' : 'ナレッジに反映'}
+              </button>
+            ))
+          : (
+              <button
+                className="reflect-btn"
+                onClick={(e) => {
+                  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  const parent = (e.currentTarget.closest('.memo-tab') as HTMLElement | null)?.getBoundingClientRect();
+                  const x = r.left + r.width / 2 - (parent?.left || 0);
+                  const y = r.top  + r.height / 2 - (parent?.top  || 0);
+                  reflect(x, y, 'both');
+                }}
+                disabled={loading}
+              >
+                <IcoSparkle /> AI で TODO・ナレッジに反映
+              </button>
+            )}
       </div>
       {showHistory && (
         <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
@@ -3182,11 +3220,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
-        if (t.recurring) {
+        const tWithCoin = { ...t, coinReward: t.coinReward ?? estimateCoinReward(t.title, t.tags) };
+        if (tWithCoin.recurring) {
           const stamp = Date.now();
-          expandRecurringDraft(t, stamp).forEach(onAdd);
+          expandRecurringDraft(tWithCoin, stamp).forEach(onAdd);
         } else {
-          onAdd(t);
+          onAdd(tWithCoin);
         }
         setAdding(false);
       }} onClose={() => setAdding(false)} customTags={customTags} />}
@@ -3536,7 +3575,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
           mode="add"
           idea={{ id: Date.now(), projectName: '', summary: '', details: [], tags: [], subTab: activeSubTab === 'all' ? undefined : activeSubTab, addedAt: Date.now(), updatedAt: todayStr } as Idea}
           projects={projectNames}
-          onSave={i => { onAdd(i); setAddingIdea(false); }}
+          onSave={i => { onAdd({ ...i, coinReward: i.coinReward ?? estimateIdeaCoinReward(i.summary, i.details || [], i.tags || []) }); setAddingIdea(false); }}
           onClose={() => setAddingIdea(false)}
           customTags={customTags}
           ideaTabs={ideaTabs}
@@ -3923,6 +3962,13 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
             <div className="settings-row-sub">「来週」などの相対日付を解析</div>
           </div>
           <button className={`toggle${autoDate ? ' on' : ' off'}`} onClick={() => onChange('autoDate', !autoDate)} />
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">反映ボタンを分ける</div>
+            <div className="settings-row-sub">「TODOに反映」「ナレッジに反映」を個別ボタンで表示</div>
+          </div>
+          <button className={`toggle${settings.splitReflectButtons !== false ? ' on' : ' off'}`} onClick={() => onChange('splitReflectButtons', settings.splitReflectButtons === false)} />
         </div>
       </div>
 
@@ -4785,6 +4831,10 @@ function SmartMemoApp() {
     }
     if (newIdeas.length) {
       setIdeas(prev => mergeIdeas(prev, newIdeas));
+      if (!settings.infiniteCoins) {
+        const ideaCoins = newIdeas.reduce((sum, i) => sum + (i.coinReward ?? 0), 0);
+        if (ideaCoins > 0) setSettings(p => ({ ...p, coins: (p.coins || 0) + ideaCoins }));
+      }
     }
     const targets: Tab[] = [];
     if (newTodos.length) targets.push('todo');
@@ -4836,7 +4886,12 @@ function SmartMemoApp() {
   const addTodo    = (item: Todo)          => setTodos(p => [...p, item]);
   const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
   const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
-  const addIdea    = (item: Idea)          => setIdeas(p => [...p, item]);
+  const addIdea    = (item: Idea) => {
+    if (!settings.infiniteCoins && (item.coinReward ?? 0) > 0) {
+      setSettings(p => ({ ...p, coins: (p.coins || 0) + (item.coinReward ?? 0) }));
+    }
+    setIdeas(p => [...p, item]);
+  };
   const setSetting = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings(p => ({ ...p, [k]: v }));
   const saveTodoSet    = (s: TodoSet) => setTodoSets(p => { const i = p.findIndex(x => x.id === s.id); return i >= 0 ? p.map(x => x.id === s.id ? s : x) : [...p, s]; });
   const deleteTodoSet  = (id: string) => setTodoSets(p => p.filter(x => x.id !== id));
@@ -4860,7 +4915,7 @@ function SmartMemoApp() {
         <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
       </div>
       <div className="tab-content">
-        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} onCommit={commit} />}
+        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
