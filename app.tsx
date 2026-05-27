@@ -3703,35 +3703,37 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
           <button className={`toggle${settings.holidayJpHolidays !== false ? ' on' : ' off'}`}
             onClick={() => onChange('holidayJpHolidays', settings.holidayJpHolidays === false ? true : false)} />
         </div>
-        <div className="settings-row-label" style={{ padding: '4px 0 8px', marginTop: 4 }}>追加の休日</div>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-          <input
-            type="date"
-            value={newHolidayDate}
-            onChange={e => setNewHolidayDate(e.target.value)}
-            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e0e0de', fontSize: 14, fontFamily: 'inherit' }}
-          />
-          <button
-            onClick={() => {
-              if (!newHolidayDate) return;
-              const cur = settings.customHolidays || [];
-              if (!cur.includes(newHolidayDate)) onChange('customHolidays', [...cur, newHolidayDate].sort());
-              setNewHolidayDate('');
-            }}
-            style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-          >追加</button>
-        </div>
-        {(settings.customHolidays || []).length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {(settings.customHolidays || []).map(d => (
-              <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fde8e8', color: '#c62828', fontSize: 13 }}>
-                {d}
-                <button onClick={() => onChange('customHolidays', (settings.customHolidays || []).filter(x => x !== d))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
-              </span>
-            ))}
+        <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+          <div className="settings-row-label">追加の休日</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="date"
+              value={newHolidayDate}
+              onChange={e => setNewHolidayDate(e.target.value)}
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e0e0de', fontSize: 14, fontFamily: 'inherit', background: 'var(--card-bg,#fff)', color: 'inherit' }}
+            />
+            <button
+              onClick={() => {
+                if (!newHolidayDate) return;
+                const cur = settings.customHolidays || [];
+                if (!cur.includes(newHolidayDate)) onChange('customHolidays', [...cur, newHolidayDate].sort());
+                setNewHolidayDate('');
+              }}
+              style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+            >追加</button>
           </div>
-        )}
+          {(settings.customHolidays || []).length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {(settings.customHolidays || []).map(d => (
+                <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fde8e8', color: '#c62828', fontSize: 13 }}>
+                  {d}
+                  <button onClick={() => onChange('customHolidays', (settings.customHolidays || []).filter(x => x !== d))}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {settings.infiniteCoinsUnlocked && <>
