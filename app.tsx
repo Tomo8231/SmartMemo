@@ -1468,9 +1468,15 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
   return result;
 }
 
-async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = ''): Promise<ParseResult> {
+async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = '', mode: 'todo' | 'idea' | 'both' = 'both'): Promise<ParseResult> {
+  const modeInstruction =
+    mode === 'todo'
+      ? `あなたはメモをTODOに変換するアシスタントです。以下のメモをTODOのみに変換し、ideas は必ず空配列で返してください。\n\n`
+      : mode === 'idea'
+      ? `あなたはメモをナレッジ（アイデア・情報）に変換するアシスタントです。以下のメモをナレッジのみに変換し、todos は必ず空配列で返してください。\n\n`
+      : `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「ナレッジ」に分類し、JSONのみを返してください。\n\n`;
   const prompt =
-    `あなたはメモを解析するアシスタントです。以下のメモを「TODO」と「ナレッジ」に分類し、JSONのみを返してください。\n\n` +
+    modeInstruction +
     `【TODO vs ナレッジ 判定ルール】\n` +
     `TODO（以下のいずれかに該当すれば必ずTODO）:\n` +
     `  - 行動動詞がある（買う・連絡する・送る・提出する・行く・やる・確認する 等）\n` +
@@ -2578,13 +2584,13 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
     e.target.value = '';
   }
 
-  async function reflect(originX: number, originY: number) {
+  async function reflect(originX: number, originY: number, mode: 'todo' | 'idea' | 'both' = 'both') {
     if (!text.trim()) { showToast('メモを入力してください'); return; }
     setMemoHistory(h => [{ id: Date.now(), text: text.trim(), savedAt: Date.now(), attachments: memoAttachments.length ? memoAttachments : undefined }, ...h].slice(0, 100));
     setLoading(true);
-    setLMsg('AI で TODO とナレッジに自動分類中');
+    setLMsg(mode === 'todo' ? 'AI で TODO に変換中' : mode === 'idea' ? 'AI でナレッジに変換中' : 'AI で TODO とナレッジに自動分類中');
     try {
-      const result = await parseMemoToItems(text, existingProjects, geminiApiKey);
+      const result = await parseMemoToItems(text, existingProjects, geminiApiKey, mode);
       const todos = result.todos || [];
       const ideas = result.ideas || [];
 
@@ -2768,19 +2774,22 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       </div>
 
       <div className="reflect-actions">
-        <button
-          className="reflect-btn"
-          onClick={(e) => {
-            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const parent = (e.currentTarget.closest('.memo-tab') as HTMLElement | null)?.getBoundingClientRect();
-            const x = r.left + r.width / 2 - (parent?.left || 0);
-            const y = r.top  + r.height / 2 - (parent?.top  || 0);
-            reflect(x, y);
-          }}
-          disabled={loading}
-        >
-          <IcoSparkle /> AI で TODO・ナレッジに反映
-        </button>
+        {(['todo', 'idea'] as const).map(mode => (
+          <button
+            key={mode}
+            className={`reflect-btn${mode === 'idea' ? ' reflect-btn-idea' : ''}`}
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              const parent = (e.currentTarget.closest('.memo-tab') as HTMLElement | null)?.getBoundingClientRect();
+              const x = r.left + r.width / 2 - (parent?.left || 0);
+              const y = r.top  + r.height / 2 - (parent?.top  || 0);
+              reflect(x, y, mode);
+            }}
+            disabled={loading}
+          >
+            <IcoSparkle /> {mode === 'todo' ? 'TODOに反映' : 'ナレッジに反映'}
+          </button>
+        ))}
       </div>
       {showHistory && (
         <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
