@@ -84,6 +84,7 @@ type TodoDraft = {
   attachments?: Attachment[];
 };
 type TrashedTodo = Todo & { trashedAt: number };
+type TrashedIdea = Idea & { trashedAt: number };
 type IdeaDraft = {
   id?: number | string;
   projectName: string;
@@ -111,7 +112,8 @@ const { useState, useRef, useEffect } = React;
 const LS_TODOS    = 'smartmemo:todos';
 const LS_IDEAS    = 'smartmemo:ideas';
 const LS_SETTINGS = 'smartmemo:settings';
-const LS_TRASH    = 'smartmemo:trash';
+const LS_TRASH      = 'smartmemo:trash';
+const LS_IDEA_TRASH = 'smartmemo:idea-trash';
 const LS_TODO_SETS = 'smartmemo:todosets';
 
 function loadStored<T>(key: string, fallback: T): T {
@@ -2903,6 +2905,45 @@ function TrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
   );
 }
 
+function IdeaTrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
+  trash: TrashedIdea[];
+  onRestore: (id: number | string) => void;
+  onDelete: (id: number | string) => void;
+  onEmpty: () => void;
+  onClose: () => void;
+}) {
+  function formatTrashedDate(ts: number) {
+    const d = new Date(ts);
+    return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
+  }
+  return (
+    <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="memo-history-sheet">
+        <div className="modal-handle"/>
+        <div className="memo-history-header">
+          <span className="modal-title" style={{ marginBottom: 0 }}>🗑 ナレッジのゴミ箱</span>
+          {trash.length > 0 && <button className="memo-history-clear" onClick={onEmpty}>全削除</button>}
+        </div>
+        {trash.length === 0
+          ? <div className="memo-history-empty">ゴミ箱は空です</div>
+          : <div className="memo-history-list">
+              {trash.map(i => (
+                <div key={i.id} className="trash-item">
+                  <div className="trash-item-info" onClick={() => { onRestore(i.id); onClose(); }}>
+                    <div className="trash-item-title">{i.projectName}{i.summary ? ` — ${i.summary}` : ''}</div>
+                    <div className="memo-history-date">{formatTrashedDate(i.trashedAt)}</div>
+                  </div>
+                  <button className="trash-restore-btn" onClick={() => { onRestore(i.id); onClose(); }}>元に戻す</button>
+                  <button className="memo-history-del" onClick={() => onDelete(i.id)}>✕</button>
+                </div>
+              ))}
+            </div>
+        }
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────
 // TodoSet Modals
 // ─────────────────────────────────────────────────────────────
@@ -3320,7 +3361,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs, ideaTrash = [], onIdeaTrashRestore, onIdeaTrashDelete, onIdeaTrashEmpty }: {
   ideas: Idea[];
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
@@ -3329,9 +3370,14 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
   customTags: string[];
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
+  ideaTrash?: TrashedIdea[];
+  onIdeaTrashRestore?: (id: number | string) => void;
+  onIdeaTrashDelete?: (id: number | string) => void;
+  onIdeaTrashEmpty?: () => void;
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
+  const [showIdeaTrash,  setShowIdeaTrash]  = useState(false);
   const [activeSubTab,   setActiveSubTab]   = usePersistedState<string>('smartmemo:ui:subTab', 'all');
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
@@ -3588,10 +3634,24 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
           ? <div className="ideas-empty">まだナレッジがありません</div>
           : ideaCards
         }
-        <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
-          ＋ 新しいナレッジを追加
-        </button>
+        <div className="ideas-bottom-row">
+          <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
+            ＋ 新しいナレッジを追加
+          </button>
+          <button className="trash-open-btn" onClick={() => setShowIdeaTrash(true)}>
+            🗑 ゴミ箱{ideaTrash.length > 0 && <span className="trash-count">{ideaTrash.length}</span>}
+          </button>
+        </div>
       </div>
+      {showIdeaTrash && (
+        <IdeaTrashModal
+          trash={ideaTrash}
+          onRestore={id => { onIdeaTrashRestore?.(id); }}
+          onDelete={id => { onIdeaTrashDelete?.(id); }}
+          onEmpty={() => { onIdeaTrashEmpty?.(); }}
+          onClose={() => setShowIdeaTrash(false)}
+        />
+      )}
     </div>
   );
 }
@@ -4885,7 +4945,19 @@ function SmartMemoApp() {
   const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? item : t));
   const addTodo    = (item: Todo)          => setTodos(p => [...p, item]);
   const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
-  const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
+  const [ideaTrash, setIdeaTrash] = usePersistedState<TrashedIdea[]>(LS_IDEA_TRASH, []);
+  const removeIdea = (id: number | string) => {
+    const item = ideas.find(i => i.id === id);
+    if (item) setIdeaTrash(p => [{ ...item, trashedAt: Date.now() }, ...p].slice(0, 200));
+    setIdeas(p => p.filter(i => i.id !== id));
+  };
+  const ideaTrashRestore = (id: number | string) => {
+    const item = ideaTrash.find(x => x.id === id);
+    if (item) { const { trashedAt, ...i } = item; setIdeas(p => [...p, i as Idea]); }
+    setIdeaTrash(p => p.filter(x => x.id !== id));
+  };
+  const ideaTrashDelete = (id: number | string) => setIdeaTrash(p => p.filter(x => x.id !== id));
+  const ideaTrashEmpty  = () => setIdeaTrash([]);
   const addIdea    = (item: Idea) => {
     if (!settings.infiniteCoins && (item.coinReward ?? 0) > 0) {
       setSettings(p => ({ ...p, coins: (p.coins || 0) + (item.coinReward ?? 0) }));
@@ -4917,7 +4989,7 @@ function SmartMemoApp() {
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} ideaTrash={ideaTrash} onIdeaTrashRestore={ideaTrashRestore} onIdeaTrashDelete={ideaTrashDelete} onIdeaTrashEmpty={ideaTrashEmpty} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
       </div>
       <div className="bottom-nav-wrapper">
