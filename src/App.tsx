@@ -1,6 +1,4 @@
-// React / ReactDOM are loaded via UMD <script> tags in index.html.
-declare const React: any;
-declare const ReactDOM: any;
+import React, { useState, useRef, useEffect } from 'react';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -103,14 +101,12 @@ type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?
 type TodoSetItem = { title: string; tags: string[]; coinReward?: number; };
 type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: number; };
 
-const { useState, useRef, useEffect } = React;
-
 // ─────────────────────────────────────────────────────────────
 // App version — bump on every change (see CLAUDE.md versioning rule)
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
-//   sw.js の CACHE バージョンも合わせて上げること
+//   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4763,7 +4759,7 @@ async function showSWNotification(title: string, body: string, tag: string) {
   try {
     if (navigator.serviceWorker) {
       const reg = await navigator.serviceWorker.ready;
-      await reg.showNotification(title, { body, icon: './icon.svg', badge: './icon.svg', tag, vibrate: [200, 100, 200] });
+      await reg.showNotification(title, { body, icon: './icon.svg', badge: './icon.svg', tag, vibrate: [200, 100, 200] } as NotificationOptions);
       return;
     }
   } catch {}
@@ -5123,4 +5119,4 @@ function SmartMemoApp() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<SmartMemoApp />);
+export default SmartMemoApp;
