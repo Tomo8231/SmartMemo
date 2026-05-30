@@ -32,7 +32,19 @@
 
 上げる箇所（両方を同時に更新する）:
 
-1. [app.tsx](app.tsx) の `APP_VERSION` 定数（アプリ情報に表示される正式バージョン）
-2. [sw.js](sw.js) の `CACHE`（`smartmemo-vNN` の連番。キャッシュ無効化のため改修ごとに +1）
+1. [src/App.tsx](src/App.tsx) の `APP_VERSION` 定数（アプリ情報に表示される正式バージョン）
+2. [package.json](package.json) の `version` フィールド
+
+> Service Worker のキャッシュ無効化は `vite-plugin-pwa` がビルドごとに自動で行うため、手動更新は不要。
 
 PR を出す前に、その改修内容に応じて上記を更新したか確認すること。
+
+## 開発・ビルド
+
+- 依存インストール: `npm install`
+- 開発サーバ: `npm run dev`（スマホ実機確認は `npm run dev -- --host`）
+- 本番ビルド: `npm run build`（`tsc --noEmit` 型チェック込み）
+- ビルド結果のプレビュー: `npm run preview`
+- Lint: `npm run lint`
+- main への push で GitHub Actions が自動ビルドして GitHub Pages にデプロイする
+  （[.github/workflows/deploy.yml](.github/workflows/deploy.yml)、base は `/SmartMemo/`）

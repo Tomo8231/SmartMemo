@@ -33,12 +33,12 @@
 
 | 項目 | 内容 |
 |------|------|
-| フロントエンド | React 18.3.1 (UMD) + TypeScript (Babel standalone) |
-| ビルドシステム | なし（ブラウザで直接トランスパイル） |
-| スタイル | `index.html` 内インライン CSS |
+| フロントエンド | React 18.3.1 + TypeScript |
+| ビルドシステム | Vite（開発: HMR / 本番: production ビルド） |
+| スタイル | `src/index.css`（外部 CSS） |
 | データ保存 | localStorage |
 | AI 連携 | Gemini 2.5 Flash API（任意）/ Claude API（任意）|
-| PWA | Service Worker（`sw.js`）、stale-while-revalidate |
+| PWA | vite-plugin-pwa（Workbox / 自動生成 Service Worker） |
 | 音声 | Web Audio API（全サウンドをプログラム生成）|
 | 音声入力 | Speech Recognition API / Gemini Audio |
 | 画像認識 | Gemini Vision API / Claude Vision |
