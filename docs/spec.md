@@ -570,20 +570,20 @@ Web Audio API でプログラム生成（音声ファイル不使用）。
 
 ## 14. PWA・データ永続化
 
-### Service Worker（`sw.js`）
+### Service Worker（vite-plugin-pwa / Workbox 自動生成）
 
 | 項目 | 内容 |
 |------|------|
-| キャッシュ名 | `smartmemo-v34` |
-| キャッシュ戦略 | Stale-while-revalidate |
+| 生成方式 | `vite-plugin-pwa`（`generateSW`）がビルド時に `sw.js` を生成 |
+| キャッシュ戦略 | ビルド成果物を precache（ハッシュ付きファイル名で自動失効）|
+| 更新処理 | `registerType: 'autoUpdate'`。新ビルドで自動的に差し替え |
 | オフライン対応 | navigate リクエストを `index.html` にフォールバック |
-| 更新処理 | activate 時に旧バージョンのキャッシュを自動削除 |
+| 手動バージョン管理 | 不要（旧 `smartmemo-vNN` 連番は廃止）|
 
-**キャッシュ対象:**
-- `index.html`, `app.tsx`, `manifest.webmanifest`, `icon.svg`
-- Google Fonts（Inter）
-- React 18.3.1 / ReactDOM / Babel standalone（CDN）
-- スプライット PNG: `kn_*`・`sl_*`・`sk_*`・`hy_*`・`ob_*`（各 36 枚、計 180 枚）
+**precache 対象:**
+- ビルド出力（`index.html`、ハッシュ付き JS / CSS、`manifest.webmanifest`）
+- `public/` の静的アセット（`icon.svg`、スプライット PNG 全 380 枚）
+- Google Fonts（Inter）は runtime caching（StaleWhileRevalidate）
 
 ### データ永続化
 
