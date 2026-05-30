@@ -492,7 +492,9 @@ el.style.transform = `scaleX(${flipH ? -1 : 1})`
 
 ## 11. サウンドシステム
 
-Web Audio API でプログラム生成（音声ファイル不使用）。
+サウンドは2種類。**プログラム生成音**（Web Audio API）と、**ファイル音**（`public/sounds/` の mp3）。`playSound(type)` が `FILE_SOUNDS` に該当キーがあれば `HTMLAudioElement` で再生、なければ Web Audio で合成する。
+
+### プログラム生成音（Web Audio API）
 
 | サウンド ID | 表示名 | 生成方式 |
 |------------|--------|---------|
@@ -508,6 +510,26 @@ Web Audio API でプログラム生成（音声ファイル不使用）。
 
 - AudioContext はサウンド初回再生時に遅延初期化
 - suspended 状態の場合は `resume()` を自動呼び出し
+
+### ファイル音（mp3 / `public/sounds/`）
+
+`<audio>` 要素をキー単位でキャッシュして再生。パスは `import.meta.env.BASE_URL + 'sounds/'` 基準。`vite-plugin-pwa` の precache 対象（オフライン再生可）。
+
+| サウンド ID | 表示名 | ファイル | レアリティ |
+|------------|--------|---------|-----------|
+| snd_decision4  | ✅ 決定音 A | decision-4.mp3 | common |
+| snd_decision12 | ✅ 決定音 B | decision-12.mp3 | common |
+| snd_decision13 | ✅ 決定音 C | decision-13.mp3 | common |
+| snd_decision16 | ✅ 決定音 D | decision-16.mp3 | rare |
+| snd_decision17 | ✅ 決定音 E | decision-17.mp3 | rare |
+| snd_men_ou     | 🙌 男衆「オウ！」 | men-ou.mp3 | rare |
+| snd_women_ou   | 🙌 女衆「おう！」 | women-ou.mp3 | rare |
+| snd_level_up   | 🆙 レベルアップ | level-up.mp3 | super |
+| snd_trumpet    | 📯 ラッパ | trumpet-fanfare.mp3 | super |
+| snd_men_yay    | 🙌 男衆「イエーイ！」 | men-yay.mp3 | super |
+| snd_men_yahoo  | 🙌 男衆「イヤッホー！」 | men-yahoo.mp3 | ultra |
+
+いずれもガチャ景品。当選で `gachaUnlocked.sounds` に追加され、設定で選択可能になる。
 
 ---
 

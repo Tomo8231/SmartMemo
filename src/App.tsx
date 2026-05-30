@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -489,6 +489,22 @@ function AttachmentRow({ attachments }: { attachments: Attachment[] }) {
 }
 
 // Sound types for task completion.
+// File-based sounds (mp3 in public/sounds). key → 表示ラベル / ファイル名。
+const FILE_SOUNDS: Record<string, { label: string; file: string }> = {
+  'snd_level_up':   { label: '🆙 レベルアップ',       file: 'level-up.mp3' },
+  'snd_trumpet':    { label: '📯 ラッパ',             file: 'trumpet-fanfare.mp3' },
+  'snd_decision4':  { label: '✅ 決定音 A',           file: 'decision-4.mp3' },
+  'snd_decision12': { label: '✅ 決定音 B',           file: 'decision-12.mp3' },
+  'snd_decision13': { label: '✅ 決定音 C',           file: 'decision-13.mp3' },
+  'snd_decision16': { label: '✅ 決定音 D',           file: 'decision-16.mp3' },
+  'snd_decision17': { label: '✅ 決定音 E',           file: 'decision-17.mp3' },
+  'snd_men_yay':    { label: '🙌 男衆「イエーイ！」', file: 'men-yay.mp3' },
+  'snd_men_yahoo':  { label: '🙌 男衆「イヤッホー！」', file: 'men-yahoo.mp3' },
+  'snd_men_ou':     { label: '🙌 男衆「オウ！」',     file: 'men-ou.mp3' },
+  'snd_women_ou':   { label: '🙌 女衆「おう！」',     file: 'women-ou.mp3' },
+};
+const SOUND_FILE_BASE = `${import.meta.env.BASE_URL}sounds/`;
+
 const SOUND_TYPES = [
   { key: 'doremi',   label: 'ドレミ' },
   { key: 'pop',      label: 'ポップ' },
@@ -499,6 +515,7 @@ const SOUND_TYPES = [
   { key: 'bell',     label: '🎶 ベル' },
   { key: 'fanfare',  label: '🎺 ファンファーレ' },
   { key: 'special',  label: '🎵 特製メロディ' },
+  ...Object.entries(FILE_SOUNDS).map(([key, v]) => ({ key, label: v.label })),
 ];
 let _audioCtx: AudioContext | undefined;
 function _getAudioCtx(): AudioContext {
@@ -507,7 +524,23 @@ function _getAudioCtx(): AudioContext {
   if (_audioCtx.state === 'suspended') _audioCtx.resume();
   return _audioCtx;
 }
+// Cache <audio> elements per file sound to avoid re-fetching.
+const _audioCache: Record<string, HTMLAudioElement> = {};
 function playSound(type: string) {
+  const fileSound = FILE_SOUNDS[type];
+  if (fileSound) {
+    try {
+      let el = _audioCache[type];
+      if (!el) {
+        el = new Audio(SOUND_FILE_BASE + fileSound.file);
+        el.preload = 'auto';
+        _audioCache[type] = el;
+      }
+      el.currentTime = 0;
+      el.play().catch(() => {});
+    } catch {}
+    return;
+  }
   try {
     const ctx = _getAudioCtx();
     const now = ctx.currentTime;
@@ -706,6 +739,18 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'sound', label: '🎵 特製メロディ',     rarity: 'ultra',  stars: '★★★★★', color: '#ff6f00', soundType: 'special', weight: 2,  flavor: 'どこか懐かしく、でも初めて聞く不思議な旋律。落ち着きとワクワクが同居していて、長く使っていると愛着が湧いてくる。' },
   { type: 'sound', label: '🎶 ベル',             rarity: 'ultra',  stars: '★★★★★', color: '#e91e63', soundType: 'bell',    weight: 1,  flavor: '透き通ったベルの音は、雑念をすっと消してくれる。「やった」という純粋な感覚だけが残る。シンプルなのに一番気持ちいいかもしれない。' },
   { type: 'bg',      label: '🌅 ローズ背景', rarity: 'ultra', stars: '★★★★★', color: '#c2185b', bgIdx: 6,            weight: 1, flavor: '情熱的なローズレッド。これを見たら「やる気ない」とは言えなくなる。テンションをブチ上げたいときのための一枚。' },
+  // ── ファイルベースのサウンド（public/sounds） ──
+  { type: 'sound', label: '✅ 決定音 A', rarity: 'common', stars: '★★',    color: '#777',    soundType: 'snd_decision4',  weight: 14, flavor: 'カチッと押し込むような決定音。タスクに「終わり」の区切りを付けてくれる。事務的なようでいて、地味に気持ちいい定番系。' },
+  { type: 'sound', label: '✅ 決定音 B', rarity: 'common', stars: '★★',    color: '#777',    soundType: 'snd_decision12', weight: 13, flavor: '軽快なクリック音。リズムよくタスクを片付けたい日にぴったり。テンポ重視派のための、すっきりした一音。' },
+  { type: 'sound', label: '✅ 決定音 C', rarity: 'common', stars: '★★',    color: '#777',    soundType: 'snd_decision13', weight: 12, flavor: '短くシャープな確定音。迷いを断ち切るような潔さがある。サクサク進めたいときの相棒。' },
+  { type: 'sound', label: '✅ 決定音 D', rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'snd_decision16', weight: 9,  flavor: 'やや厚みのある決定音。押した感がしっかりあって、「ちゃんと完了した」という手応えが残る。安心感のある中音域。' },
+  { type: 'sound', label: '✅ 決定音 E', rarity: 'rare',   stars: '★★★',   color: '#2e7bef', soundType: 'snd_decision17', weight: 7,  flavor: '少し高めの澄んだ確定音。耳に残りすぎず、それでいて満足感はしっかり。繊細さを求める人向けの一音。' },
+  { type: 'sound', label: '🆙 レベルアップ', rarity: 'super', stars: '★★★★',  color: '#e53935', soundType: 'snd_level_up',  weight: 4,  flavor: 'おなじみの「強くなった！」音。タスク一個でステータスが上がった気分になれる。日々の小さな完了が、成長の実感に変わる魔法のサウンド。' },
+  { type: 'sound', label: '📯 ラッパ',       rarity: 'super', stars: '★★★★',  color: '#9c27b0', soundType: 'snd_trumpet',   weight: 4,  flavor: '高らかに鳴り響くラッパのファンファーレ。完了の瞬間が一気にイベント化する。地味な作業も晴れ舞台に変える、堂々の鳴り物。' },
+  { type: 'sound', label: '🙌 男衆「イエーイ！」', rarity: 'super', stars: '★★★★', color: '#e53935', soundType: 'snd_men_yay',   weight: 3, flavor: '完了するたび、どこからともなく沸き起こる歓声。一人で作業していても、なぜか祭りの中にいる気分になれる。テンション爆上げ系。' },
+  { type: 'sound', label: '🙌 男衆「イヤッホー！」', rarity: 'ultra', stars: '★★★★★', color: '#ff6f00', soundType: 'snd_men_yahoo', weight: 2, flavor: '抑えきれない喜びが炸裂する掛け声。ささいなTODO一つでこの盛り上がり。完了が病みつきになる、中毒性の高い一発。' },
+  { type: 'sound', label: '🙌 男衆「オウ！」', rarity: 'rare',  stars: '★★★',   color: '#2e7bef', soundType: 'snd_men_ou',     weight: 6, flavor: '短く力強い「オウ！」の一声。気合いが注入される感じがする。淡々と片付けたい日でも、背中を押してくれる頼れる掛け声。' },
+  { type: 'sound', label: '🙌 女衆「おう！」', rarity: 'rare',  stars: '★★★',   color: '#2e7bef', soundType: 'snd_women_ou',   weight: 6, flavor: 'はつらつとした「おう！」の返事。完了のたびに小気味よい合いの手が入る。リズムに乗ってタスクを進めたくなる、元気の出る一音。' },
   { type: 'memomon', label: '💀 ドクロン',  rarity: 'ultra', stars: '★★★★★', color: '#52575e', monDefId: 'skullon',  weight: 2, flavor: '【生態】骨格のみからなる謎のモンスター。食事の記録は一切なし。タップされても平気なふりをしているが、実はちゃんと感じている。おばけとは幼なじみ。' },
   { type: 'memomon', label: '💧 スライム', rarity: 'super',  stars: '★★★★',  color: '#0288d1', monDefId: 'slime',    weight: 3, flavor: '【生態】液体と固体の中間に存在する不思議な生命体。体温は常に室温と同じ。メモに触れると若干粘度が上がる。ノートのすみっこで寝ているのをよく目撃される。' },
   { type: 'memomon', label: '🐥 ひよこ',   rarity: 'super',  stars: '★★★★',  color: '#f9a825', monDefId: 'hiyoko',   weight: 3, flavor: '【生態】生後3日で自力でスマホを操作できる知能を持つ。鳴き声は「ぴよ」のみだが、抑揚で複雑な感情を表現する。タスクが増えるほど元気になる珍しい性質。' },
