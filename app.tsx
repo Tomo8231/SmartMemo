@@ -3693,6 +3693,18 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? (Notification as any).permission : 'denied'
   );
+  const importFileRef = useRef<HTMLInputElement | null>(null);
+  const [backupStatus, setBackupStatus] = useState<{ kind: 'ok' | 'ng' | null; msg: string }>({ kind: null, msg: '' });
+
+  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!window.confirm('現在のすべてのデータ（TODO・アイデア・設定など）がバックアップの内容に置き換えられます。続行しますか？')) return;
+    const result = await importAllData(file);
+    setBackupStatus({ kind: result.ok ? 'ok' : 'ng', msg: result.msg });
+    if (result.ok) setTimeout(() => window.location.reload(), 900);
+  }
 
   async function requestNotifPermission() {
     if (typeof Notification === 'undefined') return;
@@ -4231,6 +4243,30 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
             <button onClick={redeemGift} disabled={!giftCode.trim()}>使用</button>
           </div>
           {giftMsg.msg && <div className={`api-status ${giftMsg.kind}`}>{giftMsg.msg}</div>}
+        </div>
+      </div>
+
+      <div className="settings-section-title">データ管理</div>
+      <div className="settings-card">
+        <div className="api-row">
+          <div className="settings-row-label">バックアップ</div>
+          <div className="settings-row-sub">
+            すべてのデータ（TODO・アイデア・設定・メモモンなど）を JSON ファイルに書き出し／読み込みできます。端末の変更やデータ消失に備えてバックアップを取れます。
+          </div>
+          <div className="backup-btn-row">
+            <button className="backup-btn" onClick={exportAllData}>エクスポート</button>
+            <button className="backup-btn" onClick={() => importFileRef.current?.click()}>インポート</button>
+          </div>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept="application/json,.json"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+          {backupStatus.kind && (
+            <div className={`api-status ${backupStatus.kind}`}>{backupStatus.msg}</div>
+          )}
         </div>
       </div>
 
