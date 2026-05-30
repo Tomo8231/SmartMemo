@@ -17,7 +17,30 @@
 
 ## 技術スタック
 
-- React 18 (UMD) + TypeScript (Babel Standalone)
-- Service Worker (PWA / stale-while-revalidate)
-- Claude AI API (メモ解析・TODO生成)
-- ビルドステップなし（シングルファイル構成）
+- **React 18 + TypeScript**
+- **Vite** によるビルド（開発: HMR / 本番: production ビルド）
+- **vite-plugin-pwa**（Workbox）による PWA / オフライン対応
+- **Gemini API**（任意・メモ解析・TODO 生成）/ ローカル解析フォールバック
+- **GitHub Actions → GitHub Pages** で自動デプロイ
+
+## 開発
+
+```bash
+npm install        # 依存をインストール
+npm run dev        # 開発サーバ（HMR）。実機確認は npm run dev -- --host
+npm run build      # 型チェック + 本番ビルド（dist/ に出力）
+npm run preview    # ビルド結果をローカル確認
+npm run lint       # ESLint
+```
+
+## フォルダ構成
+
+```
+src/
+  main.tsx     エントリポイント（createRoot）
+  App.tsx      アプリ本体（コンポーネント群）
+  index.css    スタイル
+public/        sprites/・icon.svg など静的アセット
+index.html     Vite エントリ HTML
+vite.config.ts ビルド・PWA・base 設定
+```

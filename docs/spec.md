@@ -24,7 +24,7 @@
 **SmartMemo** は、テキスト・音声・画像を入力して AI が TODO とアイデアに自動分類するメモアプリ。メモモン（ペットキャラクター）が画面を歩き回り、TODO 完了でコインを獲得してガチャを引く gamification 要素を持つ PWA。
 
 - アプリ名: SmartMemo
-- バージョン: 1.1.0 (TypeScript)
+- バージョン: 1.3.0 (TypeScript)
 - 対応: PWA（オフライン対応）
 
 ---
@@ -33,12 +33,12 @@
 
 | 項目 | 内容 |
 |------|------|
-| フロントエンド | React 18.3.1 (UMD) + TypeScript (Babel standalone) |
-| ビルドシステム | なし（ブラウザで直接トランスパイル） |
-| スタイル | `index.html` 内インライン CSS |
+| フロントエンド | React 18.3.1 + TypeScript |
+| ビルドシステム | Vite（開発: HMR / 本番: production ビルド） |
+| スタイル | `src/index.css`（外部 CSS） |
 | データ保存 | localStorage |
 | AI 連携 | Gemini 2.5 Flash API（任意）/ Claude API（任意）|
-| PWA | Service Worker（`sw.js`）、stale-while-revalidate |
+| PWA | vite-plugin-pwa（Workbox / 自動生成 Service Worker） |
 | 音声 | Web Audio API（全サウンドをプログラム生成）|
 | 音声入力 | Speech Recognition API / Gemini Audio |
 | 画像認識 | Gemini Vision API / Claude Vision |
@@ -570,20 +570,20 @@ Web Audio API でプログラム生成（音声ファイル不使用）。
 
 ## 14. PWA・データ永続化
 
-### Service Worker（`sw.js`）
+### Service Worker（vite-plugin-pwa / Workbox 自動生成）
 
 | 項目 | 内容 |
 |------|------|
-| キャッシュ名 | `smartmemo-v34` |
-| キャッシュ戦略 | Stale-while-revalidate |
+| 生成方式 | `vite-plugin-pwa`（`generateSW`）がビルド時に `sw.js` を生成 |
+| キャッシュ戦略 | ビルド成果物を precache（ハッシュ付きファイル名で自動失効）|
+| 更新処理 | `registerType: 'autoUpdate'`。新ビルドで自動的に差し替え |
 | オフライン対応 | navigate リクエストを `index.html` にフォールバック |
-| 更新処理 | activate 時に旧バージョンのキャッシュを自動削除 |
+| 手動バージョン管理 | 不要（旧 `smartmemo-vNN` 連番は廃止）|
 
-**キャッシュ対象:**
-- `index.html`, `app.tsx`, `manifest.webmanifest`, `icon.svg`
-- Google Fonts（Inter）
-- React 18.3.1 / ReactDOM / Babel standalone（CDN）
-- スプライット PNG: `kn_*`・`sl_*`・`sk_*`・`hy_*`・`ob_*`（各 36 枚、計 180 枚）
+**precache 対象:**
+- ビルド出力（`index.html`、ハッシュ付き JS / CSS、`manifest.webmanifest`）
+- `public/` の静的アセット（`icon.svg`、スプライット PNG 全 380 枚）
+- Google Fonts（Inter）は runtime caching（StaleWhileRevalidate）
 
 ### データ永続化
 
