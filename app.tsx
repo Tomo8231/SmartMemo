@@ -127,6 +127,80 @@ function saveStored<T>(key: string, value: T): void {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Backup: export / import all SmartMemo data
+// ─────────────────────────────────────────────────────────────
+const SMARTMEMO_PREFIX = 'smartmemo:';
+const BACKUP_VERSION = 1;
+
+function collectSmartmemoKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith(SMARTMEMO_PREFIX)) keys.push(k);
+  }
+  return keys;
+}
+
+function exportAllData(): void {
+  const data: Record<string, unknown> = {};
+  for (const key of collectSmartmemoKeys()) {
+    const raw = localStorage.getItem(key);
+    if (raw == null) continue;
+    try { data[key] = JSON.parse(raw); }
+    catch { data[key] = raw; }
+  }
+  const payload = {
+    app: 'SmartMemo',
+    version: BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `smartmemo-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function importAllData(file: File): Promise<{ ok: boolean; msg: string }> {
+  let parsed: any;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch {
+    return { ok: false, msg: 'JSON として読み込めませんでした' };
+  }
+  if (!parsed || parsed.app !== 'SmartMemo' || typeof parsed.data !== 'object' || parsed.data === null) {
+    return { ok: false, msg: 'SmartMemo のバックアップファイルではありません' };
+  }
+  const entries = Object.entries(parsed.data).filter(([k]) => k.startsWith(SMARTMEMO_PREFIX));
+  if (entries.length === 0) {
+    return { ok: false, msg: 'インポートできるデータが見つかりませんでした' };
+  }
+  // Snapshot current data so a write failure can be rolled back.
+  const snapshot: Record<string, string> = {};
+  for (const key of collectSmartmemoKeys()) {
+    const raw = localStorage.getItem(key);
+    if (raw != null) snapshot[key] = raw;
+  }
+  try {
+    Object.keys(snapshot).forEach(k => localStorage.removeItem(k));
+    for (const [k, v] of entries) {
+      localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+    }
+  } catch (e: any) {
+    // Roll back to the snapshot on quota/other failure.
+    collectSmartmemoKeys().forEach(k => localStorage.removeItem(k));
+    Object.entries(snapshot).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
+    return { ok: false, msg: '保存に失敗しました（容量不足の可能性）。データは元のままです' };
+  }
+  return { ok: true, msg: 'インポートしました。再読み込みします…' };
+}
+
+// ─────────────────────────────────────────────────────────────
 // Gemini API integration
 // ─────────────────────────────────────────────────────────────
 const GEMINI_MODEL = 'gemini-2.5-flash';
