@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -517,6 +517,8 @@ const SOUND_TYPES = [
   { key: 'special',  label: '🎵 特製メロディ' },
   ...Object.entries(FILE_SOUNDS).map(([key, v]) => ({ key, label: v.label })),
 ];
+// 最初から選べるサウンド。これ以外はガチャで当ててから選択可能になる。
+const DEFAULT_SOUNDS = ['doremi'];
 let _audioCtx: AudioContext | undefined;
 function _getAudioCtx(): AudioContext {
   const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
@@ -4013,13 +4015,20 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
               <div className="settings-row-sub">タップして試聴</div>
             </div>
             <div className="sound-type-opts">
-              {SOUND_TYPES.map(s => (
+              {SOUND_TYPES.filter(s =>
+                DEFAULT_SOUNDS.includes(s.key) ||
+                (settings.gachaUnlocked?.sounds || []).includes(s.key) ||
+                (settings.soundType || 'doremi') === s.key
+              ).map(s => (
                 <button
                   key={s.key}
                   className={`sound-type-btn${(settings.soundType || 'doremi') === s.key ? ' sel' : ''}`}
                   onClick={() => { onChange('soundType', s.key); playSound(s.key); }}
                 >{s.label}</button>
               ))}
+            </div>
+            <div className="settings-row-sub" style={{ marginTop: 8 }}>
+              🔒 その他のサウンドはガチャで当てると選べるようになります
             </div>
           </div>
         )}
