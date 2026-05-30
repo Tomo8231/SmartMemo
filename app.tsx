@@ -106,6 +106,13 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 const { useState, useRef, useEffect } = React;
 
 // ─────────────────────────────────────────────────────────────
+// App version — bump on every change (see CLAUDE.md versioning rule)
+//   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
+//   sw.js の CACHE バージョンも合わせて上げること
+// ─────────────────────────────────────────────────────────────
+const APP_VERSION = '1.2.0';
+
+// ─────────────────────────────────────────────────────────────
 // localStorage helpers
 // ─────────────────────────────────────────────────────────────
 const LS_TODOS    = 'smartmemo:todos';
@@ -4273,7 +4280,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
       <div className="settings-section-title">アプリ情報</div>
       <div className="about-card">
         <div className="about-app-name">SmartMemo</div>
-        <div className="about-version">Version 1.1.0 (TypeScript)</div>
+        <div className="about-version">Version {APP_VERSION} (TypeScript)</div>
       </div>
     </div>
   );
