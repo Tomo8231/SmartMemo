@@ -13,7 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['icon.svg', 'sprites/**/*.png', 'kuroneko.jpg'],
+      includeAssets: ['icon.svg', 'sprites/**/*.png', 'sounds/**/*.mp3', 'kuroneko.jpg'],
       manifest: {
         name: 'SmartMemo',
         short_name: 'SmartMemo',
@@ -32,7 +32,7 @@ export default defineConfig({
       workbox: {
         // スプライトは多数（PNG 180+ 枚）あるため precache 上限を引き上げる。
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,svg,png,jpg,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,mp3,webmanifest}'],
         navigateFallback: `${base}index.html`,
         runtimeCaching: [
           {
