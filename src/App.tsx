@@ -840,6 +840,7 @@ const SB_SPRITES = makeSprites('sb');
 const MJ_SPRITES = makeSprites('mj');
 const DR_SPRITES = makeSprites('dr');
 const PY_SPRITES = makeSprites('py');
+const MT_SPRITES = makeSprites('mt');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -930,6 +931,15 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     desc: '青いボディのがっちり系マスコット。指を立てて「いいね！」をしてくれる頼れるやつ。',
     monW: 65, monH: 70,
     sprites: PY_SPRITES,
+  },
+  {
+    id: 'matameta', name: 'めためたわかるもん',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: 'ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。',
+    monW: 65, monH: 70,
+    spriteFacing: 'l',
+    sprites: MT_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
