@@ -213,6 +213,11 @@
       to   { text-shadow:0 0 18px currentColor, 0 0 36px currentColor; opacity:1; }
     }
     .gacha-result-label { font-size:30px; line-height:1; animation:result-pop .5s cubic-bezier(.17,.67,.34,1.6) both; }
+    .gacha-result-mon-anim {
+      width:110px; height:auto; image-rendering:pixelated;
+      animation:result-pop .45s cubic-bezier(.17,.67,.34,1.5) both;
+      filter:drop-shadow(0 0 12px rgba(255,255,200,.7));
+    }
     @keyframes result-pop { from { transform:scale(0) rotate(-18deg); } to { transform:scale(1) rotate(0deg); } }
     .gacha-result-name { font-size:15px; font-weight:700; text-align:center; color:#fff; }
     .gacha-result-desc { font-size:12px; text-align:center; background:rgba(255,255,255,.1); border-radius:8px; padding:6px 14px; width:100%; color:rgba(255,255,255,.6); }
