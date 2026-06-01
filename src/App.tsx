@@ -1059,6 +1059,17 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const [flashRarity, setFlashRarity] = useState<string | null>(null);
   const [revealCount, setRevealCount] = useState(-1);
   const [gachaFrame, setGachaFrame] = useState(0);
+  const [monAnimFrame, setMonAnimFrame] = useState(0);
+
+  useEffect(() => {
+    if (phase !== 'result' || !singleResult || singleResult.type !== 'memomon' || !singleResult.monDefId) return;
+    const def = MEMOMON_DEFS.find(d => d.id === singleResult.monDefId);
+    if (!def?.sprites?.happy) return;
+    const fps = def.sprites.happy.fps ?? 6;
+    setMonAnimFrame(0);
+    const id = setInterval(() => setMonAnimFrame(f => (f + 1) % def.sprites!.happy!.frames.length), 1000 / fps);
+    return () => clearInterval(id);
+  }, [phase, singleResult]);
 
   useEffect(() => {
     if (phase === 'result' && mode === 'ten' && revealCount >= 0 && revealCount < 10) {
@@ -1209,12 +1220,26 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
                   src={`./sprites/gacha_anim_${gachaFrame}.png`}
                   alt=""
                 />
-                {phase === 'result' && singleResult && (
-                  <div className="gacha-sprite-overlay">
-                    <div className="gacha-result-rarity" style={{ color: singleResult.color }}>{singleResult.stars}</div>
-                    <div className="gacha-result-label">{labelParts[0]}</div>
-                  </div>
-                )}
+                {phase === 'result' && singleResult && (() => {
+                  const monDef = singleResult.type === 'memomon' && singleResult.monDefId
+                    ? MEMOMON_DEFS.find(d => d.id === singleResult.monDefId)
+                    : null;
+                  const happyFrames = monDef?.sprites?.happy?.frames;
+                  return (
+                    <div className="gacha-sprite-overlay">
+                      <div className="gacha-result-rarity" style={{ color: singleResult.color }}>{singleResult.stars}</div>
+                      {happyFrames ? (
+                        <img
+                          className="gacha-result-mon-anim"
+                          src={happyFrames[monAnimFrame % happyFrames.length]}
+                          alt=""
+                        />
+                      ) : (
+                        <div className="gacha-result-label">{labelParts[0]}</div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="gacha-result-area" style={{ visibility: phase === 'result' ? 'visible' : 'hidden' }}>
                 <div className="gacha-result-name">{labelParts.slice(1).join(' ') || singleResult?.label || ' '}</div>
