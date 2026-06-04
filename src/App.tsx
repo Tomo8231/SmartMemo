@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -762,6 +762,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3, flavor: '【生態】青い三角帽子を絶対に脱がない。帽子の中に何が入っているかは未解明。使うマジックはすべてメモに関連しており、忘れていたタスクを突然思い出させることがある。' },
   { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2, flavor: '【生態】本来の姿は伝説の大型龍とされるが、スマホに収まるよう自ら縮んでいる。炎は吐けないが、代わりに完了済みTODOを丁寧に整理してくれる。一度懐くと絶対的な忠誠を誓う。' },
   { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
+  { type: 'memomon', label: '🌱 めためたわかるもん', rarity: 'super', stars: '★★★★', color: '#6d9e3f', monDefId: 'matameta', weight: 3, flavor: '【生態】ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。' },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
