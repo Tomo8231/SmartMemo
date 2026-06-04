@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.7.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1067,6 +1067,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
   const [singleDup, setSingleDup] = useState(false);
   const [tenResults, setTenResults] = useState<{ prize: GachaPrize; dup: boolean }[]>([]);
+  const [detailIdx, setDetailIdx] = useState<number | null>(null);
   const [localCoins, setLocalCoins] = useState(coins);
   const [flashRarity, setFlashRarity] = useState<string | null>(null);
   const [revealCount, setRevealCount] = useState(-1);
@@ -1082,6 +1083,18 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
     const id = setInterval(() => setMonAnimFrame(f => (f + 1) % def.sprites!.happy!.frames.length), 1000 / fps);
     return () => clearInterval(id);
   }, [phase, singleResult]);
+
+  useEffect(() => {
+    if (detailIdx === null) return;
+    const prize = tenResults[detailIdx]?.prize;
+    if (!prize || prize.type !== 'memomon' || !prize.monDefId) return;
+    const def = MEMOMON_DEFS.find(d => d.id === prize.monDefId);
+    if (!def?.sprites?.happy) return;
+    const fps = def.sprites.happy.fps ?? 6;
+    setMonAnimFrame(0);
+    const id = setInterval(() => setMonAnimFrame(f => (f + 1) % def.sprites!.happy!.frames.length), 1000 / fps);
+    return () => clearInterval(id);
+  }, [detailIdx, tenResults]);
 
   useEffect(() => {
     if (phase === 'result' && mode === 'ten' && revealCount >= 0 && revealCount < 10) {
@@ -1165,6 +1178,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   function again() {
     setPhase('idle'); setSingleResult(null); setSingleDup(false);
     setTenResults([]); setRevealCount(-1); setFlashRarity(null); setGachaFrame(0);
+    setDetailIdx(null);
   }
   function switchMode(m: GachaMode) { if (phase !== 'spinning') { setMode(m); again(); } }
 
@@ -1202,17 +1216,29 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
           {mode === 'ten' && phase === 'result' ? (
             <>
               <div className="gacha-ten-grid">
-                {tenResults.map((r, i) => (
-                  <div key={i} className={`gacha-ten-card${i < revealCount ? ' show' : ''}`}
-                    style={{
-                      background: rarityBg[r.prize.rarity] || rarityBg.common,
-                      boxShadow: rarityGlow[r.prize.rarity],
-                    }}>
-                    <div style={{ fontSize: 22, lineHeight: 1.4 }}>{r.prize.label.split(' ')[0]}</div>
-                    <div style={{ fontSize: 10, color: '#fff', fontWeight: 700, opacity: .85 }}>{r.prize.stars}</div>
-                    {r.dup && <div style={{ fontSize: 9, color: '#ffd700', fontWeight: 700 }}>+10</div>}
-                  </div>
-                ))}
+                {tenResults.map((r, i) => {
+                  const revealed = i < revealCount;
+                  const monImg = r.prize.type === 'memomon' && r.prize.monDefId
+                    ? MEMOMON_IMGS[r.prize.monDefId]
+                    : null;
+                  return (
+                    <div key={i} className={`gacha-ten-card${revealed ? ' show' : ''}`}
+                      onClick={revealed ? () => setDetailIdx(i) : undefined}
+                      style={{
+                        background: rarityBg[r.prize.rarity] || rarityBg.common,
+                        boxShadow: rarityGlow[r.prize.rarity],
+                        cursor: revealed ? 'pointer' : 'default',
+                      }}>
+                      {monImg ? (
+                        <img src={monImg} alt="" className="gacha-ten-card-mon" />
+                      ) : (
+                        <div style={{ fontSize: 22, lineHeight: 1.4 }}>{r.prize.label.split(' ')[0]}</div>
+                      )}
+                      <div style={{ fontSize: 10, color: '#fff', fontWeight: 700, opacity: .85 }}>{r.prize.stars}</div>
+                      {r.dup && <div style={{ fontSize: 9, color: '#ffd700', fontWeight: 700 }}>+10</div>}
+                    </div>
+                  );
+                })}
               </div>
               <div style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,.4)', position: 'relative', zIndex: 1 }}>
                 重複 {tenResults.filter(r => r.dup).length}件 +{tenResults.filter(r => r.dup).length * 10} コイン返却
@@ -1276,6 +1302,44 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
              : mode === 'memomon' ? '🐾 メモモンガチャ！'
              : '✨ ガチャを引く！'}
           </button>
+
+          {detailIdx !== null && tenResults[detailIdx] && (() => {
+            const r = tenResults[detailIdx];
+            const labelParts = r.prize.label.split(' ');
+            const monDef = r.prize.type === 'memomon' && r.prize.monDefId
+              ? MEMOMON_DEFS.find(d => d.id === r.prize.monDefId)
+              : null;
+            const happyFrames = monDef?.sprites?.happy?.frames;
+            return (
+              <div className="gacha-detail-overlay" onClick={() => setDetailIdx(null)}>
+                <div
+                  className="gacha-detail-card"
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    background: rarityBg[r.prize.rarity] || rarityBg.common,
+                    boxShadow: rarityGlow[r.prize.rarity],
+                  }}
+                >
+                  <button className="gacha-detail-close" onClick={() => setDetailIdx(null)}>✕</button>
+                  <div className="gacha-detail-img-wrap">
+                    {happyFrames ? (
+                      <img
+                        className="gacha-detail-mon-img"
+                        src={happyFrames[monAnimFrame % happyFrames.length]}
+                        alt=""
+                      />
+                    ) : (
+                      <div className="gacha-detail-emoji">{labelParts[0]}</div>
+                    )}
+                  </div>
+                  <div className="gacha-detail-rarity" style={{ color: r.prize.color }}>{r.prize.stars}</div>
+                  <div className="gacha-detail-name">{labelParts.slice(1).join(' ') || r.prize.label}</div>
+                  {r.dup && <div className="gacha-detail-dup">すでに解放済み（+10コイン返却）</div>}
+                  {r.prize.flavor && <div className="gacha-flavor-box gacha-detail-flavor">{r.prize.flavor}</div>}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </>
