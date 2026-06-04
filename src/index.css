@@ -252,7 +252,52 @@
     .gacha-ten-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:100%; position:relative; z-index:1; }
     .gacha-ten-card { border-radius:12px; padding:8px 4px; text-align:center; opacity:0; }
     .gacha-ten-card.show { animation:card-flip .42s cubic-bezier(.17,.67,.34,1.4) forwards; }
+    .gacha-ten-card.show:active { transform:scale(.95); transition:transform .08s; }
+    .gacha-ten-card-mon {
+      display:block; margin:0 auto; height:38px; width:auto; max-width:100%;
+      object-fit:contain; image-rendering:pixelated;
+    }
     @keyframes card-flip { from{opacity:0;transform:rotateY(90deg) scale(.7)} to{opacity:1;transform:rotateY(0deg) scale(1)} }
+
+    /* 10-pull prize detail overlay */
+    .gacha-detail-overlay {
+      position:absolute; inset:0; z-index:50;
+      background:rgba(0,0,0,.6);
+      display:flex; align-items:center; justify-content:center;
+      padding:18px;
+      animation:fade-in .18s ease;
+      border-radius:inherit;
+    }
+    @keyframes fade-in { from{opacity:0} to{opacity:1} }
+    .gacha-detail-card {
+      width:100%; max-width:300px;
+      border-radius:18px; padding:22px 18px 18px;
+      display:flex; flex-direction:column; align-items:center; gap:8px;
+      position:relative;
+      animation:detail-pop .25s cubic-bezier(.17,.67,.34,1.4);
+    }
+    @keyframes detail-pop { from{transform:scale(.7);opacity:0} to{transform:scale(1);opacity:1} }
+    .gacha-detail-close {
+      position:absolute; top:8px; right:8px;
+      width:28px; height:28px; border-radius:50%;
+      border:none; background:rgba(0,0,0,.25); color:#fff;
+      font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .gacha-detail-img-wrap {
+      width:96px; height:96px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .gacha-detail-mon-img {
+      max-width:100%; max-height:100%;
+      image-rendering:pixelated;
+      object-fit:contain;
+    }
+    .gacha-detail-emoji { font-size:64px; line-height:1; }
+    .gacha-detail-rarity { font-size:14px; font-weight:700; letter-spacing:.5px; }
+    .gacha-detail-name { font-size:16px; font-weight:700; color:#fff; text-align:center; }
+    .gacha-detail-dup { font-size:11px; color:#ffd700; font-weight:600; }
+    .gacha-detail-flavor { max-height:120px; }
 
     /* Tab content */
     .tab-content {
