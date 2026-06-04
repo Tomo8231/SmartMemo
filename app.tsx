@@ -609,6 +609,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🎩 マジシャン', rarity: 'super', stars: '★★★★',  color: '#1565c0', monDefId: 'magician',    weight: 3, flavor: '【生態】青い三角帽子を絶対に脱がない。帽子の中に何が入っているかは未解明。使うマジックはすべてメモに関連しており、忘れていたタスクを突然思い出させることがある。' },
   { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2, flavor: '【生態】本来の姿は伝説の大型龍とされるが、スマホに収まるよう自ら縮んでいる。炎は吐けないが、代わりに完了済みTODOを丁寧に整理してくれる。一度懐くと絶対的な忠誠を誓う。' },
   { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
+  { type: 'memomon', label: '🦭 ゴマちゃん', rarity: 'super', stars: '★★★★',  color: '#a1887f', monDefId: 'gomachan',     weight: 3, flavor: '【生態】まんまる体型のゴマフアザラシ。背中のゴマ模様は本人いわく「個性の証」。寝姿が美しいことで有名で、メモアプリ内で最も眠っている時間が長いメモモン。タスクが片付くと嬉しそうにヒレをぱたぱた動かす。' },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -687,6 +688,7 @@ const SB_SPRITES = makeSprites('sb');
 const MJ_SPRITES = makeSprites('mj');
 const DR_SPRITES = makeSprites('dr');
 const PY_SPRITES = makeSprites('py');
+const GM_SPRITES = makeSprites('gm');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -777,6 +779,15 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     desc: '青いボディのがっちり系マスコット。指を立てて「いいね！」をしてくれる頼れるやつ。',
     monW: 65, monH: 70,
     sprites: PY_SPRITES,
+  },
+  {
+    id: 'gomachan', name: 'ゴマちゃん',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: 'ゴマ模様がチャームポイントのまんまるアザラシ。眠るのが大好きで、メモ画面でうとうとしているところをよく目撃される。',
+    monW: 65, monH: 60,
+    spriteFacing: 'l',
+    sprites: GM_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
