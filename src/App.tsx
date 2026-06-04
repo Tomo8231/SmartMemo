@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -763,6 +763,7 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🐉 ドラゴン',   rarity: 'ultra', stars: '★★★★★', color: '#37474f', monDefId: 'dragon',      weight: 2, flavor: '【生態】本来の姿は伝説の大型龍とされるが、スマホに収まるよう自ら縮んでいる。炎は吐けないが、代わりに完了済みTODOを丁寧に整理してくれる。一度懐くと絶対的な忠誠を誓う。' },
   { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
   { type: 'memomon', label: '🌱 めためたわかるもん', rarity: 'super', stars: '★★★★', color: '#6d9e3f', monDefId: 'matameta', weight: 3, flavor: '【生態】ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。' },
+  { type: 'memomon', label: '🦭 ゴマちゃん', rarity: 'super', stars: '★★★★', color: '#a1887f', monDefId: 'gomachan', weight: 3, flavor: '【生態】まんまる体型のゴマフアザラシ。背中のゴマ模様は本人いわく「個性の証」。寝姿が美しいことで有名で、メモアプリ内で最も眠っている時間が長いメモモン。タスクが片付くと嬉しそうにヒレをぱたぱた動かす。' },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -842,6 +843,7 @@ const MJ_SPRITES = makeSprites('mj');
 const DR_SPRITES = makeSprites('dr');
 const PY_SPRITES = makeSprites('py');
 const MT_SPRITES = makeSprites('mt');
+const GM_SPRITES = makeSprites('gm');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -941,6 +943,15 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: MT_SPRITES,
+  },
+  {
+    id: 'gomachan', name: 'ゴマちゃん',
+    pixels: [], palette: {},
+    rarity: 'super',
+    desc: 'ゴマ模様がチャームポイントのまんまるアザラシ。眠るのが大好きで、メモ画面でうとうとしているところをよく目撃される。',
+    monW: 65, monH: 60,
+    spriteFacing: 'l',
+    sprites: GM_SPRITES,
   },
 ];
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
