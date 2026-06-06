@@ -51,6 +51,7 @@ type Settings = {
   memoMonVisible?: boolean;
   hiddenMons?: string[];
   memoMonSize?: 'small' | 'medium' | 'large';
+  memoMonSpeech?: boolean;
   usedGiftCodes?: string[];
   notifAdvanceMin?: number;  // minutes before task time (0/15/30/60)
   notifDailyTime?: string;   // "HH:MM" for todos without a time
@@ -106,7 +107,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4291,6 +4292,16 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
             </div>
             <div className="settings-row">
               <div>
+                <div className="settings-row-label">タップで吹き出し</div>
+                <div className="settings-row-sub">メモモンをタップしたときにセリフを表示</div>
+              </div>
+              <button
+                className={`toggle${settings.memoMonSpeech === false ? ' off' : ' on'}`}
+                onClick={() => onChange('memoMonSpeech', settings.memoMonSpeech === false ? true : false)}
+              />
+            </div>
+            <div className="settings-row">
+              <div>
                 <div className="settings-row-label">メモモンを選ぶ</div>
                 <div className="settings-row-sub">
                   {memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId)).length} / {memoMons.length} 体表示中
@@ -4678,9 +4689,11 @@ function pickMemoMonLine(defId: string): string | null {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; onTapReward: () => void }) {
+function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; onTapReward: () => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
+  const speechEnabledRef = useRef(speechEnabled);
+  speechEnabledRef.current = speechEnabled;
   const liveRef     = useRef<Record<string, LiveMon>>({});
   const elemRefs    = useRef<Record<string, HTMLDivElement | null>>({});
   const imgRefs     = useRef<Record<string, HTMLImageElement | null>>({});
@@ -4741,7 +4754,7 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         const bubble = bubbleRefs.current[m.uid];
         if (bubble) {
           const expired = m.speech && Date.now() > m.speech.until;
-          if (expired) m.speech = undefined;
+          if (expired || !speechEnabledRef.current) m.speech = undefined;
           const hide = !m.speech || m.state === 'hidden' || m.state === 'hiding' || m.state === 'dislike-wait';
           if (hide) {
             if (bubble.style.display !== 'none') bubble.style.display = 'none';
@@ -4955,13 +4968,15 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
     if (m.tapCount <= 3) {
       m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
       m.vx = 0; m.vy = 0; m.state = 'idle';
-      const line = pickMemoMonLine(def.id);
-      if (line) {
-        m.speech = { text: line, until: Date.now() + 4000 };
-        const bubble = bubbleRefs.current[m.uid];
-        if (bubble) {
-          bubble.textContent = line;
-          bubble.style.display = 'block';
+      if (speechEnabledRef.current) {
+        const line = pickMemoMonLine(def.id);
+        if (line) {
+          m.speech = { text: line, until: Date.now() + 4000 };
+          const bubble = bubbleRefs.current[m.uid];
+          if (bubble) {
+            bubble.textContent = line;
+            bubble.style.display = 'block';
+          }
         }
       }
       onTapReward();
@@ -5379,7 +5394,7 @@ function SmartMemoApp() {
       {settings.memoMonVisible !== false && (() => {
         const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
-        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
+        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} speechEnabled={settings.memoMonSpeech !== false} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
       {showInsights && (
         <InsightsModal
