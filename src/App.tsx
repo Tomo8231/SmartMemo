@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4841,6 +4841,19 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         // Locked animations (happy/surprise): no movement
         if (m.animState === 'happy' || m.animState === 'surprise') {
           m.vx = 0; m.vy = 0;
+          return;
+        }
+
+        // Pinned in place while speech bubble is up
+        if (m.speech && now < m.speech.until) {
+          m.vx = 0; m.vy = 0;
+          if (m.animState === 'walk') {
+            m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
+          }
+          if (m.state !== 'idle') {
+            m.state = 'idle';
+            m.stateUntil = m.speech.until + 200;
+          }
           return;
         }
 
