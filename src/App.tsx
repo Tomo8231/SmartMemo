@@ -106,7 +106,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4615,7 +4615,68 @@ type LiveMon = MemoMonInstance & {
   frameTime: number;
   tapCount: number;
   personality: 'active' | 'lazy';
+  speech?: { text: string; until: number };
 };
+
+const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
+  kuroneko: {
+    chat: ['…にゃ', '夜は静かでよい', 'ふぅ…', '誰かに見られている気がする', 'あくび…', '見るな', '今宵は良い夜だ'],
+    tip: ['完了したものは整理してこそ意味があるぞ', 'ナレッジに残せば、未来の自分が助かる'],
+  },
+  skullon: {
+    chat: ['カラカラ…', '我は永遠なり', 'おばけ、どこ行った？', 'ホネは細部に宿る', 'メメント・モリ', 'もう体は無いが、未練はある'],
+    tip: ['削除したメモはゴミ箱から復元できる', '整理整頓、それもまた供養'],
+  },
+  slime: {
+    chat: ['ぷるん', 'ぷにぷに', '今日も湿度ばっちり', 'メモにくっついちゃった', 'むにゅ〜ん', 'ふにゃっ'],
+    tip: ['TODOに期限を入れると忘れにくくなるよ', 'タグで分類するとあとから探しやすいよ'],
+  },
+  hiyoko: {
+    chat: ['ぴよっ！', 'ぴよぴよぴよ〜', 'ぴよ！(やる気MAX)', 'ぴよぴよ…(疲れた)', 'ちっちゃくても頑張るピヨ', 'ぴよっ！？'],
+    tip: ['メモは音声入力もできるピヨ！', '繰り返し設定で習慣化できるピヨ'],
+  },
+  obake: {
+    chat: ['ふぁ〜…', 'ぼくみえてる？', 'ドクロンと遊んでた', '驚かしちゃおっと', 'ふらふら…', 'ぼくの正体は秘密'],
+    tip: ['ナレッジタブにメモした知識が貯まるよ〜', '夜更かしせず、明日のTODOを軽くして寝るのもアリ'],
+  },
+  yukigitsune: {
+    chat: ['ふっ、運気上昇のしるしだ', '九尾を見たな', '雪のような気品を', '今日は良い日になるぞ', '尾を数えると不思議が起きる', '選ばれし者よ'],
+    tip: ['完了したTODOは履歴に残り、知の糧となる', '焦らずとも、続けることが運を呼ぶ'],
+  },
+  shibainu: {
+    chat: ['わんわん！', 'わんわんわん！', '走り回るぞ！', 'あなた最高！', '尻尾ぶんぶん', '今日も全力疾走！', 'もっと撫でて〜'],
+    tip: ['TODOにタグを付けると分類しやすいワン！', '完了するとコインがもらえるワン！'],
+  },
+  magician: {
+    chat: ['じゃじゃーん！', '魔法の時間だ', 'アブラカタブラ', '袖の中、空っぽに見える？', '拍手をくれ、拍手を', '種も仕掛けもあるんだ'],
+    tip: ['メモを書いてAI解析するとタスクが自動で生まれるぞ', 'ガチャは確率の魔法、引きすぎ注意'],
+  },
+  dragon: {
+    chat: ['我は黒龍なり', '汝のタスク、整えん', '…', '古より見守る', '忠誠を誓う', '縮んでも龍は龍'],
+    tip: ['繰り返し設定は「毎日」「毎週」など選べる', '完了したナレッジは知の宝として残る'],
+  },
+  pylar: {
+    chat: ['いいねっ！', 'うっす！', '君ならできる！', '今日も腕を立てよう！', '筋肉は裏切らない', '応援してるぞ！', 'グッド！'],
+    tip: ['TODOを完了するとコインがもらえるぜ！', '1日1タスクでも前進だ！'],
+  },
+  matameta: {
+    chat: ['めためたわかる！', 'ふむふむ、めためたわかる', 'なるほど〜', '頭の芽が育ってきた', 'もう一度教えて？', 'わかったふりは得意'],
+    tip: ['ナレッジを集めると芽が伸びる気がする', 'メモを残せば後で見返せるんだって、めためたわかる'],
+  },
+  gomachan: {
+    chat: ['すぴー…', 'ねむい…', 'あと10分…', 'ふあぁ', '起こさないで', 'おふとん最高', '夢の中で泳ぐ', 'ぱたぱた'],
+    tip: ['通知設定でリマインドできるよ、たぶん…', '寝る前にTODOを整理しておくと朝が楽だよ'],
+  },
+};
+
+function pickMemoMonLine(defId: string): string | null {
+  const lines = MEMOMON_LINES[defId];
+  if (!lines) return null;
+  const useTip = lines.tip.length > 0 && Math.random() < 0.3;
+  const pool = useTip ? lines.tip : lines.chat;
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; onTapReward: () => void }) {
   const scaleRef    = useRef(scale);
@@ -4623,6 +4684,7 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
   const liveRef     = useRef<Record<string, LiveMon>>({});
   const elemRefs    = useRef<Record<string, HTMLDivElement | null>>({});
   const imgRefs     = useRef<Record<string, HTMLImageElement | null>>({});
+  const bubbleRefs  = useRef<Record<string, HTMLDivElement | null>>({});
   const rafRef      = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const [monIds, setMonIds] = useState<string[]>([]);
@@ -4674,6 +4736,21 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
         if (!def) return;
         const sc = scaleRef.current;
         const mw = Math.round(def.monW * sc);
+
+        // Update speech bubble (uses position from previous frame — invisible at 60fps)
+        const bubble = bubbleRefs.current[m.uid];
+        if (bubble) {
+          const expired = m.speech && Date.now() > m.speech.until;
+          if (expired) m.speech = undefined;
+          const hide = !m.speech || m.state === 'hidden' || m.state === 'hiding' || m.state === 'dislike-wait';
+          if (hide) {
+            if (bubble.style.display !== 'none') bubble.style.display = 'none';
+          } else {
+            bubble.style.left = `${Math.round(m.x + mw / 2)}px`;
+            bubble.style.top  = `${Math.round(m.y) - 6}px`;
+            if (bubble.style.display !== 'block') bubble.style.display = 'block';
+          }
+        }
         const mh = Math.round(def.monH * sc);
 
         if (m.state === 'hidden') return;
@@ -4865,8 +4942,20 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
     if (m.tapCount <= 3) {
       m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
       m.vx = 0; m.vy = 0; m.state = 'idle';
+      const line = pickMemoMonLine(def.id);
+      if (line) {
+        m.speech = { text: line, until: Date.now() + 4000 };
+        const bubble = bubbleRefs.current[m.uid];
+        if (bubble) {
+          bubble.textContent = line;
+          bubble.style.display = 'block';
+        }
+      }
       onTapReward();
     } else {
+      m.speech = undefined;
+      const bubble = bubbleRefs.current[m.uid];
+      if (bubble) bubble.style.display = 'none';
       startHide(m, def);
     }
   }
@@ -4913,6 +5002,14 @@ function MemoMonLayer({ mons, scale, initSleep, onTapReward }: { mons: MemoMonIn
           </div>
         );
       })}
+      {monIds.map(uid => (
+        <div
+          key={`bubble-${uid}`}
+          ref={el => { bubbleRefs.current[uid] = el; }}
+          className="memomon-bubble"
+          style={{ display: 'none' }}
+        />
+      ))}
     </div>
   );
 }
