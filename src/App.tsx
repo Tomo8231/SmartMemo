@@ -107,7 +107,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1723,6 +1723,27 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
 }
 
 async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = '', mode: 'todo' | 'idea' | 'both' = 'both'): Promise<ParseResult> {
+  // Empty-line-separated paragraphs become independent knowledge entries.
+  // Splits on one or more blank lines (allowing trailing whitespace).
+  const paragraphs = text
+    .split(/\n[ \t　]*\n+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 0);
+
+  if (paragraphs.length <= 1) {
+    return parseMemoSingleBlock(text, existingProjects, apiKey, mode, false);
+  }
+
+  const results = await Promise.all(
+    paragraphs.map(p => parseMemoSingleBlock(p, existingProjects, apiKey, mode, true))
+  );
+  return {
+    todos: results.flatMap(r => r.todos),
+    ideas: results.flatMap(r => r.ideas),
+  };
+}
+
+async function parseMemoSingleBlock(text: string, existingProjects: string[] = [], apiKey = '', mode: 'todo' | 'idea' | 'both' = 'both', oneParagraphOfMany = false): Promise<ParseResult> {
   const modeInstruction =
     mode === 'todo'
       ? `あなたはメモをTODOに変換するアシスタントです。以下のメモをTODOのみに変換し、ideas は必ず空配列で返してください。\n\n`
@@ -1767,7 +1788,10 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     `     例「毎月1日」   → recurring="monthly", recurringDay=1\n` +
     `     例「毎月15日」  → recurring="monthly", recurringDay=15\n` +
     `   - daily: recurringDay不要\n` +
-    `   startDate=本日（または指定の開始日）、endDate=6ヶ月後（または指定の終了日）\n\n` +
+    `   startDate=本日（または指定の開始日）、endDate=6ヶ月後（または指定の終了日）\n` +
+    (oneParagraphOfMany
+      ? `10. 【重要】このメモは、ユーザーが空行で区切った1段落分を抜き出したものです。同一段落内の内容はひと続きの「1つのナレッジentry」としてまとめてください（明確に複数の独立トピックが含まれる場合のみ分割可）。TODOは独立した行動それぞれをentryにしてください。\n\n`
+      : `\n`) +
     `形式（JSONのみ、コードブロック不要）:\n` +
     `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[],"coinReward":20}]}\n\n` +
     `メモ:\n${text}`;
