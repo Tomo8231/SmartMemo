@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.2';
+const APP_VERSION = '1.13.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4782,8 +4782,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
       : `${selectedDef.name} は満足げ（なつき +${eff.affectionDelta}）`;
     showToastMsg(msg, eff.reaction);
     setShowFoodPicker(false);
-    // Trigger happy reaction (one-shot, then auto-returns to sit)
-    setCurrentAnim('happy');
+    // Reaction animation: favorite/normal -> happy, disliked -> dislike
+    const reactionAnim: AnimState = eff.reaction === 'dis' ? 'dislike' : 'happy';
+    setCurrentAnim(reactionAnim);
     setAnimFrame(0);
   }
 
@@ -4803,8 +4804,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     }));
     if (!infinite) onGainCoins(5);
     showToastMsg(`${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`, 'pet');
-    // Trigger surprise reaction (one-shot, then auto-returns to sit)
-    setCurrentAnim('surprise');
+    // Trigger happy reaction (one-shot, then auto-returns to sit)
+    setCurrentAnim('happy');
     setAnimFrame(0);
   }
 
