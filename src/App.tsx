@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.4';
+const APP_VERSION = '1.13.5';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4682,6 +4682,90 @@ function pickMemoMonLine(defId: string): string | null {
 // ─────────────────────────────────────────────────────────────
 // Playground Modal (feed & pet memomons)
 // ─────────────────────────────────────────────────────────────
+type ReactionKind = 'pet' | 'feedFav' | 'feedNormal' | 'feedDis';
+const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
+  kuroneko: {
+    pet:        ['…にゃ', 'ふぅ…', 'まあいい', '見るな', 'もうちょっと'],
+    feedFav:    ['これだ…！', '思い出すにゃ', 'お主、わかっておるな', '至福…', '夜のごちそうだ'],
+    feedNormal: ['ふむ', '悪くない', 'まあ食ってやろう', 'にゃ', 'ごちそうさま'],
+    feedDis:    ['…これは', '勘弁してくれ', 'にゃっ！？', 'これは違う', 'ぐぬぬ'],
+  },
+  skullon: {
+    pet:        ['カラカラ…', '我に触れたな', 'ホネに沁みる', 'もぞ', '気は確かか？'],
+    feedFav:    ['カラカラ！！', '我が魂が震える', 'これぞ供物', '永遠の味だ', 'おばけにも分けてやろう'],
+    feedNormal: ['いただこう', 'カラカラ', '腹はないが…', 'ふむ', 'まあよかろう'],
+    feedDis:    ['カラ…？', 'これは罠か', '我を試すか', 'ホネが拒んでいる', 'うっ…'],
+  },
+  slime: {
+    pet:        ['ぷるん♪', 'むにゅ〜', 'もっとぉ', 'ぷにぷに〜', 'たのしー！'],
+    feedFav:    ['ぷるん♥', 'すきー！', 'もっとちょうだい！', 'しあわせ〜', 'これだいすき！'],
+    feedNormal: ['ぷる', 'うん', 'おいしい', 'ぷにっ', 'ごちそうさま'],
+    feedDis:    ['ぷる…', 'うえ〜', 'ぷにゅん（拒否）', 'これダメ…', '溶けそう…'],
+  },
+  hiyoko: {
+    pet:        ['ぴよ♪', 'ぴよぴよ〜', 'うれしいピヨ', 'ぴよ！', 'もっとピヨ'],
+    feedFav:    ['ピヨ♥', '大好きピヨ！', 'ぴよぴよっ！', 'もっとちょうだいピヨ', 'たまらんピヨ'],
+    feedNormal: ['ぴよ', 'ごちそうさまピヨ', 'おいしいピヨ', 'ぴよぴよ', 'まあピヨ'],
+    feedDis:    ['ぴ、ぴよ…', 'これはピヨらない', 'ぴよっ！？', '苦手ピヨ', 'うっぴよ'],
+  },
+  obake: {
+    pet:        ['ふわ〜', 'くすぐったい〜', 'ぼくに触れたね', 'ふふっ', 'もう一回ね'],
+    feedFav:    ['ふわふわ♥', 'ぼくの大好物だ！', '透けるくらい嬉しい！', 'ありがと〜', '一生ついていくよ'],
+    feedNormal: ['いただきまーす', 'ふむふむ', 'ぼくも食べられるんだ', '満足', 'ごちそうさま'],
+    feedDis:    ['ふ、ふぇ…', 'ちょっと…', 'ぼく無理かも', 'うえぇ', '消えちゃう…'],
+  },
+  yukigitsune: {
+    pet:        ['ふっ', '良き手つきよ', '尾が揺れる', '心地よい', 'もう少し…'],
+    feedFav:    ['ふっ、見事！', '神饌の味よ', '我が選んだ証', '永遠に覚えておこう', '汝に幸あれ'],
+    feedNormal: ['いただこう', 'ふむ', '悪くない', 'ありがたい', 'ごちそうさま'],
+    feedDis:    ['…', 'これは…', '我を試すか', 'ふっ、無理', '受け取れぬ'],
+  },
+  shibainu: {
+    pet:        ['わん！', 'もっと！', 'うれしいわん♪', 'なでなで好き！', '尻尾とまらん！'],
+    feedFav:    ['わわわん！', 'これ最高ぉぉ！', 'ありがとうわん！！', 'ごほうび！！', '飼い主は神…！'],
+    feedNormal: ['わん♪', 'うまうま', 'ごちそうさまわん', 'おいちー', 'もぐもぐ'],
+    feedDis:    ['わぅ…', 'これは違うわん', 'うえぇぇ…', 'なんで？', '違うやつほしいわん'],
+  },
+  magician: {
+    pet:        ['マジックタイム！', 'ふふ、心地よい', 'これも魔法', 'おや、優しいね', 'ブラボー！'],
+    feedFav:    ['ジャジャーン！', '魔法のような味！', 'これぞ秘伝のレシピ！', '私の最高傑作だ', 'アンコール！'],
+    feedNormal: ['頂戴しよう', 'ふむ', '魔法的に消えていく', 'ごちそうさま', '満足だ'],
+    feedDis:    ['消失の魔法を…', 'これは罠か？', '私の舌は誤魔化せん', 'ノーサンキュー', 'マジで無理'],
+  },
+  dragon: {
+    pet:        ['…うむ', '心地よい', '人の手とは', 'ふぅ', 'もう少しよかろう'],
+    feedFav:    ['これぞ伝説の味', '汝、献身を見せたな', '我が魂が震える', '千年の友よ', '忠誠を誓う'],
+    feedNormal: ['いただこう', 'うむ', '悪くない', 'ありがたい', '腹は満ちた'],
+    feedDis:    ['…', 'これは…', '我に挑むか', '受け取れぬ', '汝、覚悟はあるか'],
+  },
+  pylar: {
+    pet:        ['いいねっ！', 'うれしいぜ！', 'もっとくれ！', '元気が出る！', 'サンキュー！'],
+    feedFav:    ['ベリーグッド！', '最高！！！', 'これは筋肉になる！', '今日はベストデー！', 'ありがとう兄貴！'],
+    feedNormal: ['いただきます！', 'うむ、うまい', 'ごちそうさん', '満タンだぜ', 'いい栄養！'],
+    feedDis:    ['うっ…', 'これは厳しい', '筋肉が拒否', 'ちょっとパス', 'グッドじゃない…'],
+  },
+  matameta: {
+    pet:        ['めためたわかる', 'なるほどなで！', 'これはいい', 'ふむふむ', '芽が育つ'],
+    feedFav:    ['めためたわかる！！', 'これは伝説の味！', '芽がぐんぐん育つ！', '知識が増えた気がする', 'めためた満足！'],
+    feedNormal: ['ふむふむ', 'めためた普通', 'ごちそうさま', 'これも勉強', '満足めためた'],
+    feedDis:    ['めため…た？', 'これは違うかも', '芽が縮む…', 'うっ', 'めため…たくない'],
+  },
+  gomachan: {
+    pet:        ['ふあぁ…', 'ねむい…', 'もうちょっと…', 'すぴー', 'ぱたぱた'],
+    feedFav:    ['ぱたぱた♥', 'お腹いっぱい幸せ', 'すきー…', 'ぱたぱたぱた', 'おふとんに戻る'],
+    feedNormal: ['もぐもぐ…', 'ありがと…', 'ふあぁ…', 'すぴー…', 'ごちそうさま'],
+    feedDis:    ['ぐぬ…', '寝る前提でない…', 'ぱた…', 'ふぁ…ダメ', 'うえぇ'],
+  },
+};
+
+function pickReaction(defId: string, kind: ReactionKind): string | null {
+  const r = MEMOMON_REACTIONS[defId];
+  if (!r) return null;
+  const pool = r[kind];
+  if (!pool || pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 const PET_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
 
 function affectionLevel(a: number): { label: string; stars: string } {
@@ -4779,11 +4863,21 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
         lastSeenAt: now,
       };
     }));
-    const msg = eff.reaction === 'fav'
-      ? `大好物！${selectedDef.name} が大喜び（なつき +${eff.affectionDelta}）`
+    const reactionKind: ReactionKind = eff.reaction === 'fav'
+      ? 'feedFav'
       : eff.reaction === 'dis'
-      ? `${selectedDef.name} は嫌いみたい…（なつき ${eff.affectionDelta}）`
-      : `${selectedDef.name} は満足げ（なつき +${eff.affectionDelta}）`;
+      ? 'feedDis'
+      : 'feedNormal';
+    const line = pickReaction(selectedDef.id, reactionKind);
+    const sign = eff.affectionDelta >= 0 ? '+' : '';
+    const fallback = eff.reaction === 'fav'
+      ? `大好物！${selectedDef.name} が大喜び`
+      : eff.reaction === 'dis'
+      ? `${selectedDef.name} は嫌いみたい…`
+      : `${selectedDef.name} は満足げ`;
+    const msg = line
+      ? `${selectedDef.name}「${line}」（なつき ${sign}${eff.affectionDelta}）`
+      : `${fallback}（なつき ${sign}${eff.affectionDelta}）`;
     showToastMsg(msg, eff.reaction);
     setShowFoodPicker(false);
     // Reaction animation: favorite/normal -> happy, disliked -> dislike
@@ -4807,7 +4901,11 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
       return { ...m, affection: Math.min(100, baseAff + 2), lastPetAt: now, lastSeenAt: now };
     }));
     if (!infinite) onGainCoins(5);
-    showToastMsg(`${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`, 'pet');
+    const line = pickReaction(selectedDef.id, 'pet');
+    const msg = line
+      ? `${selectedDef.name}「${line}」（なつき +2、コイン +5）`
+      : `${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`;
+    showToastMsg(msg, 'pet');
     // Trigger happy reaction (one-shot, then auto-returns to sit)
     setCurrentAnim('happy');
     setAnimFrame(0);
