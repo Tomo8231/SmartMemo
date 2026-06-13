@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.3';
+const APP_VERSION = '1.13.4';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4729,7 +4729,11 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     }
     setAnimFrame(0);
     let frame = 0;
-    const total = animDef.frames.length;
+    // Idle (sit) only cycles between frames 0 and 1 for a subtle breath/bob.
+    // Reaction anims (happy / dislike / surprise) play through all their frames.
+    const total = currentAnim === 'sit'
+      ? Math.min(2, animDef.frames.length)
+      : animDef.frames.length;
     const fps = animDef.fps || 6;
     const id = setInterval(() => {
       frame += 1;
