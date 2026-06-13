@@ -50,6 +50,7 @@ type Settings = {
   gachaUnlocked?: { sounds: string[]; bgs: number[]; mons?: string[] };
   memoMonVisible?: boolean;
   hiddenMons?: string[];
+  activeMonUid?: string;
   memoMonSize?: 'small' | 'medium' | 'large';
   memoMonSpeech?: boolean;
   usedGiftCodes?: string[];
@@ -62,7 +63,7 @@ type Settings = {
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; };
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
   label: string; rarity: string; stars: string; color: string;
@@ -107,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.11.1';
+const APP_VERSION = '1.12.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -985,6 +986,19 @@ const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
   matameta:    { fav: ['herb', 'apple'],  dis: ['sushi'] },
   gomachan:    { fav: ['sushi', 'cake'],  dis: ['cookie'] },
 };
+
+// Affection decays 1 point per ~4 hours when the mon isn't being displayed
+const AFFECTION_DECAY_HOURS = 4;
+
+// "Effective" affection considering decay since lastSeenAt
+function effectiveAffection(mon: MemoMonInstance, now: number = Date.now()): number {
+  const stored = mon.affection ?? 0;
+  if (stored <= 0) return 0;
+  const last = mon.lastSeenAt ?? mon.lastFed ?? now;
+  const hours = Math.max(0, (now - last) / 3600000);
+  const decay = Math.floor(hours / AFFECTION_DECAY_HOURS);
+  return Math.max(0, stored - decay);
+}
 
 // Compute affection / hunger delta and reaction message for a feeding action
 function computeFeedingEffect(defId: string, foodId: string): { affectionDelta: number; hungerDelta: number; reaction: 'fav' | 'dis' | 'normal' } {
@@ -4380,9 +4394,13 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
             </div>
             <div className="settings-row">
               <div>
-                <div className="settings-row-label">メモモンを選ぶ</div>
+                <div className="settings-row-label">画面に出すメモモンを選ぶ</div>
                 <div className="settings-row-sub">
-                  {memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId)).length} / {memoMons.length} 体表示中
+                  {(() => {
+                    const active = (settings.activeMonUid && memoMons.find(m => m.uid === settings.activeMonUid)) || memoMons[0];
+                    const def = active ? MEMOMON_DEFS.find(d => d.id === active.defId) : null;
+                    return `現在: ${def?.name || '—'} / 全 ${memoMons.length} 体`;
+                  })()}
                 </div>
               </div>
               <button className="font-size-opt" onClick={() => setShowMonSelector(true)}>選択</button>
@@ -4401,23 +4419,25 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
             borderRadius: '20px 20px 0 0', padding: '20px 16px 32px',
             maxHeight: '70vh', overflowY: 'auto',
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 16, textAlign: 'center' }}>メモモンを選ぶ</div>
+            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6, textAlign: 'center' }}>画面に出すメモモンを選ぶ</div>
+            <div style={{ fontSize: 12, color: 'var(--text-sub,#666)', textAlign: 'center', marginBottom: 14 }}>1体だけが画面に出ます。お出かけ中はなつき度が減りません。</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
               {memoMons.map(m => {
                 const def = MEMOMON_DEFS.find(d => d.id === m.defId);
                 if (!def) return null;
-                const hidden = (settings.hiddenMons || []).includes(m.defId);
+                const activeUid = settings.activeMonUid;
+                const fallbackActive = !activeUid && memoMons[0]?.uid === m.uid;
+                const isActive = activeUid === m.uid || fallbackActive;
                 return (
                   <div
                     key={m.uid}
-                    onClick={() => setMonInfoId(m.defId)}
+                    onClick={() => onChange('activeMonUid', m.uid)}
                     style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center',
                       gap: 8, padding: '16px 8px',
-                      border: `2px solid ${hidden ? '#ddd' : 'var(--accent, #4f46e5)'}`,
+                      border: `2px solid ${isActive ? 'var(--accent, #4f46e5)' : '#ddd'}`,
                       borderRadius: 14, cursor: 'pointer',
-                      background: hidden ? '#fafafa' : 'rgba(79,70,229,0.06)',
-                      opacity: hidden ? 0.5 : 1,
+                      background: isActive ? 'rgba(79,70,229,0.06)' : '#fafafa',
                       transition: 'all 0.15s',
                     }}
                   >
@@ -4429,9 +4449,9 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{def.name}</div>
                     <div style={{
                       fontSize: 11, padding: '2px 8px', borderRadius: 20,
-                      background: hidden ? '#eee' : 'var(--accent, #4f46e5)',
-                      color: hidden ? '#888' : '#fff',
-                    }}>{hidden ? '非表示' : '表示中'}</div>
+                      background: isActive ? 'var(--accent, #4f46e5)' : '#eee',
+                      color: isActive ? '#fff' : '#888',
+                    }}>{isActive ? '画面' : '休憩中'}</div>
                   </div>
                 );
               })}
@@ -4447,7 +4467,6 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
         const def = MEMOMON_DEFS.find(d => d.id === monInfoId);
         const gachaItem = GACHA_ITEMS.find(g => g.type === 'memomon' && g.monDefId === monInfoId);
         if (!def) return null;
-        const hidden = (settings.hiddenMons || []).includes(monInfoId);
         const ecology = gachaItem?.flavor || def.desc;
         const stars = gachaItem?.stars || (def.rarity === 'ultra' ? '★★★★★' : '★★★★');
         const rarityColor = def.rarity === 'ultra' ? '#e040fb' : def.rarity === 'super' ? '#f9a825' : '#4caf50';
@@ -4467,10 +4486,11 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => {
-                  const current = settings.hiddenMons || [];
-                  onChange('hiddenMons', hidden ? current.filter(id => id !== monInfoId) : [...current, monInfoId]);
+                  const target = memoMons.find(m => m.defId === monInfoId);
+                  if (target) onChange('activeMonUid', target.uid);
+                  setMonInfoId(null);
                 }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'2px solid var(--accent,#4f46e5)', color:'var(--accent,#4f46e5)', background:'transparent', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
-                  {hidden ? '表示する' : '非表示にする'}
+                  画面に出す
                 </button>
                 <button onClick={() => setMonInfoId(null)}
                   style={{ flex:1, padding:'11px 0', borderRadius:12, background:'var(--accent,#4f46e5)', color:'#fff', border:'none', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
@@ -4780,14 +4800,16 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
-function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onSpendCoins, onGainCoins }: {
+function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive }: {
   memoMons: MemoMonInstance[];
   coins: number;
   infinite: boolean;
+  activeMonUid: string | undefined;
   onClose: () => void;
   onUpdateMons: (updater: (mons: MemoMonInstance[]) => MemoMonInstance[]) => void;
   onSpendCoins: (amount: number) => void;
   onGainCoins: (amount: number) => void;
+  onSetActive: (uid: string) => void;
 }) {
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
@@ -4821,15 +4843,17 @@ function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onS
     }
     if (!infinite) onSpendCoins(food.cost);
     const eff = computeFeedingEffect(selectedDef.id, food.id);
+    const now = Date.now();
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
-      const baseAff = m.affection ?? 0;
+      const baseAff = effectiveAffection(m, now); // honor decay before adding bonus
       const baseHun = m.hunger ?? 0;
       return {
         ...m,
         affection: Math.max(0, Math.min(100, baseAff + eff.affectionDelta)),
         hunger:    Math.max(0, Math.min(100, baseHun + eff.hungerDelta)),
-        lastFed:   Date.now(),
+        lastFed:   now,
+        lastSeenAt: now,
       };
     }));
     const msg = eff.reaction === 'fav'
@@ -4852,8 +4876,8 @@ function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onS
     }
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
-      const baseAff = m.affection ?? 0;
-      return { ...m, affection: Math.min(100, baseAff + 2), lastPetAt: now };
+      const baseAff = effectiveAffection(m, now); // honor decay first
+      return { ...m, affection: Math.min(100, baseAff + 2), lastPetAt: now, lastSeenAt: now };
     }));
     if (!infinite) onGainCoins(5);
     showToastMsg(`${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`, 'pet');
@@ -4861,7 +4885,8 @@ function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onS
 
   const happyFrames = selectedDef?.sprites?.happy?.frames;
   const bigSrc = happyFrames ? happyFrames[animFrame % happyFrames.length] : (selected ? MEMOMON_IMGS[selected.defId] : '');
-  const aff = selected?.affection ?? 0;
+  const nowMs = Date.now();
+  const aff = selected ? effectiveAffection(selected, nowMs) : 0;
   const hun = selected?.hunger ?? 0;
   const lvl = affectionLevel(aff);
   const prefs = selectedDef ? (MEMOMON_FOOD_PREFS[selectedDef.id] || { fav: [], dis: [] }) : { fav: [], dis: [] };
@@ -4885,15 +4910,17 @@ function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onS
               {visibleMons.map(m => {
                 const def = MEMOMON_DEFS.find(d => d.id === m.defId);
                 if (!def) return null;
+                const isOnScreen = m.uid === activeMonUid || (!activeMonUid && m.uid === visibleMons[0]?.uid);
                 return (
                   <button
                     key={m.uid}
-                    className={`playground-mon-card${selected?.uid === m.uid ? ' active' : ''}`}
+                    className={`playground-mon-card${selected?.uid === m.uid ? ' active' : ''}${isOnScreen ? ' onscreen' : ''}`}
                     onClick={() => setSelectedUid(m.uid)}
                   >
+                    {isOnScreen && <div className="playground-mon-card-badge">画面</div>}
                     <img src={MEMOMON_IMGS[def.id]} alt={def.name} />
                     <div className="playground-mon-card-name">{def.name}</div>
-                    <div className="playground-mon-card-aff">♥ {m.affection ?? 0}</div>
+                    <div className="playground-mon-card-aff">♥ {effectiveAffection(m, nowMs)}</div>
                   </button>
                 );
               })}
@@ -4941,6 +4968,20 @@ function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onS
                     🍽️ 餌をあげる
                   </button>
                 </div>
+                {(() => {
+                  const isOnScreen = selected.uid === activeMonUid || (!activeMonUid && selected.uid === visibleMons[0]?.uid);
+                  return (
+                    <button
+                      className={`playground-btn-active${isOnScreen ? ' onscreen' : ''}`}
+                      onClick={() => onSetActive(selected.uid)}
+                      disabled={isOnScreen}
+                    >
+                      {isOnScreen
+                        ? '🏠 画面にお出かけ中（なつき度は減らない）'
+                        : '🚪 この子を画面に出す'}
+                    </button>
+                  );
+                })()}
               </div>
             )}
           </>
@@ -5449,6 +5490,21 @@ function SmartMemoApp() {
     }
   }, []);
 
+  // Keep the active mon's lastSeenAt fresh so its affection doesn't decay while displayed.
+  // Updates every 60s and once on mount; non-active mons stay frozen at their last lastSeenAt.
+  useEffect(() => {
+    if (settings.memoMonVisible === false) return;
+    const tick = () => {
+      const activeUid = settings.activeMonUid;
+      const target = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
+      if (!target) return;
+      setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, lastSeenAt: Date.now() } : m));
+    };
+    tick();
+    const id = setInterval(tick, 60 * 1000);
+    return () => clearInterval(id);
+  }, [settings.activeMonUid, settings.memoMonVisible, memoMons.length]);
+
   useEffect(() => {
     if (navigator.storage && (navigator.storage as any).persist) {
       (navigator.storage as any).persist().catch(() => {});
@@ -5687,7 +5743,10 @@ function SmartMemoApp() {
         />
       )}
       {settings.memoMonVisible !== false && (() => {
-        const visible = memoMons.filter(m => !(settings.hiddenMons || []).includes(m.defId));
+        // Only one memomon is on screen at a time. Default to the first owned one.
+        const activeUid = settings.activeMonUid;
+        const active = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
+        const visible = active ? [active] : [];
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
         return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} speechEnabled={settings.memoMonSpeech !== false} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
@@ -5696,10 +5755,12 @@ function SmartMemoApp() {
           memoMons={memoMons}
           coins={settings.coins || 0}
           infinite={!!settings.infiniteCoins}
+          activeMonUid={settings.activeMonUid}
           onClose={() => setShowPlayground(false)}
           onUpdateMons={updater => setMemoMons(updater)}
           onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
           onGainCoins={amount => setSettings(p => ({ ...p, coins: (p.coins || 0) + amount }))}
+          onSetActive={uid => setSettings(p => ({ ...p, activeMonUid: uid }))}
         />
       )}
       {showInsights && (
