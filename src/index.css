@@ -314,7 +314,11 @@
     .tab-pane > * { flex-shrink:0; }
 
     /* ────────── Playground modal ────────── */
-    .playground-backdrop { z-index: 200; }
+    .playground-backdrop {
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
     .playground-modal {
       background: linear-gradient(160deg, #FFF7E8 0%, #FFEAD0 55%, #FFD9A8 100%);
       border-radius: 24px;
@@ -325,7 +329,7 @@
       position: relative;
       overflow-y: auto;
       box-shadow: 0 16px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.05);
-      animation: sheetUp .25s ease;
+      animation: detail-pop .22s cubic-bezier(.17, .67, .34, 1.4);
     }
     .playground-title {
       font-size: 17px; font-weight: 800; text-align: center;
