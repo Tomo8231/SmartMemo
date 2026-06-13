@@ -437,6 +437,21 @@
     .playground-level span {
       color: #5a3818; margin-left: 6px; font-weight: 600;
     }
+    .playground-bio {
+      width: 100%;
+      background: rgba(255,255,255,.5);
+      border-radius: 10px;
+      padding: 9px 12px;
+      font-size: 11px; line-height: 1.7;
+      color: rgba(90,56,24,.85);
+      max-height: 80px; overflow-y: auto;
+      text-align: left;
+      -webkit-overflow-scrolling: touch;
+    }
+    .app.dark .playground-bio {
+      background: rgba(0,0,0,.2);
+      color: rgba(240,226,200,.8);
+    }
     .playground-meter {
       width: 100%;
       display: grid; grid-template-columns: 70px 1fr 60px; align-items: center; gap: 8px;

@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.13.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3931,8 +3931,6 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
   const [keyInput, setKeyInput]         = useState(geminiApiKey || '');
   const [keyVisible, setKeyVisible]     = useState(false);
   const [apiStatus, setApiStatus]       = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
-  const [showMonSelector,  setShowMonSelector]  = useState(false);
-  const [monInfoId,        setMonInfoId]        = useState<string | null>(null);
   const [newHolidayDate,   setNewHolidayDate]   = useState('');
   const [giftCode, setGiftCode]             = useState('');
   const [giftMsg, setGiftMsg]               = useState<{ kind: 'idle' | 'ok' | 'ng'; msg: string }>({ kind: 'idle', msg: '' });
@@ -4352,7 +4350,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
             <span className="playground-open-btn-emoji">🎪</span>
             <span className="playground-open-btn-text">
               <span className="playground-open-btn-title">メモモンの遊び場</span>
-              <span className="playground-open-btn-sub">餌をあげてなつき度を上げよう</span>
+              <span className="playground-open-btn-sub">選ぶ・餌をあげる・なでる</span>
             </span>
             <span className="playground-open-btn-arrow">›</span>
           </button>
@@ -4392,115 +4390,9 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
                 onClick={() => onChange('memoMonSpeech', settings.memoMonSpeech === false ? true : false)}
               />
             </div>
-            <div className="settings-row">
-              <div>
-                <div className="settings-row-label">画面に出すメモモンを選ぶ</div>
-                <div className="settings-row-sub">
-                  {(() => {
-                    const active = (settings.activeMonUid && memoMons.find(m => m.uid === settings.activeMonUid)) || memoMons[0];
-                    const def = active ? MEMOMON_DEFS.find(d => d.id === active.defId) : null;
-                    return `現在: ${def?.name || '—'} / 全 ${memoMons.length} 体`;
-                  })()}
-                </div>
-              </div>
-              <button className="font-size-opt" onClick={() => setShowMonSelector(true)}>選択</button>
-            </div>
           </>}
         </div>
       </>}
-      {showMonSelector && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 2000,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'flex-end',
-        }} onClick={() => setShowMonSelector(false)}>
-          <div style={{
-            width: '100%', background: 'var(--card-bg, #fff)',
-            borderRadius: '20px 20px 0 0', padding: '20px 16px 32px',
-            maxHeight: '70vh', overflowY: 'auto',
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 6, textAlign: 'center' }}>画面に出すメモモンを選ぶ</div>
-            <div style={{ fontSize: 12, color: 'var(--text-sub,#666)', textAlign: 'center', marginBottom: 14 }}>1体だけが画面に出ます。お出かけ中はなつき度が減りません。</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-              {memoMons.map(m => {
-                const def = MEMOMON_DEFS.find(d => d.id === m.defId);
-                if (!def) return null;
-                const activeUid = settings.activeMonUid;
-                const fallbackActive = !activeUid && memoMons[0]?.uid === m.uid;
-                const isActive = activeUid === m.uid || fallbackActive;
-                return (
-                  <div
-                    key={m.uid}
-                    onClick={() => onChange('activeMonUid', m.uid)}
-                    style={{
-                      display: 'flex', flexDirection: 'column', alignItems: 'center',
-                      gap: 8, padding: '16px 8px',
-                      border: `2px solid ${isActive ? 'var(--accent, #4f46e5)' : '#ddd'}`,
-                      borderRadius: 14, cursor: 'pointer',
-                      background: isActive ? 'rgba(79,70,229,0.06)' : '#fafafa',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    <img
-                      src={MEMOMON_IMGS[def.id]}
-                      alt={def.name}
-                      style={{ width: def.monW * 2, height: def.monH * 2, imageRendering: 'pixelated' }}
-                    />
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{def.name}</div>
-                    <div style={{
-                      fontSize: 11, padding: '2px 8px', borderRadius: 20,
-                      background: isActive ? 'var(--accent, #4f46e5)' : '#eee',
-                      color: isActive ? '#fff' : '#888',
-                    }}>{isActive ? '画面' : '休憩中'}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <button
-              style={{ width: '100%', marginTop: 20, padding: '12px 0', borderRadius: 12, fontSize: 15, fontWeight: 600 }}
-              onClick={() => setShowMonSelector(false)}
-            >閉じる</button>
-          </div>
-        </div>
-      )}
-      {monInfoId && (() => {
-        const def = MEMOMON_DEFS.find(d => d.id === monInfoId);
-        const gachaItem = GACHA_ITEMS.find(g => g.type === 'memomon' && g.monDefId === monInfoId);
-        if (!def) return null;
-        const ecology = gachaItem?.flavor || def.desc;
-        const stars = gachaItem?.stars || (def.rarity === 'ultra' ? '★★★★★' : '★★★★');
-        const rarityColor = def.rarity === 'ultra' ? '#e040fb' : def.rarity === 'super' ? '#f9a825' : '#4caf50';
-        return (
-          <div style={{ position:'fixed', inset:0, zIndex:3000, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:'24px 16px' }}
-            onClick={() => setMonInfoId(null)}>
-            <div style={{ width:'100%', maxWidth:340, background:'var(--card-bg,#fff)', borderRadius:22, padding:'28px 20px 20px', boxShadow:'0 8px 32px rgba(0,0,0,0.18)' }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, marginBottom:16 }}>
-                <img src={MEMOMON_IMGS[def.id]} alt={def.name}
-                  style={{ width: def.monW * 2.2, height: def.monH * 2.2, imageRendering:'pixelated', marginBottom:4 }} />
-                <div style={{ fontWeight:700, fontSize:20 }}>{def.name}</div>
-                <div style={{ color: rarityColor, fontSize:16, letterSpacing:2 }}>{stars}</div>
-              </div>
-              <div style={{ fontSize:14, lineHeight:1.8, color:'var(--text-sub,#666)', background:'rgba(0,0,0,0.04)', borderRadius:14, padding:'14px 16px', marginBottom:18, whiteSpace:'pre-wrap' }}>
-                {ecology.replace(/^【生態】/, '').trim()}
-              </div>
-              <div style={{ display:'flex', gap:8 }}>
-                <button onClick={() => {
-                  const target = memoMons.find(m => m.defId === monInfoId);
-                  if (target) onChange('activeMonUid', target.uid);
-                  setMonInfoId(null);
-                }} style={{ flex:1, padding:'11px 0', borderRadius:12, border:'2px solid var(--accent,#4f46e5)', color:'var(--accent,#4f46e5)', background:'transparent', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
-                  画面に出す
-                </button>
-                <button onClick={() => setMonInfoId(null)}
-                  style={{ flex:1, padding:'11px 0', borderRadius:12, background:'var(--accent,#4f46e5)', color:'#fff', border:'none', fontWeight:600, fontSize:14, cursor:'pointer', fontFamily:'inherit' }}>
-                  閉じる
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       <div className="settings-section-title">プレゼントコード</div>
       <div className="settings-card">
@@ -4933,6 +4825,12 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
                 </div>
                 <div className="playground-name">{selectedDef.name}</div>
                 <div className="playground-level">{lvl.stars} <span>{lvl.label}</span></div>
+                {(() => {
+                  const gachaItem = GACHA_ITEMS.find(g => g.type === 'memomon' && g.monDefId === selectedDef.id);
+                  const ecology = (gachaItem?.flavor || selectedDef.desc || '').replace(/^【生態】/, '').trim();
+                  if (!ecology) return null;
+                  return <div className="playground-bio">{ecology}</div>;
+                })()}
                 <div className="playground-meter">
                   <div className="playground-meter-label">なつき度</div>
                   <div className="playground-meter-bar">
