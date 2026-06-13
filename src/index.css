@@ -313,6 +313,301 @@
     .tab-pane::-webkit-scrollbar { display:none; }
     .tab-pane > * { flex-shrink:0; }
 
+    /* ────────── Playground modal ────────── */
+    .playground-backdrop { z-index: 200; }
+    .playground-modal {
+      background: linear-gradient(160deg, #FFF7E8 0%, #FFEAD0 55%, #FFD9A8 100%);
+      border-radius: 24px;
+      width: calc(100% - 32px); max-width: 420px;
+      max-height: calc(100vh - 64px);
+      padding: 22px 18px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+      position: relative;
+      overflow-y: auto;
+      box-shadow: 0 16px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.05);
+      animation: sheetUp .25s ease;
+    }
+    .playground-title {
+      font-size: 17px; font-weight: 800; text-align: center;
+      color: #5a3818; letter-spacing: .5px;
+    }
+    .playground-coin-display {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      font-size: 13px; color: rgba(0,0,0,.5); font-weight: 600;
+    }
+    .playground-empty {
+      text-align: center; padding: 40px 20px;
+      font-size: 13px; color: rgba(0,0,0,.5); line-height: 1.7;
+    }
+    .playground-mon-strip {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding: 4px 2px; scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+    }
+    .playground-mon-strip::-webkit-scrollbar { display: none; }
+    .playground-mon-card {
+      flex: 0 0 auto; width: 78px;
+      background: rgba(255,255,255,.6);
+      border: 2px solid transparent;
+      border-radius: 14px;
+      padding: 8px 4px;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      cursor: pointer; font-family: inherit;
+      scroll-snap-align: start;
+      transition: transform .12s, border-color .12s, background .12s;
+    }
+    .playground-mon-card.active {
+      background: #fff;
+      border-color: #ff8a3d;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255,138,61,.3);
+    }
+    .playground-mon-card img {
+      width: 48px; height: 48px; object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .playground-mon-card-name {
+      font-size: 10px; font-weight: 600; color: #5a3818;
+      max-width: 100%; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .playground-mon-card-aff {
+      font-size: 10px; font-weight: 700; color: #e91e63;
+    }
+
+    .playground-detail {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      background: rgba(255,255,255,.55);
+      border-radius: 18px;
+      padding: 14px 14px 16px;
+    }
+    .playground-stage {
+      width: 140px; height: 130px;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 75%);
+    }
+    .playground-stage-img {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+      animation: monBob 0.8s ease-in-out infinite;
+    }
+    .playground-name {
+      font-size: 16px; font-weight: 800; color: #5a3818;
+    }
+    .playground-level {
+      font-size: 12px; font-weight: 700; color: #ff8a3d;
+      letter-spacing: .5px;
+    }
+    .playground-level span {
+      color: #5a3818; margin-left: 6px; font-weight: 600;
+    }
+    .playground-meter {
+      width: 100%;
+      display: grid; grid-template-columns: 70px 1fr 60px; align-items: center; gap: 8px;
+    }
+    .playground-meter-label {
+      font-size: 11px; font-weight: 700; color: #5a3818;
+    }
+    .playground-meter-bar {
+      height: 10px; border-radius: 6px;
+      background: rgba(0,0,0,.08); overflow: hidden;
+    }
+    .playground-meter-fill {
+      height: 100%; border-radius: 6px;
+      transition: width .25s ease;
+    }
+    .playground-meter-aff { background: linear-gradient(90deg, #ff8a3d, #e91e63); }
+    .playground-meter-hun { background: linear-gradient(90deg, #ffc107, #ff9800); }
+    .playground-meter-val {
+      font-size: 11px; font-weight: 600; color: #5a3818;
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .playground-prefs {
+      width: 100%;
+      display: flex; flex-direction: column; gap: 4px;
+      background: rgba(255,255,255,.5);
+      border-radius: 10px; padding: 8px 12px;
+    }
+    .playground-prefs-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px;
+    }
+    .playground-prefs-label {
+      font-weight: 700; color: #5a3818; min-width: 40px;
+    }
+    .playground-prefs-items { font-size: 16px; }
+    .playground-actions {
+      width: 100%;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      margin-top: 6px;
+    }
+    .playground-btn {
+      padding: 11px 8px; border: none; border-radius: 12px;
+      font-size: 13px; font-weight: 700; color: #fff;
+      cursor: pointer; font-family: inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      transition: transform .08s, opacity .12s;
+    }
+    .playground-btn:active { transform: scale(.96); }
+    .playground-btn-sub {
+      font-size: 10px; font-weight: 500; opacity: .9;
+    }
+    .playground-btn-pet  { background: linear-gradient(135deg, #4caf50, #2e7d32); }
+    .playground-btn-feed { background: linear-gradient(135deg, #ff8a3d, #e91e63); }
+
+    /* Settings entry button */
+    .playground-open-btn {
+      width: 100%;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 14px;
+      background: linear-gradient(135deg, #FFEAD0 0%, #FFD9A8 100%);
+      border: none; border-radius: 12px;
+      cursor: pointer; font-family: inherit;
+      margin-bottom: 12px;
+      transition: transform .08s, box-shadow .12s;
+      box-shadow: 0 2px 8px rgba(255,138,61,.2);
+    }
+    .playground-open-btn:active { transform: scale(.98); }
+    .playground-open-btn-emoji { font-size: 26px; line-height: 1; }
+    .playground-open-btn-text {
+      flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+      text-align: left;
+    }
+    .playground-open-btn-title {
+      font-size: 14px; font-weight: 800; color: #5a3818;
+    }
+    .playground-open-btn-sub {
+      font-size: 11px; font-weight: 500; color: rgba(90,56,24,.7);
+    }
+    .playground-open-btn-arrow {
+      font-size: 22px; color: #5a3818; opacity: .5;
+    }
+
+    /* Food picker overlay */
+    .playground-food-overlay {
+      position: absolute; inset: 0; z-index: 5;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      border-radius: inherit;
+      animation: fade-in .18s ease;
+    }
+    .playground-food-sheet {
+      background: #fff;
+      border-radius: 16px;
+      padding: 16px 14px 14px;
+      width: 100%;
+      max-height: 100%;
+      overflow-y: auto;
+      animation: detail-pop .22s cubic-bezier(.17,.67,.34,1.4);
+    }
+    .playground-food-title {
+      font-size: 14px; font-weight: 800; color: #5a3818;
+      text-align: center; margin-bottom: 12px;
+    }
+    .playground-food-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .playground-food-card {
+      position: relative;
+      background: #fff;
+      border: 1.5px solid #e0e0de; border-radius: 12px;
+      padding: 10px 6px;
+      cursor: pointer; font-family: inherit;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      transition: transform .08s, border-color .12s, background .12s;
+    }
+    .playground-food-card:hover:not(.disabled) { border-color: #ff8a3d; background: #fff8f0; }
+    .playground-food-card:active:not(.disabled) { transform: scale(.96); }
+    .playground-food-card.disabled { opacity: .4; cursor: not-allowed; }
+    .playground-food-card.fav { border-color: #e91e63; box-shadow: 0 0 0 2px rgba(233,30,99,.15); }
+    .playground-food-card.dis { border-color: #9e9e9e; opacity: .7; }
+    .playground-food-card.grade-1 { background: #fafafa; }
+    .playground-food-card.grade-2 { background: #f1f8e9; }
+    .playground-food-card.grade-3 { background: #e3f2fd; }
+    .playground-food-card.grade-4 { background: linear-gradient(135deg, #fff8e1, #fff3c0); }
+    .playground-food-emoji { font-size: 28px; line-height: 1; }
+    .playground-food-name { font-size: 12px; font-weight: 600; color: #1a1a18; }
+    .playground-food-grade { font-size: 9px; color: #ffa000; letter-spacing: 1px; }
+    .playground-food-cost {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 11px; font-weight: 700; color: #5a3818;
+    }
+    .playground-food-tag {
+      position: absolute; top: 4px; right: 4px;
+      font-size: 9px; font-weight: 700;
+      padding: 2px 5px; border-radius: 6px;
+      color: #fff;
+    }
+    .playground-food-tag.fav { background: #e91e63; }
+    .playground-food-tag.dis { background: #9e9e9e; }
+    .playground-food-cancel {
+      width: 100%; margin-top: 10px;
+      padding: 10px; border: 1px solid #e0e0de; border-radius: 10px;
+      background: #fff; color: #4a4a48;
+      font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+    }
+
+    /* Toast inside playground */
+    .playground-toast {
+      position: absolute;
+      bottom: 20px; left: 50%; transform: translateX(-50%);
+      max-width: 90%;
+      background: rgba(20,20,18,.9); color: #fff;
+      font-size: 12px; font-weight: 600;
+      padding: 8px 14px; border-radius: 10px;
+      animation: bubblePop .22s cubic-bezier(.17,.67,.34,1.4);
+      z-index: 10;
+      text-align: center;
+      pointer-events: none;
+    }
+    .playground-toast-fav      { background: rgba(233,30,99,.95); }
+    .playground-toast-dis      { background: rgba(96,96,96,.95); }
+    .playground-toast-pet      { background: rgba(76,175,80,.95); }
+    .playground-toast-cooldown { background: rgba(255,152,0,.95); }
+    .playground-toast-broke    { background: rgba(244,67,54,.95); }
+
+    /* Dark mode */
+    .app.dark .playground-modal {
+      background: linear-gradient(160deg, #2a1f12 0%, #1f1a14 55%, #18130e 100%);
+    }
+    .app.dark .playground-title,
+    .app.dark .playground-name,
+    .app.dark .playground-mon-card-name,
+    .app.dark .playground-meter-label,
+    .app.dark .playground-meter-val,
+    .app.dark .playground-prefs-label,
+    .app.dark .playground-level span {
+      color: #f0e2c8;
+    }
+    .app.dark .playground-coin-display,
+    .app.dark .playground-empty { color: rgba(240,226,200,.5); }
+    .app.dark .playground-mon-card { background: rgba(255,255,255,.05); }
+    .app.dark .playground-mon-card.active { background: rgba(255,138,61,.15); }
+    .app.dark .playground-detail { background: rgba(255,255,255,.04); }
+    .app.dark .playground-prefs { background: rgba(0,0,0,.2); }
+    .app.dark .playground-open-btn {
+      background: linear-gradient(135deg, #3a2a18 0%, #2a1f12 100%);
+    }
+    .app.dark .playground-open-btn-title,
+    .app.dark .playground-open-btn-arrow { color: #f0e2c8; }
+    .app.dark .playground-open-btn-sub { color: rgba(240,226,200,.6); }
+    .app.dark .playground-food-sheet { background: #28282c; }
+    .app.dark .playground-food-title,
+    .app.dark .playground-food-name,
+    .app.dark .playground-food-cost { color: #f0e2c8; }
+    .app.dark .playground-food-card {
+      background: #1e1e21; border-color: #3a3a3e;
+    }
+    .app.dark .playground-food-card.grade-1 { background: #1e1e21; }
+    .app.dark .playground-food-card.grade-2 { background: #1a2418; }
+    .app.dark .playground-food-card.grade-3 { background: #18222e; }
+    .app.dark .playground-food-card.grade-4 { background: linear-gradient(135deg, #2a2418, #2a1f12); }
+    .app.dark .playground-food-cancel {
+      background: #1e1e21; border-color: #3a3a3e; color: #b0b0ac;
+    }
+
     /* Bottom nav */
     .bottom-nav-wrapper {
       position:relative; flex:0 0 auto;
