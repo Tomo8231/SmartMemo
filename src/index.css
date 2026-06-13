@@ -437,6 +437,11 @@
       font-weight: 700; color: #5a3818; min-width: 40px;
     }
     .playground-prefs-items { font-size: 16px; }
+    .playground-prefs-hint {
+      font-size: 10px; font-weight: 500; color: rgba(90,56,24,.55);
+      font-style: italic; margin-top: 2px;
+    }
+    .app.dark .playground-prefs-hint { color: rgba(240,226,200,.45); }
     .playground-actions {
       width: 100%;
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
