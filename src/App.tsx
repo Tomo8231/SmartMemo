@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.0';
+const APP_VERSION = '1.13.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4781,9 +4781,6 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
   const aff = selected ? effectiveAffection(selected, nowMs) : 0;
   const hun = selected?.hunger ?? 0;
   const lvl = affectionLevel(aff);
-  const prefs = selectedDef ? (MEMOMON_FOOD_PREFS[selectedDef.id] || { fav: [], dis: [] }) : { fav: [], dis: [] };
-  const disFoods = prefs.dis.map(id => FOODS.find(f => f.id === id)).filter(Boolean) as Food[];
-
   return (
     <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="playground-modal">
@@ -4847,14 +4844,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
                 </div>
 
                 <div className="playground-prefs">
-                  <div className="playground-prefs-row">
-                    <span className="playground-prefs-label">嫌い</span>
-                    <span className="playground-prefs-items">
-                      {disFoods.length > 0 ? disFoods.map(f => f.emoji).join(' ') : '—'}
-                    </span>
-                  </div>
                   <div className="playground-prefs-hint">
-                    好物は色んな餌をあげて見つけよう
+                    好物・嫌いな物は色んな餌をあげて見つけよう
                   </div>
                 </div>
 
@@ -4895,12 +4886,11 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
               <div className="playground-food-title">餌をえらぶ</div>
               <div className="playground-food-grid">
                 {FOODS.map(f => {
-                  const isDis = prefs.dis.includes(f.id);
                   const canAfford = infinite || coins >= f.cost;
                   return (
                     <button
                       key={f.id}
-                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}${isDis ? ' dis' : ''}`}
+                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}`}
                       onClick={() => canAfford && handleFeed(f)}
                       disabled={!canAfford}
                     >
@@ -4908,7 +4898,6 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
                       <div className="playground-food-name">{f.name}</div>
                       <div className="playground-food-grade">{'★'.repeat(f.grade)}</div>
                       <div className="playground-food-cost"><IcoCoin />&nbsp;{f.cost}</div>
-                      {isDis && <div className="playground-food-tag dis">嫌</div>}
                     </button>
                   );
                 })}
