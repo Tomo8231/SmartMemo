@@ -61,8 +61,8 @@ type Settings = {
   splitReflectButtons?: boolean;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; };
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon';
   label: string; rarity: string; stars: string; color: string;
@@ -107,7 +107,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -955,6 +955,51 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     sprites: GM_SPRITES,
   },
 ];
+
+// ─────────────────────────────────────────────────────────────
+// Foods & feeding system
+// ─────────────────────────────────────────────────────────────
+type Food = { id: string; emoji: string; name: string; grade: 1 | 2 | 3 | 4; cost: number };
+const FOODS: Food[] = [
+  { id: 'pan',    emoji: '🍞', name: 'パン',           grade: 1, cost: 30  },
+  { id: 'herb',   emoji: '🌿', name: 'ハーブ',         grade: 1, cost: 30  },
+  { id: 'apple',  emoji: '🍎', name: 'りんご',         grade: 2, cost: 80  },
+  { id: 'cookie', emoji: '🍪', name: 'クッキー',       grade: 2, cost: 80  },
+  { id: 'sushi',  emoji: '🍣', name: '寿司',           grade: 3, cost: 200 },
+  { id: 'cake',   emoji: '🍰', name: 'ケーキ',         grade: 3, cost: 200 },
+  { id: 'steak',  emoji: '🍖', name: 'ステーキ',       grade: 4, cost: 500 },
+  { id: 'feed',   emoji: '🌟', name: 'メモモンフード', grade: 4, cost: 500 },
+];
+
+const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
+  kuroneko:    { fav: ['sushi'],          dis: ['herb'] },
+  skullon:     { fav: ['steak'],          dis: ['cake'] },
+  slime:       { fav: ['cake'],           dis: ['steak'] },
+  hiyoko:      { fav: ['herb', 'apple'],  dis: ['sushi'] },
+  obake:       { fav: ['feed'],           dis: ['pan'] },
+  yukigitsune: { fav: ['sushi'],          dis: ['cookie'] },
+  shibainu:    { fav: ['steak', 'cookie'], dis: ['herb'] },
+  magician:    { fav: ['cookie'],         dis: ['pan'] },
+  dragon:      { fav: ['steak', 'feed'],  dis: ['herb'] },
+  pylar:       { fav: ['apple'],          dis: ['cake'] },
+  matameta:    { fav: ['herb', 'apple'],  dis: ['sushi'] },
+  gomachan:    { fav: ['sushi', 'cake'],  dis: ['cookie'] },
+};
+
+// Compute affection / hunger delta and reaction message for a feeding action
+function computeFeedingEffect(defId: string, foodId: string): { affectionDelta: number; hungerDelta: number; reaction: 'fav' | 'dis' | 'normal' } {
+  const food = FOODS.find(f => f.id === foodId);
+  if (!food) return { affectionDelta: 0, hungerDelta: 0, reaction: 'normal' };
+  const prefs = MEMOMON_FOOD_PREFS[defId] || { fav: [], dis: [] };
+  if (prefs.fav.includes(foodId)) {
+    return { affectionDelta: 10 + food.grade * 3, hungerDelta: 30 + food.grade * 10, reaction: 'fav' };
+  }
+  if (prefs.dis.includes(foodId)) {
+    return { affectionDelta: -3, hungerDelta: 10, reaction: 'dis' };
+  }
+  return { affectionDelta: 2 + food.grade, hungerDelta: 20 + food.grade * 8, reaction: 'normal' };
+}
+
 function pixelToDataUrl(pixels: string[], palette: Record<string, string>, scale = MON_SCALE): string {
   const w = pixels[0].length * scale;
   const h = pixels.length * scale;
@@ -3859,11 +3904,12 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange, memoMons, onInsights }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
   onInsights: () => void;
+  onPlayground: () => void;
 }) {
   const { colorIdx, fontIdx, notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00', autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
@@ -4288,6 +4334,14 @@ function SettingsTab({ settings, onChange, memoMons, onInsights }: {
       {memoMons.length > 0 && <>
         <div className="settings-section-title">メモモン</div>
         <div className="settings-card">
+          <button className="playground-open-btn" onClick={onPlayground}>
+            <span className="playground-open-btn-emoji">🎪</span>
+            <span className="playground-open-btn-text">
+              <span className="playground-open-btn-title">メモモンの遊び場</span>
+              <span className="playground-open-btn-sub">餌をあげてなつき度を上げよう</span>
+            </span>
+            <span className="playground-open-btn-arrow">›</span>
+          </button>
           <div className="settings-row">
             <div>
               <div className="settings-row-label">メモモンを表示する</div>
@@ -4711,6 +4765,228 @@ function pickMemoMonLine(defId: string): string | null {
   const pool = useTip ? lines.tip : lines.chat;
   if (pool.length === 0) return null;
   return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Playground Modal (feed & pet memomons)
+// ─────────────────────────────────────────────────────────────
+const PET_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+
+function affectionLevel(a: number): { label: string; stars: string } {
+  if (a >= 90) return { label: '心の友', stars: '★★★★★' };
+  if (a >= 70) return { label: 'なかよし', stars: '★★★★' };
+  if (a >= 40) return { label: '打ち解けた', stars: '★★★' };
+  if (a >= 15) return { label: '挨拶仲間', stars: '★★' };
+  return { label: 'おはつ', stars: '★' };
+}
+
+function PlaygroundModal({ memoMons, coins, infinite, onClose, onUpdateMons, onSpendCoins, onGainCoins }: {
+  memoMons: MemoMonInstance[];
+  coins: number;
+  infinite: boolean;
+  onClose: () => void;
+  onUpdateMons: (updater: (mons: MemoMonInstance[]) => MemoMonInstance[]) => void;
+  onSpendCoins: (amount: number) => void;
+  onGainCoins: (amount: number) => void;
+}) {
+  const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
+  const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
+  const [showFoodPicker, setShowFoodPicker] = useState(false);
+  const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' } | null>(null);
+  const [animFrame, setAnimFrame] = useState(0);
+
+  const selected = visibleMons.find(m => m.uid === selectedUid) || visibleMons[0];
+  const selectedDef = selected ? MEMOMON_DEFS.find(d => d.id === selected.defId) : null;
+
+  // Animate the big sprite (happy loop)
+  useEffect(() => {
+    if (!selectedDef?.sprites?.happy) return;
+    const fps = selectedDef.sprites.happy.fps ?? 6;
+    setAnimFrame(0);
+    const id = setInterval(() => setAnimFrame(f => (f + 1) % selectedDef.sprites!.happy!.frames.length), 1000 / fps);
+    return () => clearInterval(id);
+  }, [selectedDef]);
+
+  type ToastTone = 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke';
+  function showToastMsg(text: string, tone: ToastTone) {
+    setToast({ text, tone });
+    setTimeout(() => setToast(t => t && t.text === text ? null : t), 2500);
+  }
+
+  function handleFeed(food: Food) {
+    if (!selected || !selectedDef) return;
+    if (!infinite && coins < food.cost) {
+      showToastMsg('コインが足りません', 'broke');
+      return;
+    }
+    if (!infinite) onSpendCoins(food.cost);
+    const eff = computeFeedingEffect(selectedDef.id, food.id);
+    onUpdateMons(prev => prev.map(m => {
+      if (m.uid !== selected.uid) return m;
+      const baseAff = m.affection ?? 0;
+      const baseHun = m.hunger ?? 0;
+      return {
+        ...m,
+        affection: Math.max(0, Math.min(100, baseAff + eff.affectionDelta)),
+        hunger:    Math.max(0, Math.min(100, baseHun + eff.hungerDelta)),
+        lastFed:   Date.now(),
+      };
+    }));
+    const msg = eff.reaction === 'fav'
+      ? `大好物！${selectedDef.name} が大喜び（なつき +${eff.affectionDelta}）`
+      : eff.reaction === 'dis'
+      ? `${selectedDef.name} は嫌いみたい…（なつき ${eff.affectionDelta}）`
+      : `${selectedDef.name} は満足げ（なつき +${eff.affectionDelta}）`;
+    showToastMsg(msg, eff.reaction);
+    setShowFoodPicker(false);
+  }
+
+  function handlePet() {
+    if (!selected || !selectedDef) return;
+    const now = Date.now();
+    const last = selected.lastPetAt ?? 0;
+    if (now - last < PET_COOLDOWN_MS) {
+      const remainMin = Math.ceil((PET_COOLDOWN_MS - (now - last)) / 60000);
+      showToastMsg(`もう少し休ませてあげて（あと ${remainMin} 分）`, 'cooldown');
+      return;
+    }
+    onUpdateMons(prev => prev.map(m => {
+      if (m.uid !== selected.uid) return m;
+      const baseAff = m.affection ?? 0;
+      return { ...m, affection: Math.min(100, baseAff + 2), lastPetAt: now };
+    }));
+    if (!infinite) onGainCoins(5);
+    showToastMsg(`${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`, 'pet');
+  }
+
+  const happyFrames = selectedDef?.sprites?.happy?.frames;
+  const bigSrc = happyFrames ? happyFrames[animFrame % happyFrames.length] : (selected ? MEMOMON_IMGS[selected.defId] : '');
+  const aff = selected?.affection ?? 0;
+  const hun = selected?.hunger ?? 0;
+  const lvl = affectionLevel(aff);
+  const prefs = selectedDef ? (MEMOMON_FOOD_PREFS[selectedDef.id] || { fav: [], dis: [] }) : { fav: [], dis: [] };
+  const favFoods = prefs.fav.map(id => FOODS.find(f => f.id === id)).filter(Boolean) as Food[];
+  const disFoods = prefs.dis.map(id => FOODS.find(f => f.id === id)).filter(Boolean) as Food[];
+
+  return (
+    <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="playground-modal">
+        <button className="gacha-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
+        <div className="playground-title">🎪 メモモンの遊び場</div>
+        <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
+
+        {visibleMons.length === 0 ? (
+          <div className="playground-empty">
+            まだメモモンを持っていません。<br />
+            ガチャでメモモンをお迎えしましょう！
+          </div>
+        ) : (
+          <>
+            <div className="playground-mon-strip">
+              {visibleMons.map(m => {
+                const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+                if (!def) return null;
+                return (
+                  <button
+                    key={m.uid}
+                    className={`playground-mon-card${selected?.uid === m.uid ? ' active' : ''}`}
+                    onClick={() => setSelectedUid(m.uid)}
+                  >
+                    <img src={MEMOMON_IMGS[def.id]} alt={def.name} />
+                    <div className="playground-mon-card-name">{def.name}</div>
+                    <div className="playground-mon-card-aff">♥ {m.affection ?? 0}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {selected && selectedDef && (
+              <div className="playground-detail">
+                <div className="playground-stage">
+                  <img className="playground-stage-img" src={bigSrc} alt={selectedDef.name} />
+                </div>
+                <div className="playground-name">{selectedDef.name}</div>
+                <div className="playground-level">{lvl.stars} <span>{lvl.label}</span></div>
+                <div className="playground-meter">
+                  <div className="playground-meter-label">なつき度</div>
+                  <div className="playground-meter-bar">
+                    <div className="playground-meter-fill playground-meter-aff" style={{ width: `${aff}%` }} />
+                  </div>
+                  <div className="playground-meter-val">{aff} / 100</div>
+                </div>
+                <div className="playground-meter">
+                  <div className="playground-meter-label">満腹度</div>
+                  <div className="playground-meter-bar">
+                    <div className="playground-meter-fill playground-meter-hun" style={{ width: `${hun}%` }} />
+                  </div>
+                  <div className="playground-meter-val">{Math.round(hun)} / 100</div>
+                </div>
+
+                <div className="playground-prefs">
+                  <div className="playground-prefs-row">
+                    <span className="playground-prefs-label">好物</span>
+                    <span className="playground-prefs-items">
+                      {favFoods.length > 0 ? favFoods.map(f => f.emoji).join(' ') : '—'}
+                    </span>
+                  </div>
+                  <div className="playground-prefs-row">
+                    <span className="playground-prefs-label">嫌い</span>
+                    <span className="playground-prefs-items">
+                      {disFoods.length > 0 ? disFoods.map(f => f.emoji).join(' ') : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="playground-actions">
+                  <button className="playground-btn playground-btn-pet" onClick={handlePet}>
+                    ✋ なでる<span className="playground-btn-sub">+2 / +5🪙</span>
+                  </button>
+                  <button className="playground-btn playground-btn-feed" onClick={() => setShowFoodPicker(true)}>
+                    🍽️ 餌をあげる
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {toast && (
+          <div className={`playground-toast playground-toast-${toast.tone}`}>{toast.text}</div>
+        )}
+
+        {showFoodPicker && selectedDef && (
+          <div className="playground-food-overlay" onClick={() => setShowFoodPicker(false)}>
+            <div className="playground-food-sheet" onClick={e => e.stopPropagation()}>
+              <div className="playground-food-title">餌をえらぶ</div>
+              <div className="playground-food-grid">
+                {FOODS.map(f => {
+                  const isFav = prefs.fav.includes(f.id);
+                  const isDis = prefs.dis.includes(f.id);
+                  const canAfford = infinite || coins >= f.cost;
+                  return (
+                    <button
+                      key={f.id}
+                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}${isFav ? ' fav' : ''}${isDis ? ' dis' : ''}`}
+                      onClick={() => canAfford && handleFeed(f)}
+                      disabled={!canAfford}
+                    >
+                      <div className="playground-food-emoji">{f.emoji}</div>
+                      <div className="playground-food-name">{f.name}</div>
+                      <div className="playground-food-grade">{'★'.repeat(f.grade)}</div>
+                      <div className="playground-food-cost"><IcoCoin />&nbsp;{f.cost}</div>
+                      {isFav && <div className="playground-food-tag fav">好</div>}
+                      {isDis && <div className="playground-food-tag dis">嫌</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="playground-food-cancel" onClick={() => setShowFoodPicker(false)}>キャンセル</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; onTapReward: () => void }) {
@@ -5144,6 +5420,7 @@ function SmartMemoApp() {
   const [micTrigger, setMicTrigger] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [showPlayground, setShowPlayground] = useState(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -5345,7 +5622,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
@@ -5420,6 +5697,17 @@ function SmartMemoApp() {
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
         return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} speechEnabled={settings.memoMonSpeech !== false} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
+      {showPlayground && (
+        <PlaygroundModal
+          memoMons={memoMons}
+          coins={settings.coins || 0}
+          infinite={!!settings.infiniteCoins}
+          onClose={() => setShowPlayground(false)}
+          onUpdateMons={updater => setMemoMons(updater)}
+          onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
+          onGainCoins={amount => setSettings(p => ({ ...p, coins: (p.coins || 0) + amount }))}
+        />
+      )}
       {showInsights && (
         <InsightsModal
           todos={todos}
