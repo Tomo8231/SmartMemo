@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.1';
+const APP_VERSION = '1.13.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4708,18 +4708,45 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' } | null>(null);
   const [animFrame, setAnimFrame] = useState(0);
+  const [currentAnim, setCurrentAnim] = useState<AnimState>('sit');
 
   const selected = visibleMons.find(m => m.uid === selectedUid) || visibleMons[0];
   const selectedDef = selected ? MEMOMON_DEFS.find(d => d.id === selected.defId) : null;
 
-  // Animate the big sprite (happy loop)
+  // Reset to idle (sit) whenever the selected memomon changes
   useEffect(() => {
-    if (!selectedDef?.sprites?.happy) return;
-    const fps = selectedDef.sprites.happy.fps ?? 6;
+    setCurrentAnim('sit');
     setAnimFrame(0);
-    const id = setInterval(() => setAnimFrame(f => (f + 1) % selectedDef.sprites!.happy!.frames.length), 1000 / fps);
+  }, [selectedUid]);
+
+  // Drive the big sprite animation. Looping anims (sit) repeat forever;
+  // one-shot anims (happy / surprise) return to sit when complete.
+  useEffect(() => {
+    const animDef = selectedDef?.sprites?.[currentAnim];
+    if (!animDef) {
+      if (currentAnim !== 'sit') setCurrentAnim('sit');
+      return;
+    }
+    setAnimFrame(0);
+    let frame = 0;
+    const total = animDef.frames.length;
+    const fps = animDef.fps || 6;
+    const id = setInterval(() => {
+      frame += 1;
+      if (frame >= total) {
+        if (animDef.loop) {
+          frame = 0;
+          setAnimFrame(0);
+        } else {
+          clearInterval(id);
+          setCurrentAnim('sit');
+        }
+      } else {
+        setAnimFrame(frame);
+      }
+    }, 1000 / fps);
     return () => clearInterval(id);
-  }, [selectedDef]);
+  }, [selectedDef, currentAnim]);
 
   type ToastTone = 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke';
   function showToastMsg(text: string, tone: ToastTone) {
@@ -4755,6 +4782,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
       : `${selectedDef.name} は満足げ（なつき +${eff.affectionDelta}）`;
     showToastMsg(msg, eff.reaction);
     setShowFoodPicker(false);
+    // Trigger happy reaction (one-shot, then auto-returns to sit)
+    setCurrentAnim('happy');
+    setAnimFrame(0);
   }
 
   function handlePet() {
@@ -4773,10 +4803,15 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     }));
     if (!infinite) onGainCoins(5);
     showToastMsg(`${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`, 'pet');
+    // Trigger surprise reaction (one-shot, then auto-returns to sit)
+    setCurrentAnim('surprise');
+    setAnimFrame(0);
   }
 
-  const happyFrames = selectedDef?.sprites?.happy?.frames;
-  const bigSrc = happyFrames ? happyFrames[animFrame % happyFrames.length] : (selected ? MEMOMON_IMGS[selected.defId] : '');
+  const animFrames = selectedDef?.sprites?.[currentAnim]?.frames || selectedDef?.sprites?.sit?.frames;
+  const bigSrc = animFrames && animFrames.length > 0
+    ? animFrames[animFrame % animFrames.length]
+    : (selected ? MEMOMON_IMGS[selected.defId] : '');
   const nowMs = Date.now();
   const aff = selected ? effectiveAffection(selected, nowMs) : 0;
   const hun = selected?.hunger ?? 0;
