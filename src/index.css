@@ -548,7 +548,8 @@
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       transition: transform .08s, opacity .12s;
     }
-    .playground-btn:active { transform: scale(.96); }
+    .playground-btn:active:not(:disabled) { transform: scale(.96); }
+    .playground-btn:disabled { opacity: .5; cursor: not-allowed; filter: saturate(.6); }
     .playground-btn-sub {
       font-size: 10px; font-weight: 500; opacity: .9;
     }
@@ -666,6 +667,7 @@
     .playground-toast-pet      { background: rgba(76,175,80,.95); }
     .playground-toast-cooldown { background: rgba(255,152,0,.95); }
     .playground-toast-broke    { background: rgba(244,67,54,.95); }
+    .playground-toast-full     { background: rgba(255,152,0,.95); }
 
     /* Dark mode */
     .app.dark .playground-modal {
