@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.7';
+const APP_VERSION = '1.14.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4801,7 +4801,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
-  const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' } | null>(null);
+  const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' | 'full' } | null>(null);
   const [bubbleMsg, setBubbleMsg] = useState<string | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [animFrame, setAnimFrame] = useState(0);
@@ -4860,7 +4860,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     return () => clearInterval(id);
   }, [selectedDef, currentAnim]);
 
-  type ToastTone = 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke';
+  type ToastTone = 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' | 'full';
   function showToastMsg(text: string, tone: ToastTone) {
     setToast({ text, tone });
     setTimeout(() => setToast(t => t && t.text === text ? null : t), 2500);
@@ -4868,6 +4868,11 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
 
   function handleFeed(food: Food) {
     if (!selected || !selectedDef) return;
+    const now0 = Date.now();
+    if (effectiveHunger(selected, now0) >= 100) {
+      showToastMsg(`${selectedDef.name} はお腹いっぱいみたい…`, 'full');
+      return;
+    }
     if (!infinite && coins < food.cost) {
       showToastMsg('コインが足りません', 'broke');
       return;
@@ -5010,8 +5015,12 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
                   <button className="playground-btn playground-btn-pet" onClick={handlePet}>
                     ✋ なでる<span className="playground-btn-sub">+2 / +5🪙</span>
                   </button>
-                  <button className="playground-btn playground-btn-feed" onClick={() => setShowFoodPicker(true)}>
-                    🍽️ 餌をあげる
+                  <button
+                    className="playground-btn playground-btn-feed"
+                    onClick={() => setShowFoodPicker(true)}
+                    disabled={hun >= 100}
+                  >
+                    🍽️ 餌をあげる{hun >= 100 && <span className="playground-btn-sub">お腹いっぱい</span>}
                   </button>
                 </div>
                 {(() => {
@@ -5152,7 +5161,11 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
           const animDef = def.sprites[m.animState];
           if (animDef) {
             m.frameTime += dt;
-            const totalFrames = animDef.frames.length;
+            // Idle (sit) loops only frames 0-1 for a subtle breathing pose;
+            // other anims play through all frames.
+            const totalFrames = m.animState === 'sit'
+              ? Math.min(2, animDef.frames.length)
+              : animDef.frames.length;
             const rawFrame = Math.floor(m.frameTime * animDef.fps);
             const newFrame = animDef.loop ? rawFrame % totalFrames : Math.min(rawFrame, totalFrames - 1);
             if (newFrame !== m.frame) {
