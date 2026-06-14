@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.6';
+const APP_VERSION = '1.13.7';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -989,6 +989,9 @@ const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
 
 // Affection decays 1 point per ~4 hours when the mon isn't being displayed
 const AFFECTION_DECAY_HOURS = 4;
+// Hunger decays 10 points per hour regardless of whether the mon is displayed
+// (the mon gets hungry just by existing)
+const HUNGER_DECAY_PER_HOUR = 10;
 
 // "Effective" affection considering decay since lastSeenAt
 function effectiveAffection(mon: MemoMonInstance, now: number = Date.now()): number {
@@ -998,6 +1001,14 @@ function effectiveAffection(mon: MemoMonInstance, now: number = Date.now()): num
   const hours = Math.max(0, (now - last) / 3600000);
   const decay = Math.floor(hours / AFFECTION_DECAY_HOURS);
   return Math.max(0, stored - decay);
+}
+
+// "Effective" hunger considering decay since lastFed
+function effectiveHunger(mon: MemoMonInstance, now: number = Date.now()): number {
+  const stored = mon.hunger ?? 100;
+  const last = mon.lastFed ?? now;
+  const hours = Math.max(0, (now - last) / 3600000);
+  return Math.max(0, Math.min(100, stored - hours * HUNGER_DECAY_PER_HOUR));
 }
 
 // Compute affection / hunger delta and reaction message for a feeding action
@@ -4867,7 +4878,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
       const baseAff = effectiveAffection(m, now); // honor decay before adding bonus
-      const baseHun = m.hunger ?? 0;
+      const baseHun = effectiveHunger(m, now); // honor decay before adding bonus
       return {
         ...m,
         affection: Math.max(0, Math.min(100, baseAff + eff.affectionDelta)),
@@ -4922,7 +4933,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     : (selected ? MEMOMON_IMGS[selected.defId] : '');
   const nowMs = Date.now();
   const aff = selected ? effectiveAffection(selected, nowMs) : 0;
-  const hun = selected?.hunger ?? 0;
+  const hun = selected ? effectiveHunger(selected, nowMs) : 0;
   const lvl = affectionLevel(aff);
   return (
     <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
