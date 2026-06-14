@@ -61,6 +61,7 @@ type Settings = {
   customHolidays?: string[];
   splitReflectButtons?: boolean;
   foodInventory?: Record<string, number>;
+  glassUI?: boolean;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
@@ -109,7 +110,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4046,6 +4047,13 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
         </div>
         <div className="settings-row">
           <div>
+            <div className="settings-row-label">ガラス風デザイン</div>
+            <div className="settings-row-sub">背景がふわっと透ける半透明 UI に切り替え</div>
+          </div>
+          <button className={`toggle${settings.glassUI ? ' on' : ' off'}`} onClick={() => onChange('glassUI', !settings.glassUI)} />
+        </div>
+        <div className="settings-row">
+          <div>
             <div className="settings-row-label">ベースカラー</div>
             <div className="settings-row-sub">{COLOR_PRESETS[colorIdx].name}</div>
           </div>
@@ -5739,7 +5747,7 @@ function SmartMemoApp() {
   ];
 
   return (
-    <div className={`app${settings.darkMode ? ' dark' : ''}`} style={appStyle}>
+    <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
       <div className="app-header">
         <div className="header-left">
           <h1>SmartMemo</h1>
