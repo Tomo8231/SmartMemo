@@ -634,6 +634,21 @@
       display: flex; align-items: center; gap: 3px;
       font-size: 11px; font-weight: 700; color: #5a3818;
     }
+    .playground-food-card.in-stock {
+      border-color: #4caf50;
+      box-shadow: 0 0 0 1.5px rgba(76,175,80,.25);
+    }
+    .playground-food-stock {
+      position: absolute; top: 4px; right: 4px;
+      background: #4caf50; color: #fff;
+      font-size: 10px; font-weight: 800;
+      padding: 2px 6px; border-radius: 8px;
+      letter-spacing: .5px;
+    }
+    .playground-food-stock-label {
+      color: #2e7d32; font-weight: 700; font-size: 11px;
+    }
+    .app.dark .playground-food-stock-label { color: #81c784; }
     .playground-food-tag {
       position: absolute; top: 4px; right: 4px;
       font-size: 9px; font-weight: 700;
