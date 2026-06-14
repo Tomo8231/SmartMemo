@@ -60,14 +60,15 @@ type Settings = {
   holidayJpHolidays?: boolean;
   customHolidays?: string[];
   splitReflectButtons?: boolean;
+  foodInventory?: Record<string, number>;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
 type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; };
 type GachaPrize = {
-  type: 'miss' | 'sound' | 'bg' | 'memomon';
+  type: 'miss' | 'sound' | 'bg' | 'memomon' | 'food';
   label: string; rarity: string; stars: string; color: string;
-  soundType?: string; bgIdx?: number; monDefId?: string;
+  soundType?: string; bgIdx?: number; monDefId?: string; foodId?: string;
   flavor?: string;
 };
 type TodoDraft = {
@@ -108,7 +109,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -766,6 +767,15 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
   { type: 'memomon', label: '🌱 めためたわかるもん', rarity: 'super', stars: '★★★★', color: '#6d9e3f', monDefId: 'matameta', weight: 3, flavor: '【生態】ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。' },
   { type: 'memomon', label: '🦭 ゴマちゃん', rarity: 'super', stars: '★★★★', color: '#a1887f', monDefId: 'gomachan', weight: 3, flavor: '【生態】まんまる体型のゴマフアザラシ。背中のゴマ模様は本人いわく「個性の証」。寝姿が美しいことで有名で、メモアプリ内で最も眠っている時間が長いメモモン。タスクが片付くと嬉しそうにヒレをぱたぱた動かす。' },
+  // ── 餌（消費アイテム）──
+  { type: 'food', label: '🍞 パン',           rarity: 'common', stars: '★★',    color: '#a1887f', foodId: 'pan',    weight: 18, flavor: '焼きたてのパン。香ばしくて朝食にもぴったり。誰にでも好かれやすい基本の餌。' },
+  { type: 'food', label: '🌿 ハーブ',         rarity: 'common', stars: '★★',    color: '#7cb342', foodId: 'herb',   weight: 16, flavor: 'さわやかな香りの野草。あっさり派のメモモンに好まれがち。' },
+  { type: 'food', label: '🍎 りんご',         rarity: 'rare',   stars: '★★★',   color: '#e53935', foodId: 'apple',  weight: 9,  flavor: 'みずみずしく真っ赤に熟したりんご。シャクシャクした食感がやみつき。' },
+  { type: 'food', label: '🍪 クッキー',       rarity: 'rare',   stars: '★★★',   color: '#bf8a3d', foodId: 'cookie', weight: 8,  flavor: '甘くて香ばしいクッキー。一度食べたら忘れられない素朴な味。' },
+  { type: 'food', label: '🍣 寿司',           rarity: 'super',  stars: '★★★★',  color: '#e91e63', foodId: 'sushi',  weight: 3,  flavor: '職人が握った極上の寿司。海育ち・肉食系のメモモンは大喜び。' },
+  { type: 'food', label: '🍰 ケーキ',         rarity: 'super',  stars: '★★★★',  color: '#ff8a3d', foodId: 'cake',   weight: 3,  flavor: 'ふわふわ生クリームのホールケーキ。お祝い感の出る一品。' },
+  { type: 'food', label: '🍖 ステーキ',       rarity: 'ultra',  stars: '★★★★★', color: '#bf2922', foodId: 'steak',  weight: 1,  flavor: 'ジューシーで肉厚な極上ステーキ。力強いタイプのメモモンが歓喜する逸品。' },
+  { type: 'food', label: '🌟 メモモンフード', rarity: 'ultra',  stars: '★★★★★', color: '#ffd700', foodId: 'feed',   weight: 1,  flavor: '研究の末に開発された秘伝のフード。栄養価満点、誰にでも合うとされる伝説の餌。' },
 ];
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
@@ -1257,6 +1267,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const singleObtainedMsg = singleResult
     ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
     : singleResult.type === 'memomon' ? `${labelParts.slice(1).join(' ')} がメモ画面を歩き回り始めた！`
+    : singleResult.type === 'food' ? `${labelParts.slice(1).join(' ')} を 1個 ゲット！遊び場で使えます`
     : `${labelParts.slice(1).join(' ')} をゲット！設定に反映されました`
     : '';
   const modeCostLabel: Record<GachaMode, string> = {
@@ -4787,16 +4798,18 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
-function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive }: {
+function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood }: {
   memoMons: MemoMonInstance[];
   coins: number;
   infinite: boolean;
   activeMonUid: string | undefined;
+  foodInventory: Record<string, number>;
   onClose: () => void;
   onUpdateMons: (updater: (mons: MemoMonInstance[]) => MemoMonInstance[]) => void;
   onSpendCoins: (amount: number) => void;
   onGainCoins: (amount: number) => void;
   onSetActive: (uid: string) => void;
+  onConsumeFood: (foodId: string) => void;
 }) {
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
@@ -4873,11 +4886,14 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
       showToastMsg(`${selectedDef.name} はお腹いっぱいみたい…`, 'full');
       return;
     }
-    if (!infinite && coins < food.cost) {
+    const stock = foodInventory[food.id] || 0;
+    const useInventory = stock > 0;
+    if (!useInventory && !infinite && coins < food.cost) {
       showToastMsg('コインが足りません', 'broke');
       return;
     }
-    if (!infinite) onSpendCoins(food.cost);
+    if (useInventory) onConsumeFood(food.id);
+    else if (!infinite) onSpendCoins(food.cost);
     const eff = computeFeedingEffect(selectedDef.id, food.id);
     const now = Date.now();
     onUpdateMons(prev => prev.map(m => {
@@ -5052,18 +5068,24 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
               <div className="playground-food-title">餌をえらぶ</div>
               <div className="playground-food-grid">
                 {FOODS.map(f => {
-                  const canAfford = infinite || coins >= f.cost;
+                  const stock = foodInventory[f.id] || 0;
+                  const canAfford = stock > 0 || infinite || coins >= f.cost;
                   return (
                     <button
                       key={f.id}
-                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}`}
+                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}${stock > 0 ? ' in-stock' : ''}`}
                       onClick={() => canAfford && handleFeed(f)}
                       disabled={!canAfford}
                     >
+                      {stock > 0 && <div className="playground-food-stock">×{stock}</div>}
                       <div className="playground-food-emoji">{f.emoji}</div>
                       <div className="playground-food-name">{f.name}</div>
                       <div className="playground-food-grade">{'★'.repeat(f.grade)}</div>
-                      <div className="playground-food-cost"><IcoCoin />&nbsp;{f.cost}</div>
+                      <div className="playground-food-cost">
+                        {stock > 0
+                          ? <span className="playground-food-stock-label">在庫から</span>
+                          : <><IcoCoin />&nbsp;{f.cost}</>}
+                      </div>
                     </button>
                   );
                 })}
@@ -5791,6 +5813,11 @@ function SmartMemoApp() {
                 if (prize.type === 'memomon' && prize.monDefId && !newUnlocked.mons.includes(prize.monDefId)) {
                   newUnlocked.mons.push(prize.monDefId);
                 }
+                if (prize.type === 'food' && prize.foodId) {
+                  const inv = updates.foodInventory ?? { ...(p.foodInventory || {}) };
+                  inv[prize.foodId] = (inv[prize.foodId] || 0) + 1;
+                  updates.foodInventory = inv;
+                }
               });
               if (dupRefund && !p.infiniteCoins) updates.coins = (updates.coins ?? (p.coins || 0)) + dupRefund;
               updates.gachaUnlocked = newUnlocked;
@@ -5813,11 +5840,19 @@ function SmartMemoApp() {
           coins={settings.coins || 0}
           infinite={!!settings.infiniteCoins}
           activeMonUid={settings.activeMonUid}
+          foodInventory={settings.foodInventory || {}}
           onClose={() => setShowPlayground(false)}
           onUpdateMons={updater => setMemoMons(updater)}
           onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
           onGainCoins={amount => setSettings(p => ({ ...p, coins: (p.coins || 0) + amount }))}
           onSetActive={uid => setSettings(p => ({ ...p, activeMonUid: uid }))}
+          onConsumeFood={foodId => setSettings(p => {
+            const inv = { ...(p.foodInventory || {}) };
+            const n = inv[foodId] || 0;
+            if (n <= 1) delete inv[foodId];
+            else inv[foodId] = n - 1;
+            return { ...p, foodInventory: inv };
+          })}
         />
       )}
       {showInsights && (
