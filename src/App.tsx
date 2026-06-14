@@ -108,7 +108,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.13.5';
+const APP_VERSION = '1.13.6';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4791,6 +4791,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' } | null>(null);
+  const [bubbleMsg, setBubbleMsg] = useState<string | null>(null);
+  const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [animFrame, setAnimFrame] = useState(0);
   const [currentAnim, setCurrentAnim] = useState<AnimState>('sit');
 
@@ -4801,7 +4803,18 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
   useEffect(() => {
     setCurrentAnim('sit');
     setAnimFrame(0);
+    if (bubbleTimerRef.current) { clearTimeout(bubbleTimerRef.current); bubbleTimerRef.current = null; }
+    setBubbleMsg(null);
   }, [selectedUid]);
+
+  function showBubble(text: string) {
+    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+    setBubbleMsg(text);
+    bubbleTimerRef.current = setTimeout(() => {
+      setBubbleMsg(null);
+      bubbleTimerRef.current = null;
+    }, 3500);
+  }
 
   // Drive the big sprite animation. Looping anims (sit) repeat forever;
   // one-shot anims (happy / surprise) return to sit when complete.
@@ -4869,16 +4882,10 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
       ? 'feedDis'
       : 'feedNormal';
     const line = pickReaction(selectedDef.id, reactionKind);
+    if (line) showBubble(line);
     const sign = eff.affectionDelta >= 0 ? '+' : '';
-    const fallback = eff.reaction === 'fav'
-      ? `大好物！${selectedDef.name} が大喜び`
-      : eff.reaction === 'dis'
-      ? `${selectedDef.name} は嫌いみたい…`
-      : `${selectedDef.name} は満足げ`;
-    const msg = line
-      ? `${selectedDef.name}「${line}」（なつき ${sign}${eff.affectionDelta}）`
-      : `${fallback}（なつき ${sign}${eff.affectionDelta}）`;
-    showToastMsg(msg, eff.reaction);
+    const prefix = eff.reaction === 'fav' ? '大好物！' : eff.reaction === 'dis' ? '嫌いみたい…' : '満足げ';
+    showToastMsg(`${prefix} なつき ${sign}${eff.affectionDelta}`, eff.reaction);
     setShowFoodPicker(false);
     // Reaction animation: favorite/normal -> happy, disliked -> dislike
     const reactionAnim: AnimState = eff.reaction === 'dis' ? 'dislike' : 'happy';
@@ -4902,10 +4909,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
     }));
     if (!infinite) onGainCoins(5);
     const line = pickReaction(selectedDef.id, 'pet');
-    const msg = line
-      ? `${selectedDef.name}「${line}」（なつき +2、コイン +5）`
-      : `${selectedDef.name} はうれしそう！（なつき +2、コイン +5）`;
-    showToastMsg(msg, 'pet');
+    if (line) showBubble(line);
+    showToastMsg('なつき +2、コイン +5', 'pet');
     // Trigger happy reaction (one-shot, then auto-returns to sit)
     setCurrentAnim('happy');
     setAnimFrame(0);
@@ -4956,6 +4961,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, onClose, onU
             {selected && selectedDef && (
               <div className="playground-detail">
                 <div className="playground-stage">
+                  {bubbleMsg && (
+                    <div key={bubbleMsg} className="playground-stage-bubble">{bubbleMsg}</div>
+                  )}
                   <img className="playground-stage-img" src={bigSrc} alt={selectedDef.name} />
                 </div>
                 <div className="playground-name">{selectedDef.name}</div>
