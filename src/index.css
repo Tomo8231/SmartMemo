@@ -837,6 +837,7 @@
       padding:4px 0 6px;
       align-items:flex-end;
       width:100%;
+      position:relative; z-index:1;
     }
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
@@ -856,6 +857,7 @@
       box-shadow:0 4px 16px rgba(0,0,0,.26);
       cursor:pointer;
       transition:transform .15s, box-shadow .15s;
+      z-index:2; /* keep above .bottom-nav even when it gains backdrop-filter (glass mode) */
     }
     .nav-center-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     /* Copy button for TODO/Idea items */
