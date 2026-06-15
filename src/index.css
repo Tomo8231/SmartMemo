@@ -810,6 +810,60 @@
       font-style: italic; margin-top: 2px;
     }
     .app.dark .playground-prefs-hint { color: rgba(240,226,200,.45); }
+
+    .playground-gifts {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed rgba(90,56,24,.18);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .playground-gifts-label {
+      font-size: 11px; font-weight: 800; color: #5a3818;
+      letter-spacing: .3px; flex-shrink: 0;
+    }
+    .playground-gift-card {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,.55);
+      border: 1.5px solid rgba(255,138,61,.35);
+      border-radius: 10px;
+      cursor: pointer; font-family: inherit;
+      transition: transform .08s, background .12s, border-color .12s;
+      text-align: left;
+    }
+    .playground-gift-card:hover { background: #fff; border-color: #ff8a3d; }
+    .playground-gift-card:active { transform: scale(.97); }
+    .playground-gift-card img {
+      width: 30px; height: 30px;
+      object-fit: contain; image-rendering: pixelated;
+      flex-shrink: 0;
+    }
+    .playground-gift-name {
+      font-size: 12px; font-weight: 700; color: #5a3818;
+      flex: 1; min-width: 0;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .playground-gift-count {
+      font-size: 10px; font-weight: 800;
+      background: #ff8a3d; color: #fff;
+      padding: 1px 6px; border-radius: 8px;
+      flex-shrink: 0;
+    }
+    .playground-gift-empty {
+      flex: 1;
+      font-size: 11px; font-style: italic;
+      color: rgba(90,56,24,.55);
+    }
+    .app.dark .playground-gifts { border-top-color: rgba(255,255,255,.10); }
+    .app.dark .playground-gifts-label { color: #f0e2c8; }
+    .app.dark .playground-gift-card {
+      background: rgba(255,255,255,.05);
+      border-color: rgba(255,138,61,.40);
+    }
+    .app.dark .playground-gift-card:hover { background: rgba(255,255,255,.10); }
+    .app.dark .playground-gift-name { color: #f0e2c8; }
+    .app.dark .playground-gift-empty { color: rgba(240,226,200,.45); }
     .playground-actions {
       width: 100%;
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;

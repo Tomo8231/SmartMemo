@@ -111,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.18.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5062,31 +5062,6 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
         <div className="playground-title">🎪 メモモンの遊び場</div>
         <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
 
-        {(() => {
-          const owned = MEMOMON_ITEMS.filter(it => (itemInventory[it.id] || 0) > 0);
-          if (owned.length === 0) return null;
-          return (
-            <div className="playground-items">
-              <div className="playground-items-title">🎁 アイテムボックス</div>
-              <div className="playground-items-strip">
-                {owned.map(it => (
-                  <button
-                    key={it.id}
-                    className="playground-item-card"
-                    onClick={() => setInspectItemId(it.id)}
-                    aria-label={it.name}
-                  >
-                    <img src={it.imageUrl} alt={it.name} />
-                    {(itemInventory[it.id] || 0) > 1 && (
-                      <span className="playground-item-count">×{itemInventory[it.id]}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
         {visibleMons.length === 0 ? (
           <div className="playground-empty">
             まだメモモンを持っていません。<br />
@@ -5133,6 +5108,30 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
                   <div className="playground-prefs-hint">
                     好物・嫌いな物は色んな餌をあげて見つけよう
                   </div>
+                  {(() => {
+                    const giftItem = ITEM_BY_DEFID[selectedDef.id];
+                    const count = giftItem ? (itemInventory[giftItem.id] || 0) : 0;
+                    return (
+                      <div className="playground-gifts">
+                        <div className="playground-gifts-label">🎁 おくりもの</div>
+                        {giftItem && count > 0 ? (
+                          <button
+                            className="playground-gift-card"
+                            onClick={() => setInspectItemId(giftItem.id)}
+                            aria-label={giftItem.name}
+                          >
+                            <img src={giftItem.imageUrl} alt={giftItem.name} />
+                            <span className="playground-gift-name">{giftItem.name}</span>
+                            {count > 1 && <span className="playground-gift-count">×{count}</span>}
+                          </button>
+                        ) : (
+                          <div className="playground-gift-empty">
+                            なつき度MAXで仲良くなったら、もらえるかも…？
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="playground-actions">
