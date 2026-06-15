@@ -111,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.19.2';
+const APP_VERSION = '1.20.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1020,8 +1020,12 @@ const ITEM_BY_DEFID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_IT
 const ITEM_BY_ID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.id, i]));
 
 // Drop chances when affection is at MAX (100)
-const ITEM_DROP_CHANCE_PET = 0.05;     // 5% on pet
-const ITEM_DROP_CHANCE_FEED_FAV = 0.10; // 10% on favorite food
+const ITEM_DROP_CHANCE_PET = 0.05;     // 5% on pet (rare gift item)
+const ITEM_DROP_CHANCE_FEED_FAV = 0.10; // 10% on favorite food (rare gift item)
+
+// Basic bg/sound drops at MAX affection (fires when the gift drop didn't)
+const BONUS_DROP_CHANCE_PET = 0.50;     // 50% on pet
+const BONUS_DROP_CHANCE_FEED_FAV = 0.80; // 80% on favorite food
 
 // Affection decays 1 point per ~4 hours when the mon isn't being displayed
 const AFFECTION_DECAY_HOURS = 4;
@@ -4831,13 +4835,15 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
-function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, itemInventory, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem }: {
+function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, itemInventory, unlockedSounds, unlockedBgs, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem, onUnlockSound, onUnlockBg }: {
   memoMons: MemoMonInstance[];
   coins: number;
   infinite: boolean;
   activeMonUid: string | undefined;
   foodInventory: Record<string, number>;
   itemInventory: Record<string, number>;
+  unlockedSounds: string[];
+  unlockedBgs: number[];
   onClose: () => void;
   onUpdateMons: (updater: (mons: MemoMonInstance[]) => MemoMonInstance[]) => void;
   onSpendCoins: (amount: number) => void;
@@ -4845,12 +4851,15 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
   onSetActive: (uid: string) => void;
   onConsumeFood: (foodId: string) => void;
   onCollectItem: (itemId: string) => void;
+  onUnlockSound: (soundType: string) => void;
+  onUnlockBg: (bgIdx: number) => void;
 }) {
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [inspectItemId, setInspectItemId] = useState<string | null>(null);
   const [giftReveal, setGiftReveal] = useState<{ itemId: string; monName: string } | null>(null);
+  const [bonusReveal, setBonusReveal] = useState<{ kind: 'sound' | 'bg'; label: string; color: string } | null>(null);
   const [showMonList, setShowMonList] = useState(false);
   const swipeStartXRef = useRef<number | null>(null);
   const [swipeNudge, setSwipeNudge] = useState<'prev' | 'next' | null>(null);
@@ -4916,6 +4925,43 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     onCollectItem(item.id);
     setGiftReveal({ itemId: item.id, monName: def?.name ?? '' });
     return item.id;
+  }
+
+  // Roll for a basic bg/sound unlock when affection is at MAX. Runs only
+  // when the rarer gift drop did NOT fire. Picks among still-locked
+  // sounds/bgs from the gacha pool. Returns true if something was awarded.
+  function tryBonusDrop(currentAffection: number, chance: number): boolean {
+    if (currentAffection < 100) return false;
+    if (Math.random() >= chance) return false;
+    const lockedSounds = GACHA_ITEMS.filter(
+      g => g.type === 'sound' && g.soundType && !unlockedSounds.includes(g.soundType)
+    );
+    const lockedBgs = GACHA_ITEMS.filter(
+      g => g.type === 'bg' && g.bgIdx !== undefined && !unlockedBgs.includes(g.bgIdx)
+    );
+    const pool = [...lockedSounds, ...lockedBgs];
+    if (pool.length === 0) return false;
+    // Weight by inverse-rarity (common easier to drop than ultra)
+    const rarityWeight: Record<string, number> = { common: 6, rare: 4, super: 2, ultra: 1 };
+    const weighted: typeof pool = [];
+    for (const item of pool) {
+      const w = rarityWeight[item.rarity] || 1;
+      for (let i = 0; i < w; i++) weighted.push(item);
+    }
+    const picked = weighted[Math.floor(Math.random() * weighted.length)];
+    if (picked.type === 'sound' && picked.soundType) {
+      onUnlockSound(picked.soundType);
+    } else if (picked.type === 'bg' && picked.bgIdx !== undefined) {
+      onUnlockBg(picked.bgIdx);
+    } else {
+      return false;
+    }
+    setBonusReveal({
+      kind: picked.type as 'sound' | 'bg',
+      label: picked.label,
+      color: picked.color,
+    });
+    return true;
   }
 
   // Drive the big sprite animation. Looping anims (sit) repeat forever;
@@ -4999,7 +5045,11 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     const dropped = eff.reaction === 'fav'
       ? tryItemDrop(selectedDef.id, affBefore, ITEM_DROP_CHANCE_FEED_FAV)
       : null;
-    if (!dropped) showToastMsg(`${prefix} なつき ${sign}${eff.affectionDelta}`, eff.reaction);
+    // If rare gift didn't drop, try the basic bg/sound drop (favorite only)
+    const bonus = !dropped && eff.reaction === 'fav'
+      ? tryBonusDrop(affBefore, BONUS_DROP_CHANCE_FEED_FAV)
+      : false;
+    if (!dropped && !bonus) showToastMsg(`${prefix} なつき ${sign}${eff.affectionDelta}`, eff.reaction);
     setShowFoodPicker(false);
     // Reaction animation: favorite/normal -> happy, disliked -> dislike
     const reactionAnim: AnimState = eff.reaction === 'dis' ? 'dislike' : 'happy';
@@ -5026,7 +5076,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     const line = pickReaction(selectedDef.id, 'pet');
     if (line) showBubble(line);
     const dropped = tryItemDrop(selectedDef.id, affBefore, ITEM_DROP_CHANCE_PET);
-    if (!dropped) showToastMsg('なつき +2、コイン +5', 'pet');
+    const bonus = !dropped ? tryBonusDrop(affBefore, BONUS_DROP_CHANCE_PET) : false;
+    if (!dropped && !bonus) showToastMsg('なつき +2、コイン +5', 'pet');
     // Trigger happy reaction (one-shot, then auto-returns to sit)
     setCurrentAnim('happy');
     setAnimFrame(0);
@@ -5248,6 +5299,23 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
                 })}
               </div>
               <button className="playground-food-cancel" onClick={() => setShowMonList(false)}>閉じる</button>
+            </div>
+          </div>
+        )}
+
+        {bonusReveal && (
+          <div className="bonus-reveal-overlay" onClick={() => setBonusReveal(null)}>
+            <div className="bonus-reveal-card" onClick={e => e.stopPropagation()} style={{ borderColor: bonusReveal.color }}>
+              <div className="bonus-reveal-banner" style={{ color: bonusReveal.color }}>
+                {bonusReveal.kind === 'sound' ? '🎵 効果音' : '🎨 背景'} GET!
+              </div>
+              <div className="bonus-reveal-label">{bonusReveal.label}</div>
+              <div className="bonus-reveal-sub">
+                {bonusReveal.kind === 'sound'
+                  ? '設定 → サウンド から選べます'
+                  : '設定 → 背景テーマ から選べます'}
+              </div>
+              <button className="bonus-reveal-close" onClick={() => setBonusReveal(null)}>OK</button>
             </div>
           </div>
         )}
@@ -6078,6 +6146,8 @@ function SmartMemoApp() {
           activeMonUid={settings.activeMonUid}
           foodInventory={settings.foodInventory || {}}
           itemInventory={settings.itemInventory || {}}
+          unlockedSounds={(settings.gachaUnlocked || { sounds: [], bgs: [] }).sounds}
+          unlockedBgs={(settings.gachaUnlocked || { sounds: [], bgs: [] }).bgs}
           onClose={() => setShowPlayground(false)}
           onUpdateMons={updater => setMemoMons(updater)}
           onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
@@ -6094,6 +6164,24 @@ function SmartMemoApp() {
             const inv = { ...(p.itemInventory || {}) };
             inv[itemId] = (inv[itemId] || 0) + 1;
             return { ...p, itemInventory: inv };
+          })}
+          onUnlockSound={soundType => setSettings(p => {
+            const unlocked = p.gachaUnlocked || { sounds: [], bgs: [] };
+            if (unlocked.sounds.includes(soundType)) return p;
+            return {
+              ...p,
+              soundType,
+              gachaUnlocked: { ...unlocked, sounds: [...unlocked.sounds, soundType] },
+            };
+          })}
+          onUnlockBg={bgIdx => setSettings(p => {
+            const unlocked = p.gachaUnlocked || { sounds: [], bgs: [] };
+            if (unlocked.bgs.includes(bgIdx)) return p;
+            return {
+              ...p,
+              bgIdx,
+              gachaUnlocked: { ...unlocked, bgs: [...unlocked.bgs, bgIdx] },
+            };
           })}
         />
       )}
