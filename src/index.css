@@ -387,6 +387,53 @@
       background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.10);
     }
 
+    /* Bonus reveal overlay (lighter celebration for sound/bg drops) */
+    .bonus-reveal-overlay {
+      position: absolute; inset: 0; z-index: 7;
+      background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px;
+      border-radius: inherit;
+      animation: fade-in .18s ease;
+    }
+    .bonus-reveal-card {
+      position: relative;
+      width: 100%; max-width: 280px;
+      padding: 22px 18px 18px;
+      background: #fff;
+      border: 2px solid #ff8a3d;
+      border-radius: 18px;
+      box-shadow: 0 0 28px rgba(255,138,61,.55), 0 16px 40px rgba(0,0,0,.30);
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      text-align: center;
+      animation: detail-pop .35s cubic-bezier(.17, .67, .34, 1.4);
+    }
+    .bonus-reveal-banner {
+      font-size: 14px; font-weight: 800; letter-spacing: .6px;
+    }
+    .bonus-reveal-label {
+      font-size: 19px; font-weight: 800; color: #1a1a18;
+      letter-spacing: .2px;
+    }
+    .bonus-reveal-sub {
+      font-size: 11px; color: rgba(0,0,0,.55);
+      font-weight: 500; margin-top: -2px;
+    }
+    .bonus-reveal-close {
+      margin-top: 6px;
+      padding: 8px 26px;
+      background: linear-gradient(135deg, #ff8a3d, #e91e63);
+      color: #fff; font-weight: 800; font-size: 13px;
+      border: none; border-radius: 999px;
+      cursor: pointer; font-family: inherit;
+      box-shadow: 0 4px 14px rgba(233,30,99,.40);
+      transition: transform .08s;
+    }
+    .bonus-reveal-close:active { transform: scale(.95); }
+    .app.dark .bonus-reveal-card { background: #28282c; }
+    .app.dark .bonus-reveal-label { color: #f0e2c8; }
+    .app.dark .bonus-reveal-sub { color: rgba(240,226,200,.5); }
+
     /* Gift reveal overlay (flashy drop celebration) */
     .gift-reveal-overlay {
       position: absolute; inset: 0; z-index: 8;
