@@ -339,6 +339,107 @@
       display: flex; align-items: center; justify-content: center; gap: 4px;
       font-size: 13px; color: rgba(0,0,0,.5); font-weight: 600;
     }
+
+    .playground-items {
+      background: rgba(255,255,255,.5);
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    .playground-items-title {
+      font-size: 12px; font-weight: 800; color: #5a3818;
+      letter-spacing: .3px; margin-bottom: 6px;
+    }
+    .playground-items-strip {
+      display: flex; gap: 8px; overflow-x: auto;
+      padding: 2px 0;
+      -webkit-overflow-scrolling: touch;
+    }
+    .playground-items-strip::-webkit-scrollbar { display: none; }
+    .playground-item-card {
+      position: relative;
+      flex: 0 0 auto;
+      width: 56px; height: 56px;
+      border: 1.5px solid rgba(255,255,255,.6);
+      border-radius: 12px;
+      background: rgba(255,255,255,.6);
+      cursor: pointer; padding: 4px;
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .08s, box-shadow .12s, border-color .12s;
+      font-family: inherit;
+    }
+    .playground-item-card img {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .playground-item-card:hover { border-color: #ff8a3d; box-shadow: 0 2px 8px rgba(255,138,61,.25); }
+    .playground-item-card:active { transform: scale(.94); }
+    .playground-item-count {
+      position: absolute; bottom: -4px; right: -4px;
+      background: #ff8a3d; color: #fff;
+      font-size: 10px; font-weight: 800;
+      padding: 1px 6px; border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,.18);
+    }
+    .app.dark .playground-items { background: rgba(255,255,255,.05); }
+    .app.dark .playground-items-title { color: #f0e2c8; }
+    .app.dark .playground-item-card {
+      background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.10);
+    }
+
+    /* Item inspect overlay */
+    .playground-item-overlay {
+      position: absolute; inset: 0; z-index: 6;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px;
+      border-radius: inherit;
+      animation: fade-in .18s ease;
+    }
+    .playground-item-sheet {
+      position: relative;
+      width: 100%; max-width: 320px;
+      background: linear-gradient(160deg, #FFF7E8 0%, #FFEAD0 100%);
+      border-radius: 18px;
+      padding: 22px 18px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.25);
+      animation: detail-pop .22s cubic-bezier(.17, .67, .34, 1.4);
+    }
+    .playground-item-stage {
+      width: 120px; height: 120px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .playground-item-stage img {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .playground-item-name {
+      font-size: 17px; font-weight: 800; color: #5a3818;
+    }
+    .playground-item-giver {
+      font-size: 11px; font-weight: 600; color: rgba(90,56,24,.55);
+    }
+    .playground-item-comment {
+      font-size: 12px; line-height: 1.7; color: #5a3818;
+      background: rgba(255,255,255,.5);
+      border-radius: 10px;
+      padding: 10px 12px;
+      max-height: 140px; overflow-y: auto;
+      width: 100%; text-align: left;
+    }
+    .playground-item-count-label {
+      font-size: 11px; font-weight: 700; color: #ff8a3d;
+    }
+    .app.dark .playground-item-sheet {
+      background: linear-gradient(160deg, #2a1f12 0%, #1f1a14 100%);
+    }
+    .app.dark .playground-item-name,
+    .app.dark .playground-item-comment { color: #f0e2c8; }
+    .app.dark .playground-item-comment { background: rgba(0,0,0,.25); }
+    .app.dark .playground-item-giver { color: rgba(240,226,200,.5); }
+
     .playground-empty {
       text-align: center; padding: 40px 20px;
       font-size: 13px; color: rgba(0,0,0,.5); line-height: 1.7;

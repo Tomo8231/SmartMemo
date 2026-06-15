@@ -62,6 +62,7 @@ type Settings = {
   splitReflectButtons?: boolean;
   foodInventory?: Record<string, number>;
   glassUI?: boolean;
+  itemInventory?: Record<string, number>;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
@@ -110,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.17.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -997,6 +998,30 @@ const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
   matameta:    { fav: ['herb', 'apple'],  dis: ['sushi'] },
   gomachan:    { fav: ['sushi', 'cake'],  dis: ['cookie'] },
 };
+
+// Rare collectible items dropped by each memomon at affection MAX.
+// One unique item per memomon. Tapping shows the comment.
+type MemoMonItem = { id: string; defId: string; name: string; imageUrl: string; comment: string };
+const MEMOMON_ITEMS: MemoMonItem[] = [
+  { id: 'kuroneko_hairball',   defId: 'kuroneko',    name: '毛玉',             imageUrl: './items/kuroneko_hairball.png',   comment: 'クロネコがふと吐き出した毛玉。「持っていけ」と無造作にくれた。触ると意外と温かく、なぜか落ち着く。' },
+  { id: 'slime_liquid',        defId: 'slime',       name: '謎の液体',          imageUrl: './items/slime_liquid.png',        comment: 'スライムが「すきー！」と言いながらくれた小瓶。きれいな色だが、何で出来ているかは本人にも分かっていない。' },
+  { id: 'hiyoko_feather',      defId: 'hiyoko',      name: '羽',               imageUrl: './items/hiyoko_feather.png',      comment: 'ひよこの綿毛のような、ふわふわで小さな羽。お守りにすると、ちょっとだけ気分が軽くなるらしい。' },
+  { id: 'skullon_bone',        defId: 'skullon',     name: 'どこかの骨',         imageUrl: './items/skullon_bone.png',        comment: 'ドクロンが「我のものか不明だが、汝にやろう」と差し出した謎の骨。振ると「カラカラ」と乾いた音がする。' },
+  { id: 'obake_skin',          defId: 'obake',       name: 'ぬけがら',          imageUrl: './items/obake_skin.png',          comment: 'おばけが脱皮（？）してできた半透明のぬけがら。ふわふわ漂うが、触ると微かにくすぐったい。' },
+  { id: 'yukigitsune_acorn',   defId: 'yukigitsune', name: 'どんぐり',           imageUrl: './items/yukigitsune_acorn.png',   comment: 'ゆきぎつねが九尾でくるくる転がして遊んでいたどんぐり。手のひらサイズの幸運の象徴とされる。' },
+  { id: 'shibainu_tooth',      defId: 'shibainu',    name: '乳歯',             imageUrl: './items/shibainu_tooth.png',      comment: 'しばいぬが「もう要らないわん！」と元気にくれた乳歯。成長の証。すこし誇らしげな表情で渡された。' },
+  { id: 'dragon_claw',         defId: 'dragon',      name: '爪',               imageUrl: './items/dragon_claw.png',         comment: 'ドラゴンが脱皮の時に落とした漆黒の爪。鋭く頑丈で、お守りとしては最強クラスらしい。' },
+  { id: 'pylar_gbadge',        defId: 'pylar',       name: 'Gバッチ',          imageUrl: './items/pylar_gbadge.png',        comment: '「Good!」のG。パイラーくんが「君にあげるぜ！」と渡してくれた金色のバッチ。胸につけると元気が湧いてくる（気がする）。' },
+  { id: 'matameta_sheet',      defId: 'matameta',    name: 'めたしこうしーと',    imageUrl: './items/matameta_sheet.png',      comment: 'めためたが頭の芽の中から取り出した「めたしこうしーと」。何やら深そうな知識が書かれているが、めためた本人もよくわかっていないらしい。' },
+  { id: 'gomachan_shell',      defId: 'gomachan',    name: '貝殻',             imageUrl: './items/gomachan_shell.png',      comment: 'ごまちゃんが夢の中で拾ってきた（と本人は言い張る）貝殻。耳に当てると、海の音がする…気がする。' },
+  { id: 'magician_wand',       defId: 'magician',    name: 'ステッキ',          imageUrl: './items/magician_wand.png',       comment: 'マジシャンの予備のステッキ。振ると「アブラカタブラ」と微かに聞こえる気がする。本物の魔法は使えないので注意。' },
+];
+const ITEM_BY_DEFID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.defId, i]));
+const ITEM_BY_ID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.id, i]));
+
+// Drop chances when affection is at MAX (100)
+const ITEM_DROP_CHANCE_PET = 0.05;     // 5% on pet
+const ITEM_DROP_CHANCE_FEED_FAV = 0.10; // 10% on favorite food
 
 // Affection decays 1 point per ~4 hours when the mon isn't being displayed
 const AFFECTION_DECAY_HOURS = 4;
@@ -4806,22 +4831,25 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
-function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood }: {
+function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, itemInventory, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem }: {
   memoMons: MemoMonInstance[];
   coins: number;
   infinite: boolean;
   activeMonUid: string | undefined;
   foodInventory: Record<string, number>;
+  itemInventory: Record<string, number>;
   onClose: () => void;
   onUpdateMons: (updater: (mons: MemoMonInstance[]) => MemoMonInstance[]) => void;
   onSpendCoins: (amount: number) => void;
   onGainCoins: (amount: number) => void;
   onSetActive: (uid: string) => void;
   onConsumeFood: (foodId: string) => void;
+  onCollectItem: (itemId: string) => void;
 }) {
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
+  const [inspectItemId, setInspectItemId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' | 'full' } | null>(null);
   const [bubbleMsg, setBubbleMsg] = useState<string | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -4846,6 +4874,18 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
       setBubbleMsg(null);
       bubbleTimerRef.current = null;
     }, 3500);
+  }
+
+  // Roll for an item drop if the memomon's affection is at MAX.
+  // Returns the dropped item id (and triggers UI), or null.
+  function tryItemDrop(defId: string, currentAffection: number, chance: number): string | null {
+    if (currentAffection < 100) return null;
+    const item = ITEM_BY_DEFID[defId];
+    if (!item) return null;
+    if (Math.random() >= chance) return null;
+    onCollectItem(item.id);
+    showToastMsg(`✨ アイテム『${item.name}』をくれた！`, 'fav');
+    return item.id;
   }
 
   // Drive the big sprite animation. Looping anims (sit) repeat forever;
@@ -4904,6 +4944,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     else if (!infinite) onSpendCoins(food.cost);
     const eff = computeFeedingEffect(selectedDef.id, food.id);
     const now = Date.now();
+    const affBefore = effectiveAffection(selected, now);
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
       const baseAff = effectiveAffection(m, now); // honor decay before adding bonus
@@ -4925,7 +4966,10 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     if (line) showBubble(line);
     const sign = eff.affectionDelta >= 0 ? '+' : '';
     const prefix = eff.reaction === 'fav' ? '大好物！' : eff.reaction === 'dis' ? '嫌いみたい…' : '満足げ';
-    showToastMsg(`${prefix} なつき ${sign}${eff.affectionDelta}`, eff.reaction);
+    const dropped = eff.reaction === 'fav'
+      ? tryItemDrop(selectedDef.id, affBefore, ITEM_DROP_CHANCE_FEED_FAV)
+      : null;
+    if (!dropped) showToastMsg(`${prefix} なつき ${sign}${eff.affectionDelta}`, eff.reaction);
     setShowFoodPicker(false);
     // Reaction animation: favorite/normal -> happy, disliked -> dislike
     const reactionAnim: AnimState = eff.reaction === 'dis' ? 'dislike' : 'happy';
@@ -4942,6 +4986,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
       showToastMsg(`もう少し休ませてあげて（あと ${remainMin} 分）`, 'cooldown');
       return;
     }
+    const affBefore = effectiveAffection(selected, now);
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
       const baseAff = effectiveAffection(m, now); // honor decay first
@@ -4950,7 +4995,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     if (!infinite) onGainCoins(5);
     const line = pickReaction(selectedDef.id, 'pet');
     if (line) showBubble(line);
-    showToastMsg('なつき +2、コイン +5', 'pet');
+    const dropped = tryItemDrop(selectedDef.id, affBefore, ITEM_DROP_CHANCE_PET);
+    if (!dropped) showToastMsg('なつき +2、コイン +5', 'pet');
     // Trigger happy reaction (one-shot, then auto-returns to sit)
     setCurrentAnim('happy');
     setAnimFrame(0);
@@ -4970,6 +5016,31 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
         <button className="gacha-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
         <div className="playground-title">🎪 メモモンの遊び場</div>
         <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
+
+        {(() => {
+          const owned = MEMOMON_ITEMS.filter(it => (itemInventory[it.id] || 0) > 0);
+          if (owned.length === 0) return null;
+          return (
+            <div className="playground-items">
+              <div className="playground-items-title">🎁 アイテムボックス</div>
+              <div className="playground-items-strip">
+                {owned.map(it => (
+                  <button
+                    key={it.id}
+                    className="playground-item-card"
+                    onClick={() => setInspectItemId(it.id)}
+                    aria-label={it.name}
+                  >
+                    <img src={it.imageUrl} alt={it.name} />
+                    {(itemInventory[it.id] || 0) > 1 && (
+                      <span className="playground-item-count">×{itemInventory[it.id]}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {visibleMons.length === 0 ? (
           <div className="playground-empty">
@@ -5069,6 +5140,28 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
         {toast && (
           <div className={`playground-toast playground-toast-${toast.tone}`}>{toast.text}</div>
         )}
+
+        {inspectItemId && (() => {
+          const item = ITEM_BY_ID[inspectItemId];
+          if (!item) return null;
+          const giver = MEMOMON_DEFS.find(d => d.id === item.defId);
+          return (
+            <div className="playground-item-overlay" onClick={() => setInspectItemId(null)}>
+              <div className="playground-item-sheet" onClick={e => e.stopPropagation()}>
+                <button className="gacha-close-btn" onClick={() => setInspectItemId(null)} aria-label="閉じる">✕</button>
+                <div className="playground-item-stage">
+                  <img src={item.imageUrl} alt={item.name} />
+                </div>
+                <div className="playground-item-name">{item.name}</div>
+                <div className="playground-item-giver">{giver?.name ?? ''}からの贈り物</div>
+                <div className="playground-item-comment">{item.comment}</div>
+                {(itemInventory[item.id] || 0) > 1 && (
+                  <div className="playground-item-count-label">所持: ×{itemInventory[item.id]}</div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {showFoodPicker && selectedDef && (
           <div className="playground-food-overlay" onClick={() => setShowFoodPicker(false)}>
@@ -5849,6 +5942,7 @@ function SmartMemoApp() {
           infinite={!!settings.infiniteCoins}
           activeMonUid={settings.activeMonUid}
           foodInventory={settings.foodInventory || {}}
+          itemInventory={settings.itemInventory || {}}
           onClose={() => setShowPlayground(false)}
           onUpdateMons={updater => setMemoMons(updater)}
           onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
@@ -5860,6 +5954,11 @@ function SmartMemoApp() {
             if (n <= 1) delete inv[foodId];
             else inv[foodId] = n - 1;
             return { ...p, foodInventory: inv };
+          })}
+          onCollectItem={itemId => setSettings(p => {
+            const inv = { ...(p.itemInventory || {}) };
+            inv[itemId] = (inv[itemId] || 0) + 1;
+            return { ...p, itemInventory: inv };
           })}
         />
       )}
