@@ -2322,7 +2322,15 @@
       pointer-events: none;
       z-index: 0;
     }
-    .app.glass > * { position: relative; z-index: 1; }
+    /* Lift the static app shell above the ::before orb background,
+       but DON'T touch fixed-position overlays (modal-backdrop etc.) — those
+       must keep their position:fixed behavior. */
+    .app.glass > .app-header,
+    .app.glass > .tab-content,
+    .app.glass > .bottom-nav-wrapper {
+      position: relative;
+      z-index: 1;
+    }
 
     .app.glass .app-header {
       background: rgba(255,255,255,.5);
