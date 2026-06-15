@@ -111,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.17.3';
+const APP_VERSION = '1.18.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4850,6 +4850,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [inspectItemId, setInspectItemId] = useState<string | null>(null);
+  const [showMonList, setShowMonList] = useState(false);
+  const swipeStartXRef = useRef<number | null>(null);
+  const [swipeNudge, setSwipeNudge] = useState<'prev' | 'next' | null>(null);
   const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' | 'full' } | null>(null);
   const [bubbleMsg, setBubbleMsg] = useState<string | null>(null);
   const bubbleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -4866,6 +4869,31 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     if (bubbleTimerRef.current) { clearTimeout(bubbleTimerRef.current); bubbleTimerRef.current = null; }
     setBubbleMsg(null);
   }, [selectedUid]);
+
+  function shiftSelected(dir: -1 | 1) {
+    if (visibleMons.length <= 1) return;
+    const idx = Math.max(0, visibleMons.findIndex(m => m.uid === selected?.uid));
+    const next = (idx + dir + visibleMons.length) % visibleMons.length;
+    setSelectedUid(visibleMons[next].uid);
+    setSwipeNudge(dir === 1 ? 'next' : 'prev');
+    setTimeout(() => setSwipeNudge(null), 220);
+  }
+
+  function handleSwipeStart(e: React.TouchEvent | React.PointerEvent) {
+    if (visibleMons.length <= 1) return;
+    const x = 'touches' in e ? e.touches[0]?.clientX : (e as React.PointerEvent).clientX;
+    if (typeof x === 'number') swipeStartXRef.current = x;
+  }
+  function handleSwipeEnd(e: React.TouchEvent | React.PointerEvent) {
+    const start = swipeStartXRef.current;
+    swipeStartXRef.current = null;
+    if (start === null) return;
+    const x = 'changedTouches' in e ? e.changedTouches[0]?.clientX : (e as React.PointerEvent).clientX;
+    if (typeof x !== 'number') return;
+    const delta = x - start;
+    if (Math.abs(delta) < 50) return;
+    shiftSelected(delta < 0 ? 1 : -1);
+  }
 
   function showBubble(text: string) {
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
@@ -5014,6 +5042,23 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="playground-modal">
         <button className="gacha-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
+        {visibleMons.length > 1 && (
+          <button
+            className="playground-list-btn"
+            onClick={() => setShowMonList(true)}
+            aria-label="メモモン一覧"
+            title="メモモン一覧"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="20" y2="6" />
+              <line x1="8" y1="12" x2="20" y2="12" />
+              <line x1="8" y1="18" x2="20" y2="18" />
+              <circle cx="4" cy="6" r="1.4" fill="currentColor"/>
+              <circle cx="4" cy="12" r="1.4" fill="currentColor"/>
+              <circle cx="4" cy="18" r="1.4" fill="currentColor"/>
+            </svg>
+          </button>
+        )}
         <div className="playground-title">🎪 メモモンの遊び場</div>
         <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
 
@@ -5049,28 +5094,12 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
           </div>
         ) : (
           <>
-            <div className="playground-mon-strip">
-              {visibleMons.map(m => {
-                const def = MEMOMON_DEFS.find(d => d.id === m.defId);
-                if (!def) return null;
-                const isOnScreen = m.uid === activeMonUid || (!activeMonUid && m.uid === visibleMons[0]?.uid);
-                return (
-                  <button
-                    key={m.uid}
-                    className={`playground-mon-card${selected?.uid === m.uid ? ' active' : ''}${isOnScreen ? ' onscreen' : ''}`}
-                    onClick={() => setSelectedUid(m.uid)}
-                  >
-                    {isOnScreen && <div className="playground-mon-card-badge">画面</div>}
-                    <img src={MEMOMON_IMGS[def.id]} alt={def.name} />
-                    <div className="playground-mon-card-name">{def.name}</div>
-                    <div className="playground-mon-card-aff">♥ {effectiveAffection(m, nowMs)}</div>
-                  </button>
-                );
-              })}
-            </div>
-
             {selected && selectedDef && (
-              <div className="playground-detail">
+              <div
+                className={`playground-detail${swipeNudge ? ` swipe-${swipeNudge}` : ''}`}
+                onTouchStart={handleSwipeStart}
+                onTouchEnd={handleSwipeEnd}
+              >
                 <div className="playground-stage">
                   {bubbleMsg && (
                     <div key={bubbleMsg} className="playground-stage-bubble">{bubbleMsg}</div>
@@ -5134,11 +5163,77 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
                 })()}
               </div>
             )}
+
+            {visibleMons.length > 1 && (
+              <>
+                <button
+                  className="playground-nav-arrow left"
+                  onClick={() => shiftSelected(-1)}
+                  aria-label="前のメモモン"
+                >‹</button>
+                <button
+                  className="playground-nav-arrow right"
+                  onClick={() => shiftSelected(1)}
+                  aria-label="次のメモモン"
+                >›</button>
+                <div className="playground-dots">
+                  {visibleMons.map(m => (
+                    <button
+                      key={m.uid}
+                      className={`playground-dot${m.uid === selected?.uid ? ' active' : ''}${m.uid === activeMonUid || (!activeMonUid && m.uid === visibleMons[0]?.uid) ? ' is-active-mon' : ''}`}
+                      onClick={() => setSelectedUid(m.uid)}
+                      aria-label={(MEMOMON_DEFS.find(d => d.id === m.defId) || { name: '' }).name}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
 
         {toast && (
           <div className={`playground-toast playground-toast-${toast.tone}`}>{toast.text}</div>
+        )}
+
+        {showMonList && (
+          <div className="playground-list-overlay" onClick={() => setShowMonList(false)}>
+            <div className="playground-list-sheet" onClick={e => e.stopPropagation()}>
+              <div className="playground-list-title">メモモン一覧</div>
+              <div className="playground-list-scroll">
+                {visibleMons.map(m => {
+                  const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+                  if (!def) return null;
+                  const isOnScreen = m.uid === activeMonUid || (!activeMonUid && m.uid === visibleMons[0]?.uid);
+                  const isSelected = m.uid === selected?.uid;
+                  const a = effectiveAffection(m, nowMs);
+                  const aLvl = affectionLevel(a);
+                  return (
+                    <button
+                      key={m.uid}
+                      className={`playground-list-row${isSelected ? ' selected' : ''}`}
+                      onClick={() => { setSelectedUid(m.uid); setShowMonList(false); }}
+                    >
+                      <img src={MEMOMON_IMGS[def.id]} alt={def.name} />
+                      <div className="playground-list-row-info">
+                        <div className="playground-list-row-name">
+                          {def.name}
+                          {isOnScreen && <span className="playground-list-row-onscreen">画面</span>}
+                        </div>
+                        <div className="playground-list-row-level">{aLvl.stars} <span>{aLvl.label}</span></div>
+                        <div className="playground-list-row-meter">
+                          <div className="playground-list-row-meter-bar">
+                            <div className="playground-list-row-meter-fill" style={{ width: `${a}%` }} />
+                          </div>
+                          <span className="playground-list-row-meter-val">♥ {a}</span>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <button className="playground-food-cancel" onClick={() => setShowMonList(false)}>閉じる</button>
+            </div>
+          </div>
         )}
 
         {inspectItemId && (() => {
