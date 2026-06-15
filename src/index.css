@@ -946,55 +946,68 @@
       margin-top: 8px;
       padding-top: 8px;
       border-top: 1px dashed rgba(90,56,24,.18);
-      display: flex; align-items: center; gap: 10px;
+      display: flex; flex-direction: column; gap: 6px;
     }
     .playground-gifts-label {
       font-size: 11px; font-weight: 800; color: #5a3818;
-      letter-spacing: .3px; flex-shrink: 0;
+      letter-spacing: .3px;
     }
-    .playground-gift-card {
-      flex: 1; min-width: 0;
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 10px;
-      background: rgba(255,255,255,.55);
-      border: 1.5px solid rgba(255,138,61,.35);
+    .playground-gifts-slots {
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;
+    }
+    .playground-gift-slot {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
       border-radius: 10px;
-      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center;
+      padding: 4px;
+      font-family: inherit;
+    }
+    .playground-gift-slot.empty {
+      background: rgba(255,255,255,.25);
+      border: 1.5px dashed rgba(90,56,24,.25);
+      color: rgba(90,56,24,.30);
+      font-size: 16px; font-weight: 800;
+    }
+    .playground-gift-slot.filled {
+      background: rgba(255,255,255,.55);
+      border: 1.5px solid rgba(255,138,61,.5);
+      box-shadow: 0 2px 6px rgba(255,138,61,.18);
+      cursor: pointer;
       transition: transform .08s, background .12s, border-color .12s;
-      text-align: left;
     }
-    .playground-gift-card:hover { background: #fff; border-color: #ff8a3d; }
-    .playground-gift-card:active { transform: scale(.97); }
-    .playground-gift-card img {
-      width: 30px; height: 30px;
+    .playground-gift-slot.filled:hover { background: #fff; border-color: #ff8a3d; }
+    .playground-gift-slot.filled:active { transform: scale(.95); }
+    .playground-gift-slot img {
+      max-width: 100%; max-height: 100%;
       object-fit: contain; image-rendering: pixelated;
-      flex-shrink: 0;
     }
-    .playground-gift-name {
-      font-size: 12px; font-weight: 700; color: #5a3818;
-      flex: 1; min-width: 0;
-      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .playground-gift-count {
-      font-size: 10px; font-weight: 800;
+    .playground-gift-slot-count {
+      position: absolute; bottom: -4px; right: -4px;
       background: #ff8a3d; color: #fff;
+      font-size: 10px; font-weight: 800;
       padding: 1px 6px; border-radius: 8px;
-      flex-shrink: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,.18);
     }
-    .playground-gift-empty {
-      flex: 1;
+    .playground-gifts-empty-hint {
       font-size: 11px; font-style: italic;
       color: rgba(90,56,24,.55);
+      text-align: center;
     }
     .app.dark .playground-gifts { border-top-color: rgba(255,255,255,.10); }
     .app.dark .playground-gifts-label { color: #f0e2c8; }
-    .app.dark .playground-gift-card {
-      background: rgba(255,255,255,.05);
-      border-color: rgba(255,138,61,.40);
+    .app.dark .playground-gift-slot.empty {
+      background: rgba(255,255,255,.04);
+      border-color: rgba(255,255,255,.10);
+      color: rgba(240,226,200,.25);
     }
-    .app.dark .playground-gift-card:hover { background: rgba(255,255,255,.10); }
-    .app.dark .playground-gift-name { color: #f0e2c8; }
-    .app.dark .playground-gift-empty { color: rgba(240,226,200,.45); }
+    .app.dark .playground-gift-slot.filled {
+      background: rgba(255,255,255,.07);
+      border-color: rgba(255,138,61,.50);
+    }
+    .app.dark .playground-gift-slot.filled:hover { background: rgba(255,255,255,.12); }
+    .app.dark .playground-gifts-empty-hint { color: rgba(240,226,200,.45); }
     .playground-actions {
       width: 100%;
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
