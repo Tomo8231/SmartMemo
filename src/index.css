@@ -2201,3 +2201,127 @@
       0%   { opacity:1; transform:translateX(-50%) translateY(0); }
       100% { opacity:0; transform:translateX(-50%) translateY(-22px); }
     }
+
+    /* ──────────────────────────────────────────────────────
+       Glassmorphism theme (.app.glass)
+       Translucent frosted surfaces backed by a soft gradient.
+       ────────────────────────────────────────────────────── */
+    .app.glass {
+      background: linear-gradient(160deg, #fde9d4 0%, #fbd0c4 35%, #d6dcfa 70%, #c8e8f9 100%);
+    }
+    .app.glass::before {
+      content: '';
+      position: absolute; inset: -20% -20% 30% -20%;
+      background:
+        radial-gradient(50% 50% at 18% 24%, rgba(255,170,90,.45) 0%, transparent 70%),
+        radial-gradient(60% 60% at 82% 30%, rgba(127,165,255,.40) 0%, transparent 70%),
+        radial-gradient(45% 45% at 50% 90%, rgba(200,130,255,.30) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .app.glass > * { position: relative; z-index: 1; }
+
+    .app.glass .app-header {
+      background: rgba(255,255,255,.5);
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+      border-bottom: 1px solid rgba(255,255,255,.55);
+    }
+    .app.glass .bottom-nav {
+      background: rgba(255,255,255,.55);
+      backdrop-filter: blur(20px) saturate(170%);
+      -webkit-backdrop-filter: blur(20px) saturate(170%);
+      box-shadow: 0 -2px 20px rgba(0,0,0,.06), inset 0 1px 0 rgba(255,255,255,.7);
+    }
+
+    .app.glass .settings-card,
+    .app.glass .todo-item,
+    .app.glass .idea-item,
+    .app.glass .memo-textarea-wrap,
+    .app.glass .modal-sheet,
+    .app.glass .gacha-modal,
+    .app.glass .playground-modal {
+      background: rgba(255,255,255,.42);
+      backdrop-filter: blur(22px) saturate(160%);
+      -webkit-backdrop-filter: blur(22px) saturate(160%);
+      border: 1px solid rgba(255,255,255,.55);
+      box-shadow: 0 8px 32px rgba(31, 38, 135, .12), inset 0 1px 0 rgba(255,255,255,.6);
+    }
+    .app.glass .settings-card { border-radius: 16px; }
+    .app.glass .todo-item, .app.glass .idea-item { border-radius: 14px; }
+
+    .app.glass .gacha-modal { background: linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,.25)); }
+    .app.glass .playground-modal { background: linear-gradient(160deg, rgba(255,247,232,.55), rgba(255,217,168,.42)); }
+
+    .app.glass .memo-textarea {
+      background: transparent; color: #1a1a18;
+    }
+    .app.glass .modal-field input,
+    .app.glass .modal-field select,
+    .app.glass .modal-field textarea {
+      background: rgba(255,255,255,.6);
+      border-color: rgba(255,255,255,.6);
+      backdrop-filter: blur(6px);
+    }
+    .app.glass input,
+    .app.glass select,
+    .app.glass textarea {
+      caret-color: var(--accent);
+    }
+
+    .app.glass .filter-tag,
+    .app.glass .modal-tag {
+      background: rgba(255,255,255,.55);
+      border-color: rgba(255,255,255,.6);
+      backdrop-filter: blur(6px);
+    }
+    .app.glass .filter-tag.active,
+    .app.glass .modal-tag.sel {
+      background: var(--accent); color: #fff;
+      border-color: var(--accent);
+    }
+
+    .app.glass .modal-backdrop { background: rgba(255,255,255,.15); }
+    .app.glass .gacha-backdrop,
+    .app.glass .playground-backdrop { background: rgba(0,0,0,.25); backdrop-filter: blur(6px); }
+
+    /* Dark + glass: deeper gradient with more contrast */
+    .app.dark.glass {
+      background: linear-gradient(160deg, #1b1f3a 0%, #2a1a40 40%, #3a1c3e 75%, #1e2540 100%);
+    }
+    .app.dark.glass::before {
+      background:
+        radial-gradient(50% 50% at 18% 24%, rgba(120,90,255,.30) 0%, transparent 70%),
+        radial-gradient(60% 60% at 82% 30%, rgba(80,140,255,.30) 0%, transparent 70%),
+        radial-gradient(45% 45% at 50% 90%, rgba(255,80,200,.20) 0%, transparent 70%);
+    }
+    .app.dark.glass .app-header,
+    .app.dark.glass .bottom-nav {
+      background: rgba(20,20,30,.45);
+      border-color: rgba(255,255,255,.08);
+    }
+    .app.dark.glass .settings-card,
+    .app.dark.glass .todo-item,
+    .app.dark.glass .idea-item,
+    .app.dark.glass .memo-textarea-wrap,
+    .app.dark.glass .modal-sheet,
+    .app.dark.glass .gacha-modal,
+    .app.dark.glass .playground-modal {
+      background: rgba(30,30,40,.45);
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .app.dark.glass .playground-modal { background: rgba(40,32,24,.55); }
+    .app.dark.glass .modal-field input,
+    .app.dark.glass .modal-field select,
+    .app.dark.glass .modal-field textarea {
+      background: rgba(255,255,255,.06);
+      border-color: rgba(255,255,255,.10);
+      color: #f0f0ee;
+    }
+    .app.dark.glass .filter-tag,
+    .app.dark.glass .modal-tag {
+      background: rgba(255,255,255,.08);
+      border-color: rgba(255,255,255,.10);
+      color: #d4d4d0;
+    }
