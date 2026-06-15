@@ -515,6 +515,179 @@
       background: #4caf50; color: #fff;
     }
 
+    .playground-list-btn {
+      position: absolute;
+      top: 10px; right: 50px;
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0,0,0,.08);
+      color: #5a3818;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .12s, transform .08s;
+      z-index: 4;
+    }
+    .playground-list-btn:hover { background: rgba(0,0,0,.14); }
+    .playground-list-btn:active { transform: scale(.94); }
+    .app.dark .playground-list-btn { background: rgba(255,255,255,.10); color: #f0e2c8; }
+    .app.dark .playground-list-btn:hover { background: rgba(255,255,255,.16); }
+
+    .playground-nav-arrow {
+      position: absolute;
+      top: 46%;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,.75);
+      color: #5a3818;
+      font-size: 22px; font-weight: 700; line-height: 1;
+      cursor: pointer; font-family: inherit;
+      box-shadow: 0 4px 12px rgba(0,0,0,.15);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .08s, background .12s;
+      z-index: 3;
+    }
+    .playground-nav-arrow.left { left: 4px; }
+    .playground-nav-arrow.right { right: 4px; }
+    .playground-nav-arrow:hover { background: #fff; }
+    .playground-nav-arrow:active { transform: scale(.92); }
+    .app.dark .playground-nav-arrow {
+      background: rgba(40,40,46,.85); color: #f0e2c8;
+      box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    }
+    .app.dark .playground-nav-arrow:hover { background: #28282c; }
+
+    .playground-dots {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+      margin-top: 2px;
+    }
+    .playground-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      border: none; padding: 0;
+      background: rgba(0,0,0,.15);
+      cursor: pointer;
+      transition: background .12s, transform .12s;
+    }
+    .playground-dot:hover { background: rgba(0,0,0,.30); }
+    .playground-dot.active { background: #ff8a3d; transform: scale(1.25); }
+    .playground-dot.is-active-mon::after {
+      content: '';
+      position: absolute;
+      transform: translate(-1px, -10px);
+      width: 4px; height: 4px; border-radius: 50%; background: #4caf50;
+    }
+    .playground-dot { position: relative; }
+    .app.dark .playground-dot { background: rgba(255,255,255,.15); }
+    .app.dark .playground-dot.active { background: #ff8a3d; }
+
+    .playground-detail.swipe-prev { animation: swipe-from-left .22s ease; }
+    .playground-detail.swipe-next { animation: swipe-from-right .22s ease; }
+    @keyframes swipe-from-left {
+      from { opacity: .3; transform: translateX(-30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes swipe-from-right {
+      from { opacity: .3; transform: translateX(30px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* List view overlay */
+    .playground-list-overlay {
+      position: absolute; inset: 0; z-index: 6;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 18px;
+      border-radius: inherit;
+      animation: fade-in .18s ease;
+    }
+    .playground-list-sheet {
+      position: relative;
+      width: 100%; max-width: 360px;
+      max-height: 90%;
+      background: linear-gradient(160deg, #FFF7E8 0%, #FFEAD0 100%);
+      border-radius: 18px;
+      padding: 18px 16px 16px;
+      display: flex; flex-direction: column; gap: 12px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.25);
+      animation: detail-pop .22s cubic-bezier(.17, .67, .34, 1.4);
+    }
+    .playground-list-title {
+      font-size: 15px; font-weight: 800; color: #5a3818;
+      text-align: center;
+    }
+    .playground-list-scroll {
+      display: flex; flex-direction: column; gap: 8px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      max-height: 60vh;
+    }
+    .playground-list-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.55);
+      border: 2px solid transparent;
+      border-radius: 12px;
+      cursor: pointer; font-family: inherit;
+      transition: background .12s, transform .08s, border-color .12s;
+      text-align: left;
+    }
+    .playground-list-row:active { transform: scale(.98); }
+    .playground-list-row.selected {
+      border-color: #ff8a3d;
+      background: #fff;
+    }
+    .playground-list-row img {
+      width: 48px; height: 48px; flex-shrink: 0;
+      object-fit: contain; image-rendering: pixelated;
+    }
+    .playground-list-row-info {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .playground-list-row-name {
+      font-size: 13px; font-weight: 700; color: #5a3818;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .playground-list-row-onscreen {
+      font-size: 9px; font-weight: 700;
+      background: #4caf50; color: #fff;
+      padding: 1px 6px; border-radius: 6px;
+      letter-spacing: .5px;
+    }
+    .playground-list-row-level {
+      font-size: 10px; font-weight: 700; color: #ff8a3d;
+    }
+    .playground-list-row-level span { color: #5a3818; margin-left: 4px; font-weight: 600; }
+    .playground-list-row-meter {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .playground-list-row-meter-bar {
+      flex: 1; height: 6px; border-radius: 4px;
+      background: rgba(0,0,0,.08); overflow: hidden;
+    }
+    .playground-list-row-meter-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #ff8a3d, #e91e63);
+    }
+    .playground-list-row-meter-val {
+      font-size: 10px; font-weight: 700; color: #e91e63;
+      min-width: 40px; text-align: right;
+    }
+    .app.dark .playground-list-sheet {
+      background: linear-gradient(160deg, #2a1f12 0%, #1f1a14 100%);
+    }
+    .app.dark .playground-list-title,
+    .app.dark .playground-list-row-name,
+    .app.dark .playground-list-row-level span { color: #f0e2c8; }
+    .app.dark .playground-list-row {
+      background: rgba(255,255,255,.05);
+    }
+    .app.dark .playground-list-row.selected {
+      background: rgba(255,138,61,.18);
+    }
+    .app.dark .playground-list-row-meter-bar { background: rgba(255,255,255,.10); }
+
     .playground-detail {
       display: flex; flex-direction: column; align-items: center; gap: 10px;
       background: rgba(255,255,255,.55);
