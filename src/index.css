@@ -2718,7 +2718,7 @@
 
     .app.glass .settings-card,
     .app.glass .todo-item,
-    .app.glass .idea-item,
+    .app.glass .idea-card,
     .app.glass .memo-textarea-wrap,
     .app.glass .modal-sheet,
     .app.glass .gacha-modal,
@@ -2730,7 +2730,8 @@
       box-shadow: 0 8px 32px rgba(31, 38, 135, .12), inset 0 1px 0 rgba(255,255,255,.6);
     }
     .app.glass .settings-card { border-radius: 16px; }
-    .app.glass .todo-item, .app.glass .idea-item { border-radius: 14px; }
+    .app.glass .todo-item, .app.glass .idea-card { border-radius: 14px; }
+    .app.glass .idea-card:hover { background: rgba(255,255,255,.55); }
 
     /* Tab content surfaces (Memo / Schedule / Knowledge tabs) */
     .app.glass .memo-card,
@@ -2821,7 +2822,7 @@
     }
     .app.dark.glass .settings-card,
     .app.dark.glass .todo-item,
-    .app.dark.glass .idea-item,
+    .app.dark.glass .idea-card,
     .app.dark.glass .memo-textarea-wrap,
     .app.dark.glass .modal-sheet,
     .app.dark.glass .gacha-modal,
@@ -2830,6 +2831,7 @@
       border: 1px solid rgba(255,255,255,.10);
       box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255,255,255,.08);
     }
+    .app.dark.glass .idea-card:hover { background: rgba(30,30,40,.55); }
     .app.dark.glass .playground-modal { background: rgba(40,32,24,.55); }
 
     .app.dark.glass .memo-card,
