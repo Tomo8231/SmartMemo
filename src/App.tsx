@@ -111,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.18.2';
+const APP_VERSION = '1.19.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4850,6 +4850,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
   const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [inspectItemId, setInspectItemId] = useState<string | null>(null);
+  const [giftReveal, setGiftReveal] = useState<{ itemId: string; monName: string } | null>(null);
   const [showMonList, setShowMonList] = useState(false);
   const swipeStartXRef = useRef<number | null>(null);
   const [swipeNudge, setSwipeNudge] = useState<'prev' | 'next' | null>(null);
@@ -4911,8 +4912,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
     const item = ITEM_BY_DEFID[defId];
     if (!item) return null;
     if (Math.random() >= chance) return null;
+    const def = MEMOMON_DEFS.find(d => d.id === defId);
     onCollectItem(item.id);
-    showToastMsg(`✨ アイテム『${item.name}』をくれた！`, 'fav');
+    setGiftReveal({ itemId: item.id, monName: def?.name ?? '' });
     return item.id;
   }
 
@@ -5234,6 +5236,30 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
             </div>
           </div>
         )}
+
+        {giftReveal && (() => {
+          const item = ITEM_BY_ID[giftReveal.itemId];
+          if (!item) return null;
+          return (
+            <div className="gift-reveal-overlay" onClick={() => setGiftReveal(null)}>
+              <div className="gift-reveal-rays" />
+              <div className="gift-reveal-particles">
+                {Array.from({ length: 18 }).map((_, i) => (
+                  <span key={i} className={`gift-particle p${i}`}>✨</span>
+                ))}
+              </div>
+              <div className="gift-reveal-card" onClick={e => e.stopPropagation()}>
+                <div className="gift-reveal-banner">✨ おくりもの GET! ✨</div>
+                <div className="gift-reveal-mon">{giftReveal.monName} から</div>
+                <div className="gift-reveal-stage">
+                  <img src={item.imageUrl} alt={item.name} />
+                </div>
+                <div className="gift-reveal-name">{item.name}</div>
+                <button className="gift-reveal-close" onClick={() => setGiftReveal(null)}>OK</button>
+              </div>
+            </div>
+          );
+        })()}
 
         {inspectItemId && (() => {
           const item = ITEM_BY_ID[inspectItemId];
