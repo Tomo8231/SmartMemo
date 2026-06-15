@@ -2361,6 +2361,36 @@
     .app.glass .settings-card { border-radius: 16px; }
     .app.glass .todo-item, .app.glass .idea-item { border-radius: 14px; }
 
+    /* Tab content surfaces (Memo / Schedule / Knowledge tabs) */
+    .app.glass .memo-card,
+    .app.glass .memo-history-sheet,
+    .app.glass .calendar-section,
+    .app.glass .todo-list-header,
+    .app.glass .todo-controls,
+    .app.glass .ideas-subtabs {
+      background: rgba(255,255,255,.35);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      border-color: rgba(255,255,255,.45);
+    }
+    .app.glass .memo-card { border-bottom-color: rgba(255,255,255,.45); }
+    .app.glass .memo-actions { border-top-color: rgba(255,255,255,.45); }
+    .app.glass .cal-head,
+    .app.glass .cal-day,
+    .app.glass .cal-week-cells > div {
+      background: transparent;
+    }
+    .app.glass .cal-day.today { background: rgba(255,255,255,.45); }
+    .app.glass .cal-day.has-todo::after { /* dot stays */ }
+    .app.glass .todo-list-area {
+      background: transparent;
+    }
+    .app.glass .overdue-head,
+    .app.glass .undated-head {
+      background: transparent;
+    }
+    .app.glass .reflect-btn { box-shadow: 0 4px 16px rgba(212,98,42,.25); }
+
     .app.glass .gacha-modal { background: linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,.25)); }
     .app.glass .playground-modal { background: linear-gradient(160deg, rgba(255,247,232,.55), rgba(255,217,168,.42)); }
 
@@ -2423,6 +2453,22 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255,255,255,.08);
     }
     .app.dark.glass .playground-modal { background: rgba(40,32,24,.55); }
+
+    .app.dark.glass .memo-card,
+    .app.dark.glass .memo-history-sheet,
+    .app.dark.glass .calendar-section,
+    .app.dark.glass .todo-list-header,
+    .app.dark.glass .todo-controls,
+    .app.dark.glass .ideas-subtabs {
+      background: rgba(30,30,40,.35);
+      backdrop-filter: blur(18px) saturate(150%);
+      -webkit-backdrop-filter: blur(18px) saturate(150%);
+      border-color: rgba(255,255,255,.08);
+    }
+    .app.dark.glass .memo-card { border-bottom-color: rgba(255,255,255,.08); }
+    .app.dark.glass .memo-actions { border-top-color: rgba(255,255,255,.08); }
+    .app.dark.glass .cal-day.today { background: rgba(255,255,255,.10); }
+
     .app.dark.glass .modal-field input,
     .app.dark.glass .modal-field select,
     .app.dark.glass .modal-field textarea {
