@@ -111,7 +111,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.19.0';
+const APP_VERSION = '1.19.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5113,21 +5113,36 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
                   {(() => {
                     const giftItem = ITEM_BY_DEFID[selectedDef.id];
                     const count = giftItem ? (itemInventory[giftItem.id] || 0) : 0;
+                    const SLOTS = 5;
+                    const hasAny = !!(giftItem && count > 0);
                     return (
                       <div className="playground-gifts">
                         <div className="playground-gifts-label">🎁 おくりもの</div>
-                        {giftItem && count > 0 ? (
-                          <button
-                            className="playground-gift-card"
-                            onClick={() => setInspectItemId(giftItem.id)}
-                            aria-label={giftItem.name}
-                          >
-                            <img src={giftItem.imageUrl} alt={giftItem.name} />
-                            <span className="playground-gift-name">{giftItem.name}</span>
-                            {count > 1 && <span className="playground-gift-count">×{count}</span>}
-                          </button>
-                        ) : (
-                          <div className="playground-gift-empty">
+                        <div className="playground-gifts-slots">
+                          {Array.from({ length: SLOTS }).map((_, i) => {
+                            if (i === 0 && hasAny) {
+                              return (
+                                <button
+                                  key={i}
+                                  className="playground-gift-slot filled"
+                                  onClick={() => setInspectItemId(giftItem!.id)}
+                                  aria-label={giftItem!.name}
+                                  title={giftItem!.name}
+                                >
+                                  <img src={giftItem!.imageUrl} alt={giftItem!.name} />
+                                  {count > 1 && <span className="playground-gift-slot-count">×{count}</span>}
+                                </button>
+                              );
+                            }
+                            return (
+                              <div key={i} className="playground-gift-slot empty">
+                                <span>?</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {!hasAny && (
+                          <div className="playground-gifts-empty-hint">
                             なつき度MAXで仲良くなったら、もらえるかも…？
                           </div>
                         )}
