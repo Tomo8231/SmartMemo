@@ -112,7 +112,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.20.1';
+const APP_VERSION = '1.21.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3711,8 +3711,9 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
   ideas: Idea[];
+  geminiApiKey?: string;
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
   onAdd: (i: Idea) => void;
@@ -3723,6 +3724,7 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
+  const [showChat,       setShowChat]       = useState(false);
   const [activeSubTab,   setActiveSubTab]   = usePersistedState<string>('smartmemo:ui:subTab', 'all');
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
@@ -3979,9 +3981,186 @@ function IdeasTab({ ideas, onUpdate, onDelete, onAdd, onReorder, customTags, ide
           ? <div className="ideas-empty">まだナレッジがありません</div>
           : ideaCards
         }
-        <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
-          ＋ 新しいナレッジを追加
-        </button>
+        <div className="ideas-bottom-actions">
+          <button className="ideas-chat-btn" onClick={() => setShowChat(true)} aria-label="AIに聞く">
+            💬 AIに聞く
+          </button>
+          <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
+            ＋ 新しいナレッジを追加
+          </button>
+        </div>
+      </div>
+      {showChat && (
+        <KnowledgeChat
+          ideas={ideas}
+          apiKey={geminiApiKey}
+          onClose={() => setShowChat(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Knowledge AI Chat Modal
+// ─────────────────────────────────────────────────────────────
+type ChatMessage = { role: 'user' | 'assistant'; text: string };
+
+function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: string; onClose: () => void }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+  // null = use all ideas; otherwise an explicit selected set
+  const [selectedIds, setSelectedIds] = useState<Set<number | string> | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  const targetIdeas = selectedIds
+    ? ideas.filter(i => selectedIds.has(i.id))
+    : ideas;
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, loading]);
+
+  function formatIdea(i: Idea): string {
+    const parts = [
+      `■ ${i.projectName || '(無題)'}`,
+      i.summary ? `要約: ${i.summary}` : '',
+      i.details && i.details.length > 0 ? `詳細:\n  ・${i.details.join('\n  ・')}` : '',
+      i.tags && i.tags.length > 0 ? `タグ: ${i.tags.join(', ')}` : '',
+    ].filter(Boolean);
+    return parts.join('\n');
+  }
+
+  async function send() {
+    const q = input.trim();
+    if (!q) return;
+    if (!apiKey) {
+      setMessages(m => [...m, { role: 'assistant', text: 'Gemini API キーが未設定です。設定タブで API キーを登録してください。' }]);
+      return;
+    }
+    setMessages(m => [...m, { role: 'user', text: q }]);
+    setInput('');
+    setLoading(true);
+
+    const knowledgeBlock = targetIdeas.length > 0
+      ? targetIdeas.map(formatIdea).join('\n---\n')
+      : '(参照可能なナレッジはありません)';
+
+    const history = [...messages, { role: 'user' as const, text: q }];
+    const conversation = history
+      .map(m => `${m.role === 'user' ? 'ユーザー' : 'アシスタント'}: ${m.text}`)
+      .join('\n\n');
+
+    const prompt =
+      `あなたはユーザーのSmartMemoアプリに蓄積されたナレッジを元に質問に答えるアシスタントです。\n\n` +
+      `回答方針:\n` +
+      `- 以下の【ナレッジ】に書かれていることを最優先で参照し、根拠を簡潔に示しながら回答してください。\n` +
+      `- ナレッジ内に明確な答えがない場合でも、関連する内容から推測できる範囲で示唆を返し、その旨を明示してください。\n` +
+      `- 完全に範囲外なら「ナレッジに該当する情報が見つかりませんでした」と素直に答えてください。\n` +
+      `- マークダウンは使わず、シンプルで読みやすい日本語で200〜400字程度を目安にしてください。\n\n` +
+      `【ナレッジ（参照対象 ${targetIdeas.length} 件）】\n${knowledgeBlock}\n\n` +
+      `【これまでの会話】\n${conversation}\n\n` +
+      `上記のユーザー最新の発言に対して回答してください。`;
+
+    try {
+      const reply = await callGeminiText(apiKey, prompt);
+      setMessages(m => [...m, { role: 'assistant', text: reply.trim() || '(回答が取得できませんでした)' }]);
+    } catch (e: any) {
+      setMessages(m => [...m, { role: 'assistant', text: `エラー: ${e?.message || e}` }]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function toggleSelect(id: number | string) {
+    setSelectedIds(prev => {
+      const base = prev ? new Set(prev) : new Set(ideas.map(i => i.id));
+      if (base.has(id)) base.delete(id);
+      else base.add(id);
+      return base;
+    });
+  }
+
+  return (
+    <div className="modal-backdrop knowchat-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="knowchat-modal">
+        <div className="knowchat-header">
+          <div className="knowchat-title">💬 ナレッジAIチャット</div>
+          <button className="knowchat-close" onClick={onClose} aria-label="閉じる">✕</button>
+        </div>
+        <div className="knowchat-scope">
+          <span className="knowchat-scope-label">参照:</span>
+          <span className="knowchat-scope-count">
+            {selectedIds ? `${targetIdeas.length} / ${ideas.length} 件` : `全 ${ideas.length} 件`}
+          </span>
+          <button className="knowchat-pick-btn" onClick={() => setShowPicker(s => !s)}>
+            {showPicker ? '閉じる' : 'ナレッジを選ぶ'}
+          </button>
+          {selectedIds && (
+            <button className="knowchat-clear-btn" onClick={() => setSelectedIds(null)}>全選択に戻す</button>
+          )}
+        </div>
+        {showPicker && (
+          <div className="knowchat-picker">
+            {ideas.length === 0 ? (
+              <div className="knowchat-picker-empty">まだナレッジがありません</div>
+            ) : ideas.map(i => {
+              const sel = selectedIds ? selectedIds.has(i.id) : true;
+              return (
+                <label key={i.id} className={`knowchat-picker-row${sel ? ' selected' : ''}`}>
+                  <input type="checkbox" checked={sel} onChange={() => toggleSelect(i.id)} />
+                  <span className="knowchat-picker-name">{i.projectName || '(無題)'}</span>
+                  {i.summary && <span className="knowchat-picker-sub">{i.summary}</span>}
+                </label>
+              );
+            })}
+          </div>
+        )}
+        <div className="knowchat-messages" ref={scrollRef}>
+          {messages.length === 0 && !loading && (
+            <div className="knowchat-empty">
+              <div>💡 ナレッジに基づいて質問できます。</div>
+              <div className="knowchat-empty-examples">
+                <div>例: 「先月のメモのまとめを教えて」</div>
+                <div>例: 「○○について何かメモあった？」</div>
+                <div>例: 「アイデアを 3 つ挙げて」</div>
+              </div>
+            </div>
+          )}
+          {messages.map((m, i) => (
+            <div key={i} className={`knowchat-msg knowchat-msg-${m.role}`}>
+              <div className="knowchat-msg-bubble">{m.text}</div>
+            </div>
+          ))}
+          {loading && (
+            <div className="knowchat-msg knowchat-msg-assistant">
+              <div className="knowchat-msg-bubble loading">
+                <span className="knowchat-dot" /><span className="knowchat-dot" /><span className="knowchat-dot" />
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="knowchat-input-row">
+          <textarea
+            className="knowchat-input"
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !loading) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            placeholder="ナレッジに質問してみよう…（Cmd/Ctrl+Enter で送信）"
+            rows={2}
+            disabled={loading}
+          />
+          <button className="knowchat-send" onClick={send} disabled={loading || !input.trim()}>
+            送信
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -6080,7 +6259,7 @@ function SmartMemoApp() {
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} />}
       </div>
       <div className="bottom-nav-wrapper">
