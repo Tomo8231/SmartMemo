@@ -12,6 +12,7 @@ type Todo = {
   tags: string[];
   done: boolean;
   addedAt?: number;
+  completedAt?: string; // YYYY-MM-DD when marked done; used for displaying done todos
   coinReward?: number;
   recurring?: 'daily' | 'weekly' | 'biweekly' | 'monthly';
   recurringDay?: number;
@@ -111,7 +112,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.20.0';
+const APP_VERSION = '1.20.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -672,6 +673,22 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const today = new Date();
 const formatDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const todayStr = formatDate(today);
+
+// Returns the calendar date range used to PLACE a todo:
+//  - Done todos: their completion date (single day). Falls back to end/start
+//    for legacy items completed before completedAt was tracked.
+//  - Open todos: their startDate ~ endDate range.
+//  - No date at all: null (rendered in the undated section).
+function todoDisplayRange(t: Todo): { start: string; end: string } | null {
+  if (t.done) {
+    if (t.completedAt) return { start: t.completedAt, end: t.completedAt };
+    if (t.endDate)     return { start: t.endDate,     end: t.endDate };
+    if (t.startDate)   return { start: t.startDate,   end: t.startDate };
+    return null;
+  }
+  if (!t.startDate) return null;
+  return { start: t.startDate, end: t.endDate || t.startDate };
+}
 const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const DOW = ['日','月','火','水','木','金','土'];
 const JP_HOLIDAYS = new Set([
@@ -2116,8 +2133,9 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange,
 
   const dotSet = new Set<string>();
   todos.forEach(t => {
-    if (!t.startDate) return;
-    const s = new Date(t.startDate), e = t.endDate ? new Date(t.endDate) : s;
+    const r = todoDisplayRange(t);
+    if (!r) return;
+    const s = new Date(r.start), e = new Date(r.end);
     for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) dotSet.add(formatDate(new Date(d)));
   });
 
@@ -2211,27 +2229,27 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange,
             const rowStart = formatDate(row[0].date);
             const rowEnd   = formatDate(row[6].date);
 
-            const rowTodos = todos.filter(t => {
-              if (!t.startDate) return false;
-              const e = t.endDate || t.startDate;
-              return t.startDate <= rowEnd && e >= rowStart;
-            }).sort((a, b) => {
-              if (a.done !== b.done) return a.done ? 1 : -1;
-              const aS = a.startDate < rowStart ? rowStart : a.startDate;
-              const bS = b.startDate < rowStart ? rowStart : b.startDate;
-              const aE = (a.endDate || a.startDate) > rowEnd ? rowEnd : (a.endDate || a.startDate);
-              const bE = (b.endDate || b.startDate) > rowEnd ? rowEnd : (b.endDate || b.startDate);
-              const aSpan = row.findIndex(c => formatDate(c.date) === aE) - row.findIndex(c => formatDate(c.date) === aS);
-              const bSpan = row.findIndex(c => formatDate(c.date) === bE) - row.findIndex(c => formatDate(c.date) === bS);
-              if (bSpan !== aSpan) return bSpan - aSpan;
-              return aS.localeCompare(bS);
-            });
+            const rowTodos = todos
+              .map(t => ({ t, r: todoDisplayRange(t) }))
+              .filter(x => x.r && x.r.start <= rowEnd && x.r.end >= rowStart)
+              .sort((a, b) => {
+                if (a.t.done !== b.t.done) return a.t.done ? 1 : -1;
+                const aS = a.r!.start < rowStart ? rowStart : a.r!.start;
+                const bS = b.r!.start < rowStart ? rowStart : b.r!.start;
+                const aE = a.r!.end > rowEnd ? rowEnd : a.r!.end;
+                const bE = b.r!.end > rowEnd ? rowEnd : b.r!.end;
+                const aSpan = row.findIndex(c => formatDate(c.date) === aE) - row.findIndex(c => formatDate(c.date) === aS);
+                const bSpan = row.findIndex(c => formatDate(c.date) === bE) - row.findIndex(c => formatDate(c.date) === bS);
+                if (bSpan !== aSpan) return bSpan - aSpan;
+                return aS.localeCompare(bS);
+              });
 
             const laneSlots: LaneSlot[][] = [];
             const placements: Placement[] = [];
-            for (const t of rowTodos) {
-              const effS = t.startDate < rowStart ? rowStart : t.startDate;
-              const effE = (t.endDate || t.startDate) > rowEnd ? rowEnd : (t.endDate || t.startDate);
+            for (const { t, r } of rowTodos) {
+              if (!r) continue;
+              const effS = r.start < rowStart ? rowStart : r.start;
+              const effE = r.end > rowEnd ? rowEnd : r.end;
               const ci0 = row.findIndex(c => formatDate(c.date) === effS);
               const ci1 = row.findIndex(c => formatDate(c.date) === effE);
               if (ci0 < 0 || ci1 < 0) continue;
@@ -2244,7 +2262,7 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange,
               }
               laneSlots[lane] = laneSlots[lane] || [];
               laneSlots[lane].push({ cs, ce });
-              placements.push({ todo: t, lane, cs, ce, isStart: t.startDate >= rowStart, isEnd: (t.endDate || t.startDate) <= rowEnd });
+              placements.push({ todo: t, lane, cs, ce, isStart: r.start >= rowStart, isEnd: r.end <= rowEnd });
             }
 
             const visible = placements.filter(p => p.lane < MAX_LANES);
@@ -3521,12 +3539,14 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   const overdueIds = new Set(overdueTodos.map(t => t.id));
 
   const dateTodos = filteredTodos.filter(t => {
-    if (!t.startDate || overdueIds.has(t.id as string)) return false;
-    return sel >= t.startDate && sel <= (t.endDate || t.startDate);
+    if (overdueIds.has(t.id as string)) return false;
+    const r = todoDisplayRange(t);
+    if (!r) return false;
+    return sel >= r.start && sel <= r.end;
   });
   const sortedDateTodos = [...dateTodos.filter(t => !t.done), ...dateTodos.filter(t => t.done)];
 
-  const undated       = filteredTodos.filter(t => !t.startDate);
+  const undated       = filteredTodos.filter(t => todoDisplayRange(t) === null);
   const sortedUndated = [...undated.filter(t => !t.done), ...undated.filter(t => t.done)];
 
   const toggleTag = (tag: string) => {
@@ -6004,7 +6024,13 @@ function SmartMemoApp() {
       const delta = todo.done ? -reward : reward;
       setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
     }
-    setTodos(p => p.map(t => t.id === id ? { ...t, done: !t.done } : t));
+    setTodos(p => p.map(t => {
+      if (t.id !== id) return t;
+      const next = { ...t, done: !t.done };
+      if (next.done) next.completedAt = todayStr;
+      else delete next.completedAt;
+      return next;
+    }));
   };
   const [trash, setTrash] = usePersistedState<TrashedTodo[]>(LS_TRASH, []);
   const remove     = (id: number | string) => {
