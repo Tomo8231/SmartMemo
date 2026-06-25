@@ -2195,6 +2195,103 @@
       align-items:center; justify-content:center;
       padding:18px;
     }
+    /* Account modal (Supabase) */
+    .account-backdrop {
+      align-items:center; justify-content:center; padding:18px;
+    }
+    .account-modal {
+      position:relative;
+      background:#fff;
+      border-radius:18px;
+      width:100%; max-width:420px;
+      padding:22px 20px 18px;
+      box-shadow:0 18px 50px rgba(0,0,0,.30);
+      animation:detail-pop .22s cubic-bezier(.17,.67,.34,1.4);
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .account-title {
+      font-size:16px; font-weight:800; color:#1a1a18; text-align:center;
+      margin-bottom:6px;
+    }
+    .account-mode-tabs {
+      display:flex; background:#f0f0ee; border-radius:10px; padding:3px;
+    }
+    .account-mode-tab {
+      flex:1; padding:7px; border:none; background:transparent;
+      border-radius:8px; cursor:pointer; font-family:inherit;
+      font-size:13px; font-weight:600; color:#6a6a68;
+      transition:background .12s, color .12s;
+    }
+    .account-mode-tab.active { background:#fff; color:#1a1a18; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+    .account-field {
+      display:flex; flex-direction:column; gap:4px;
+      font-size:12px; color:#6a6a68; font-weight:600;
+    }
+    .account-field input {
+      padding:10px 12px; border:1px solid #d8d8d4; border-radius:10px;
+      font-size:14px; font-family:inherit; outline:none;
+      background:#fff; color:#1a1a18;
+    }
+    .account-field input:focus { border-color:var(--accent); }
+    .account-submit {
+      padding:11px; border:none; border-radius:10px;
+      background:var(--accent); color:#fff;
+      font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;
+      transition:opacity .12s;
+    }
+    .account-submit:disabled { opacity:.5; cursor:not-allowed; }
+    .account-divider {
+      display:flex; align-items:center; gap:8px;
+      color:#9a9a98; font-size:11px;
+    }
+    .account-divider::before, .account-divider::after {
+      content:''; flex:1; height:1px; background:#ebebea;
+    }
+    .account-google {
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      padding:10px; border:1px solid #d8d8d4; border-radius:10px;
+      background:#fff; color:#1a1a18; font-weight:600; font-family:inherit;
+      cursor:pointer; font-size:13px;
+      transition:background .12s;
+    }
+    .account-google:hover { background:#f5f5f3; }
+    .account-google:disabled { opacity:.5; cursor:not-allowed; }
+    .account-msg {
+      font-size:12px; padding:8px 10px; border-radius:8px; line-height:1.5;
+    }
+    .account-msg-err { background:#fdf0f0; color:#c0392b; border:1px solid #f0d0d0; }
+    .account-msg-ok  { background:#eaf8ec; color:#1e7e34; border:1px solid #c8e8d0; }
+    .account-help {
+      font-size:11px; color:#7a7a78; line-height:1.6;
+    }
+    .account-signedin {
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .account-email {
+      font-size:14px; font-weight:700; color:#1a1a18;
+    }
+    .account-signout {
+      margin-top:6px;
+      padding:10px; border:1px solid #d8d8d4; border-radius:10px;
+      background:#fff; color:#c0392b; font-weight:700; font-family:inherit;
+      cursor:pointer; font-size:13px;
+    }
+    .account-signout:hover { background:#fdf0f0; }
+    .account-signout:disabled { opacity:.5; cursor:not-allowed; }
+
+    .app.dark .account-modal { background:#1e1e21; }
+    .app.dark .account-title { color:#f0f0ee; }
+    .app.dark .account-mode-tabs { background:#28282c; }
+    .app.dark .account-mode-tab.active { background:#1e1e21; color:#f0f0ee; }
+    .app.dark .account-field input { background:#28282c; color:#f0f0ee; border-color:#3a3a3e; }
+    .app.dark .account-divider { color:#6a6a68; }
+    .app.dark .account-divider::before, .app.dark .account-divider::after { background:#2e2e32; }
+    .app.dark .account-google { background:#28282c; color:#f0f0ee; border-color:#3a3a3e; }
+    .app.dark .account-google:hover { background:rgba(255,255,255,.06); }
+    .app.dark .account-help { color:#9a9a98; }
+    .app.dark .account-email { color:#f0f0ee; }
+    .app.dark .account-signout { background:#28282c; border-color:#3a3a3e; }
+
     .knowchat-modal {
       background:#fff;
       border-radius:18px;
