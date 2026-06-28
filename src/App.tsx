@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.0';
+const APP_VERSION = '1.22.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4053,7 +4053,11 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
       if (error) throw error;
       // browser will redirect; nothing else to do
     } catch (e: any) {
-      setMsg({ kind: 'err', text: e?.message || String(e) });
+      const raw = e?.message || String(e);
+      const friendly = /provider is not enabled|Unsupported provider/i.test(raw)
+        ? 'Google ログインがまだ有効化されていません。Supabase ダッシュボード → Authentication → Providers → Google を Enable にして、Google Cloud で取得した Client ID / Secret を貼り付けてください。詳細は docs/SUPABASE_SETUP.md を参照。'
+        : raw;
+      setMsg({ kind: 'err', text: friendly });
       setBusy(false);
     }
   }
