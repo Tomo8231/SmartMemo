@@ -1,4 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import type { User } from '@supabase/supabase-js';
+import {
+  supabase, isSupabaseConfigured,
+  fetchCloud, pushCloud,
+  signUpWithEmail, signInWithEmail, signInWithGoogle, signOut,
+  type CloudSnapshot,
+} from './lib/supabase';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -112,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.22.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4006,6 +4013,123 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
 // ─────────────────────────────────────────────────────────────
 type ChatMessage = { role: 'user' | 'assistant'; text: string };
 
+// ─────────────────────────────────────────────────────────────
+// Account / Auth modal (Supabase)
+// ─────────────────────────────────────────────────────────────
+function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: () => void }) {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: 'err' | 'ok'; text: string } | null>(null);
+
+  async function submitEmail() {
+    if (!email.trim() || !password) {
+      setMsg({ kind: 'err', text: 'メールアドレスとパスワードを入力してください' });
+      return;
+    }
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = mode === 'signup'
+        ? await signUpWithEmail(email.trim(), password)
+        : await signInWithEmail(email.trim(), password);
+      if (error) throw error;
+      if (mode === 'signup') {
+        setMsg({ kind: 'ok', text: '登録できました。確認メールが届いた場合はリンクをクリックしてください。' });
+      } else {
+        onClose();
+      }
+    } catch (e: any) {
+      setMsg({ kind: 'err', text: e?.message || String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitGoogle() {
+    setBusy(true); setMsg(null);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) throw error;
+      // browser will redirect; nothing else to do
+    } catch (e: any) {
+      setMsg({ kind: 'err', text: e?.message || String(e) });
+      setBusy(false);
+    }
+  }
+
+  async function doSignOut() {
+    setBusy(true); setMsg(null);
+    try {
+      await signOut();
+      onClose();
+    } catch (e: any) {
+      setMsg({ kind: 'err', text: e?.message || String(e) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop account-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="account-modal">
+        <button className="knowchat-close" onClick={onClose} aria-label="閉じる" style={{ position: 'absolute', top: 12, right: 12 }}>✕</button>
+        <div className="account-title">{authUser ? 'アカウント' : 'ログイン / 新規登録'}</div>
+
+        {authUser ? (
+          <div className="account-signedin">
+            <div className="account-email">{authUser.email || '(メールなし)'}</div>
+            <div className="account-help">
+              データはサーバーに自動同期されます。複数端末で同じアカウントでログインすれば共有可能です。
+            </div>
+            <button className="account-signout" onClick={doSignOut} disabled={busy}>
+              ログアウト
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="account-mode-tabs">
+              <button className={`account-mode-tab${mode === 'signin' ? ' active' : ''}`} onClick={() => { setMode('signin'); setMsg(null); }}>ログイン</button>
+              <button className={`account-mode-tab${mode === 'signup' ? ' active' : ''}`} onClick={() => { setMode('signup'); setMsg(null); }}>新規登録</button>
+            </div>
+
+            <label className="account-field">
+              <span>メール</span>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
+            </label>
+            <label className="account-field">
+              <span>パスワード</span>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder="6 文字以上" />
+            </label>
+
+            <button className="account-submit" onClick={submitEmail} disabled={busy}>
+              {busy ? '送信中…' : (mode === 'signup' ? 'メールで登録' : 'メールでログイン')}
+            </button>
+
+            <div className="account-divider"><span>または</span></div>
+
+            <button className="account-google" onClick={submitGoogle} disabled={busy}>
+              <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
+                <path fill="#4285F4" d="M9 7.4v3.2h4.5c-.2 1.1-1.4 3.2-4.5 3.2A5 5 0 1 1 9 4a4.5 4.5 0 0 1 3.2 1.3l2.2-2.2C13 1.9 11.1 1 9 1a8 8 0 1 0 0 16c4.6 0 7.7-3.3 7.7-7.8 0-.6 0-1-.1-1.4H9z"/>
+              </svg>
+              <span>Google でログイン</span>
+            </button>
+
+            {msg && (
+              <div className={`account-msg account-msg-${msg.kind}`}>{msg.text}</div>
+            )}
+            {!msg && mode === 'signup' && (
+              <div className="account-help">
+                初回ログインで、現在この端末に保存されているナレッジ・TODO・メモモンなどがサーバーへアップロードされます。
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: string; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -4169,12 +4293,18 @@ function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: stri
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, authUser, syncStatus, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
   onInsights: () => void;
   onPlayground: () => void;
+  authUser: User | null;
+  syncStatus: 'idle' | 'syncing' | 'error';
+  lastSyncAt: string | null;
+  onOpenAccount: () => void;
+  onPushNow: () => void;
+  onPullNow: () => void;
 }) {
   const { colorIdx, fontIdx, notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00', autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
   const soundOn = completeSound !== false;
@@ -4264,6 +4394,52 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground }:
 
   return (
     <div className="settings-tab tab-pane">
+      {isSupabaseConfigured && (
+        <>
+          <div className="settings-section-title">アカウント</div>
+          <div className="settings-card">
+            {authUser ? (
+              <>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-label">ログイン中</div>
+                    <div className="settings-row-sub">
+                      {authUser.email || '(メールなし)'}
+                      {lastSyncAt && (
+                        <> ／ 最終同期: {new Date(lastSyncAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                      )}
+                    </div>
+                  </div>
+                  <button className="font-size-opt" onClick={onOpenAccount}>管理</button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row-label">同期</div>
+                    <div className="settings-row-sub">
+                      {syncStatus === 'syncing' ? '同期中…'
+                       : syncStatus === 'error'   ? 'エラー（再試行できます）'
+                       : '最新の状態'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="font-size-opt" onClick={onPullNow} disabled={syncStatus === 'syncing'}>取得</button>
+                    <button className="font-size-opt" onClick={onPushNow} disabled={syncStatus === 'syncing'}>送信</button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row-label">未ログイン</div>
+                  <div className="settings-row-sub">アカウントを作成すると複数端末でデータを同期できます</div>
+                </div>
+                <button className="font-size-opt" onClick={onOpenAccount}>ログイン</button>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       <div className="settings-section-title">表示</div>
       <div className="settings-card">
         <div className="settings-row">
@@ -6038,6 +6214,11 @@ function SmartMemoApp() {
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const initialSyncDoneRef = useRef(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -6091,6 +6272,19 @@ function SmartMemoApp() {
     if (navigator.storage && (navigator.storage as any).persist) {
       (navigator.storage as any).persist().catch(() => {});
     }
+  }, []);
+
+  // ── Supabase auth subscription ────────────────────────────
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => {
+      setAuthUser(data.session?.user ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      if (!session?.user) initialSyncDoneRef.current = false;
+    });
+    return () => { sub.subscription.unsubscribe(); };
   }, []);
 
   useEffect(() => {
@@ -6247,6 +6441,81 @@ function SmartMemoApp() {
     { key: 'settings', label: '設定',     Icon: IcoSettingsNav },
   ];
 
+  // ── Cloud sync helpers (Supabase) ─────────────────────────
+  // Keep latest state in refs so the debounced push always sees the latest.
+  const cloudStateRef = useRef({ todos, todoSets, ideas, trash, memoMons, settings });
+  cloudStateRef.current = { todos, todoSets, ideas, trash, memoMons, settings };
+
+  async function pushSnapshot() {
+    if (!authUser) return;
+    setSyncStatus('syncing');
+    try {
+      const s = cloudStateRef.current;
+      const snap: CloudSnapshot = {
+        ideas: s.ideas,
+        todos: s.todos,
+        todo_sets: s.todoSets,
+        trash: s.trash,
+        memo_mons: s.memoMons,
+        settings: s.settings as unknown as Record<string, unknown>,
+      };
+      await pushCloud(snap);
+      setLastSyncAt(new Date().toISOString());
+      setSyncStatus('idle');
+    } catch (e) {
+      console.error('[cloud push]', e);
+      setSyncStatus('error');
+    }
+  }
+
+  async function pullSnapshot(): Promise<boolean> {
+    if (!authUser) return false;
+    setSyncStatus('syncing');
+    try {
+      const { data, updatedAt } = await fetchCloud();
+      if (!data) {
+        setSyncStatus('idle');
+        return false;
+      }
+      if (Array.isArray(data.ideas))      setIdeas(data.ideas as Idea[]);
+      if (Array.isArray(data.todos))      setTodos(data.todos as Todo[]);
+      if (Array.isArray(data.todo_sets))  setTodoSets(data.todo_sets as TodoSet[]);
+      if (Array.isArray(data.trash))      setTrash(data.trash as TrashedTodo[]);
+      if (Array.isArray(data.memo_mons))  setMemoMons(data.memo_mons as MemoMonInstance[]);
+      if (data.settings && typeof data.settings === 'object') {
+        setSettings(data.settings as unknown as Settings);
+      }
+      setLastSyncAt(updatedAt || new Date().toISOString());
+      setSyncStatus('idle');
+      return true;
+    } catch (e) {
+      console.error('[cloud pull]', e);
+      setSyncStatus('error');
+      return false;
+    }
+  }
+
+  // On login: if cloud empty → push; else pull. Once per session.
+  useEffect(() => {
+    if (!authUser || initialSyncDoneRef.current) return;
+    initialSyncDoneRef.current = true;
+    (async () => {
+      const { data } = await fetchCloud();
+      if (!data) {
+        await pushSnapshot();
+      } else {
+        await pullSnapshot();
+      }
+    })().catch(e => console.error('[initial sync]', e));
+  }, [authUser]);
+
+  // Auto-push on any data change, debounced 5s after the last edit.
+  useEffect(() => {
+    if (!authUser || !initialSyncDoneRef.current) return;
+    const t = setTimeout(() => { pushSnapshot(); }, 5000);
+    return () => clearTimeout(t);
+  }, [authUser, todos, todoSets, ideas, trash, memoMons, settings]);
+
   return (
     <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
       <div className="app-header">
@@ -6260,7 +6529,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
@@ -6343,6 +6612,9 @@ function SmartMemoApp() {
         const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
         return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} speechEnabled={settings.memoMonSpeech !== false} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
       })()}
+      {showAccount && (
+        <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
+      )}
       {showPlayground && (
         <PlaygroundModal
           memoMons={memoMons}
