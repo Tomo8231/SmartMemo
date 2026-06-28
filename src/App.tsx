@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.0';
+const APP_VERSION = '1.22.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4394,11 +4394,25 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
 
   return (
     <div className="settings-tab tab-pane">
-      {isSupabaseConfigured && (
-        <>
-          <div className="settings-section-title">アカウント</div>
-          <div className="settings-card">
-            {authUser ? (
+      <div className="settings-section-title">アカウント</div>
+      <div className="settings-card">
+        {!isSupabaseConfigured ? (
+          <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}>
+            <div>
+              <div className="settings-row-label">Supabase が未設定</div>
+              <div className="settings-row-sub">
+                クラウド同期を有効化するには、GitHub の Repository secrets に <code>SUPABASE_URL</code> と <code>SUPABASE_ANON_KEY</code> を設定して、main に再デプロイしてください。
+              </div>
+            </div>
+            <div className="settings-row-sub" style={{ fontSize: 11, color: '#a0a09c', lineHeight: 1.6 }}>
+              読み込まれた値: <br />
+              VITE_SUPABASE_URL = {import.meta.env.VITE_SUPABASE_URL ? '✓ ありますが anon key が未設定です' : '✗ 未設定'}<br />
+              VITE_SUPABASE_ANON_KEY = {import.meta.env.VITE_SUPABASE_ANON_KEY ? '✓ あります' : '✗ 未設定'}<br />
+              詳細: docs/SUPABASE_SETUP.md
+            </div>
+          </div>
+        ) : (<>
+          {authUser ? (
               <>
                 <div className="settings-row">
                   <div>
@@ -4436,9 +4450,8 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
                 <button className="font-size-opt" onClick={onOpenAccount}>ログイン</button>
               </div>
             )}
-          </div>
-        </>
-      )}
+        </>)}
+      </div>
 
       <div className="settings-section-title">表示</div>
       <div className="settings-card">
