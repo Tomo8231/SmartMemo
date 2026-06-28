@@ -18,6 +18,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # github-pages environment にもアクセスして、リポジトリ secrets と
+    # 環境 secrets のどちらに置いてあっても VITE_* に注入できるようにする
+    environment: github-pages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
