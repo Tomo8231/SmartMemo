@@ -25,10 +25,23 @@ SmartMemo にアカウント機能・クラウド同期を有効にするため�
 - オンのままにする場合はメール認証フローを通る必要あり
 
 ### Google
-1. https://console.cloud.google.com で OAuth クライアント ID を作成
-2. **承認済みのリダイレクト URI** に Supabase の callback URL を追加：
-   `https://xxxxx.supabase.co/auth/v1/callback`
-3. クライアント ID / シークレットを Supabase の Google provider 設定に入れて有効化
+失敗例: ログイン時に `Unsupported provider: provider is not enabled` が出る場合は、以下の手順がまだ未完了です。
+
+1. **Google Cloud Console で OAuth クライアントを作る**
+   1. https://console.cloud.google.com/ にアクセス、プロジェクトを選択（無ければ新規作成）
+   2. 左メニュー → **APIs & Services → OAuth consent screen** を開き、外部 (External) で App name を入力して保存（Testing 状態でも OK、開発中なら Test users に自分のメールを追加）
+   3. **APIs & Services → Credentials → + CREATE CREDENTIALS → OAuth client ID**
+   4. Application type: **Web application**
+   5. **Authorized JavaScript origins**: `https://<YOUR_PROJECT_REF>.supabase.co`
+   6. **Authorized redirect URIs**: `https://<YOUR_PROJECT_REF>.supabase.co/auth/v1/callback`
+      （Supabase ダッシュボード → Authentication → Providers → Google を開いて表示される "Callback URL" と完全一致させること）
+   7. 作成すると **Client ID** と **Client Secret** が表示されるのでコピー
+2. **Supabase 側で有効化**
+   1. Supabase ダッシュボード → **Authentication → Providers**
+   2. **Google** を展開 → **Enable Google provider** をオン
+   3. **Client ID (for OAuth)** と **Client Secret (for OAuth)** に上記の値を貼り付け
+   4. **Save**
+3. アプリで Google ログインボタンを押すと、Google のログイン画面 → 承認 → アプリへ戻ってくる流れになる。
 
 ## 4. アプリ側の環境変数
 
