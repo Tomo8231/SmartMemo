@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.4';
+const APP_VERSION = '1.22.7';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4433,7 +4433,10 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
                 </div>
                 {syncStatus === 'error' && syncError && (
                   <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                    <div className="account-msg account-msg-err" style={{ width: '100%' }}>
+                    <div
+                      className="account-msg account-msg-err"
+                      style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    >
                       {syncError}
                     </div>
                   </div>
@@ -6462,13 +6465,24 @@ function SmartMemoApp() {
   function describeSyncError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e);
     const code = (e as { code?: string })?.code;
+    const uid = authUser?.id;
     // PostgREST: table not found
     if (code === '42P01' || /relation .* does not exist|table .* not found/i.test(raw)) {
       return 'サーバーに user_data テーブルがありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。';
     }
     // PostgREST: RLS denied (no policy or auth.uid() not matching)
     if (code === '42501' || /row-level security|new row violates|permission denied for table/i.test(raw)) {
-      return 'RLS ポリシーで拒否されました。schema.sql の policy が登録されているか、ログイン状態を確認してください。';
+      return (
+        'RLS ポリシーで拒否されました。以下を順に確認してください。\n\n' +
+        '① まず「ログアウト → 再ログイン」で JWT をリフレッシュ（一番よくある原因）\n\n' +
+        '② 4 つのポリシーが登録されているか（SQL Editor で実行）:\n' +
+        "   select policyname, cmd from pg_policies where tablename = 'user_data';\n" +
+        '   → 4 行返らなければ、最新の db/schema.sql を SQL Editor で実行し直してください。\n\n' +
+        '③ 現在のセッションの user_id が auth.users に存在するか:\n' +
+        (uid ? `   あなたの user_id: ${uid}\n` : '   （現在ログインしていません）\n') +
+        (uid ? `   SQL Editor で: select id, email, email_confirmed_at from auth.users where id = '${uid}';\n\n` : '\n') +
+        '④ 未確認メールなら Authentication → Providers → Email の "Confirm email" を OFF にしてから再登録するのが最短。'
+      );
     }
     // PostgREST: schema cache stale (often "could not find ... in schema cache")
     if (/schema cache|PGRST205|PGRST106/i.test(raw)) {
