@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.4';
+const APP_VERSION = '1.22.5';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4030,13 +4030,29 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
     }
     setBusy(true); setMsg(null);
     try {
-      const { error } = mode === 'signup'
-        ? await signUpWithEmail(email.trim(), password)
-        : await signInWithEmail(email.trim(), password);
-      if (error) throw error;
       if (mode === 'signup') {
-        setMsg({ kind: 'ok', text: '登録できました。確認メールが届いた場合はリンクをクリックしてください。' });
+        const { data, error } = await signUpWithEmail(email.trim(), password);
+        if (error) throw error;
+        if (data.session) {
+          // Auto-signed-in (Supabase の "Confirm email" が OFF のとき)
+          setMsg({ kind: 'ok', text: '登録＆ログイン完了。データの同期を開始します。' });
+          setTimeout(() => onClose(), 1200);
+        } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+          // Supabase の挙動: 既に登録済みのメールで signUp すると user は返るが
+          // identities が空、というスタイルで返す。
+          setMsg({ kind: 'err', text: 'このメールはすでに登録済みです。「ログイン」タブから入ってください。' });
+        } else {
+          // メール確認が必須
+          setMsg({
+            kind: 'ok',
+            text: '登録できました。届いた確認メール内のリンクをクリックしてから、このタブに戻って「ログイン」タブでログインしてください。' +
+                  '\n（Supabase ダッシュボード → Authentication → Providers → Email の "Confirm email" を OFF にすると、この確認手順を省略できます）',
+          });
+          setMode('signin');
+        }
       } else {
+        const { error } = await signInWithEmail(email.trim(), password);
+        if (error) throw error;
         onClose();
       }
     } catch (e: any) {
