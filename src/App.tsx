@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.3';
+const APP_VERSION = '1.22.4';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4297,7 +4297,7 @@ function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: stri
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
-function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, authUser, syncStatus, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, authUser, syncStatus, syncError, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
@@ -4305,6 +4305,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
   onPlayground: () => void;
   authUser: User | null;
   syncStatus: 'idle' | 'syncing' | 'error';
+  syncError: string | null;
   lastSyncAt: string | null;
   onOpenAccount: () => void;
   onPushNow: () => void;
@@ -4430,6 +4431,13 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
                     <button className="font-size-opt" onClick={onPushNow} disabled={syncStatus === 'syncing'}>送信</button>
                   </div>
                 </div>
+                {syncStatus === 'error' && syncError && (
+                  <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                    <div className="account-msg account-msg-err" style={{ width: '100%' }}>
+                      {syncError}
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="settings-row">
@@ -6221,6 +6229,7 @@ function SmartMemoApp() {
   const [showAccount, setShowAccount] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const initialSyncDoneRef = useRef(false);
   const [monInitSleep] = useState(() => {
@@ -6450,9 +6459,32 @@ function SmartMemoApp() {
   const cloudStateRef = useRef({ todos, todoSets, ideas, trash, memoMons, settings });
   cloudStateRef.current = { todos, todoSets, ideas, trash, memoMons, settings };
 
+  function describeSyncError(e: unknown): string {
+    const raw = e instanceof Error ? e.message : String(e);
+    const code = (e as { code?: string })?.code;
+    // PostgREST: table not found
+    if (code === '42P01' || /relation .* does not exist|table .* not found/i.test(raw)) {
+      return 'サーバーに user_data テーブルがありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。';
+    }
+    // PostgREST: RLS denied (no policy or auth.uid() not matching)
+    if (code === '42501' || /row-level security|new row violates|permission denied for table/i.test(raw)) {
+      return 'RLS ポリシーで拒否されました。schema.sql の policy が登録されているか、ログイン状態を確認してください。';
+    }
+    // PostgREST: schema cache stale (often "could not find ... in schema cache")
+    if (/schema cache|PGRST205|PGRST106/i.test(raw)) {
+      return 'スキーマキャッシュが古いようです。Supabase の SQL Editor で schema.sql を実行 → ダッシュボードの Database → Reload schema cache を試してください。';
+    }
+    // PostgREST: JWT/Auth
+    if (code === 'PGRST301' || /JWT|invalid token|not authenticated/i.test(raw)) {
+      return '認証トークンが無効です。一度ログアウトして再ログインしてください。';
+    }
+    return raw || '不明なエラー';
+  }
+
   async function pushSnapshot() {
     if (!authUser) return;
     setSyncStatus('syncing');
+    setSyncError(null);
     try {
       const s = cloudStateRef.current;
       const snap: CloudSnapshot = {
@@ -6468,6 +6500,7 @@ function SmartMemoApp() {
       setSyncStatus('idle');
     } catch (e) {
       console.error('[cloud push]', e);
+      setSyncError(describeSyncError(e));
       setSyncStatus('error');
     }
   }
@@ -6475,6 +6508,7 @@ function SmartMemoApp() {
   async function pullSnapshot(): Promise<boolean> {
     if (!authUser) return false;
     setSyncStatus('syncing');
+    setSyncError(null);
     try {
       const { data, updatedAt } = await fetchCloud();
       if (!data) {
@@ -6494,6 +6528,7 @@ function SmartMemoApp() {
       return true;
     } catch (e) {
       console.error('[cloud pull]', e);
+      setSyncError(describeSyncError(e));
       setSyncStatus('error');
       return false;
     }
@@ -6533,7 +6568,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">

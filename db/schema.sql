@@ -1,7 +1,7 @@
 -- SmartMemo Supabase schema
 --
--- Run this once in the Supabase SQL editor.
--- Auth must be enabled (Email + Google OAuth providers).
+-- Supabase SQL Editor で実行してください。冪等なので何度でも再実行可能。
+-- Auth で Email + (任意で Google) プロバイダを有効化しておく必要があります。
 
 create table if not exists public.user_data (
   user_id      uuid        primary key references auth.users(id) on delete cascade,
@@ -17,23 +17,29 @@ create table if not exists public.user_data (
 
 alter table public.user_data enable row level security;
 
-create policy if not exists "Users select own data"
+-- PostgreSQL の CREATE POLICY は IF NOT EXISTS をサポートしていないので、
+-- 既存ポリシーを DROP してから CREATE する形にする。
+drop policy if exists "Users select own data" on public.user_data;
+create policy "Users select own data"
   on public.user_data
   for select
   using (auth.uid() = user_id);
 
-create policy if not exists "Users insert own data"
+drop policy if exists "Users insert own data" on public.user_data;
+create policy "Users insert own data"
   on public.user_data
   for insert
   with check (auth.uid() = user_id);
 
-create policy if not exists "Users update own data"
+drop policy if exists "Users update own data" on public.user_data;
+create policy "Users update own data"
   on public.user_data
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
-create policy if not exists "Users delete own data"
+drop policy if exists "Users delete own data" on public.user_data;
+create policy "Users delete own data"
   on public.user_data
   for delete
   using (auth.uid() = user_id);
