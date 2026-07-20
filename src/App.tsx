@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.26.0';
+const APP_VERSION = '1.26.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6699,8 +6699,10 @@ function SmartMemoApp() {
 
   useNotificationScheduler(todos, settings);
 
-  const color = COLOR_PRESETS[settings.colorIdx];
-  const font  = FONT_SIZE_OPTS[settings.fontIdx];
+  // colorIdx / fontIdx は永続化データやクラウド同期由来で undefined / 範囲外に
+  // なりうる。その場合は既定値(0)にフォールバックしてクラッシュを防ぐ。
+  const color = COLOR_PRESETS[settings.colorIdx] ?? COLOR_PRESETS[0];
+  const font  = FONT_SIZE_OPTS[settings.fontIdx] ?? FONT_SIZE_OPTS[0];
 
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
@@ -6907,7 +6909,10 @@ function SmartMemoApp() {
       if (Array.isArray(data.trash))      setTrash(data.trash as TrashedTodo[]);
       if (Array.isArray(data.memo_mons))  setMemoMons(data.memo_mons as MemoMonInstance[]);
       if (data.settings && typeof data.settings === 'object') {
-        setSettings(data.settings as unknown as Settings);
+        // クラウドの settings をローカルにマージ。クラウド側に欠けている
+        // 必須フィールド（colorIdx / fontIdx など）を消さないようにして
+        // undefined 参照によるクラッシュを防ぐ。
+        setSettings(prev => ({ ...prev, ...(data.settings as unknown as Settings) }));
       }
       setLastSyncAt(updatedAt || new Date().toISOString());
       setSyncStatus('idle');
