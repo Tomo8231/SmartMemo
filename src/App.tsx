@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   supabase, isSupabaseConfigured,
@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.22.7';
+const APP_VERSION = '1.23.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -2048,6 +2048,31 @@ const IcoMicFab = () => (
     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
   </svg>
 );
+const IcoPencilFab = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 3l4 4L8 20l-5 1 1-5z"/>
+  </svg>
+);
+const IcoHomeNav = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+  </svg>
+);
+const IcoBookNav = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 4h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/>
+  </svg>
+);
+const IcoEggNav = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3C8.5 3 5 9 5 13.5a7 7 0 0 0 14 0C19 9 15.5 3 12 3z"/>
+  </svg>
+);
+const IcoGearNav = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.4 : 2} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.2 2.2M16.9 16.9l2.2 2.2M19.1 4.9l-2.2 2.2M7.1 16.9l-2.2 2.2"/>
+  </svg>
+);
 
 const IcoCopy = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3500,6 +3525,137 @@ function TodoSetListModal({ sets, allTodos, onApply, onSave, onDelete, onClose, 
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Garden World（にわ）— docs/smartmemo-garden-v4_1.html のUI
+// ─────────────────────────────────────────────────────────────
+const GW_SLOTS = [0.28, 0.56, 0.82, 0.15, 0.42, 0.70, 0.34];
+const GW_FLOWER_MAPS: string[][] = [
+  ['..R.R..', '.RRRRR.', '.RCCCR.', '.RRRRR.', '...G...', '...G...', '.G.G...'],
+  ['..R.R..', '.RRRRR.', 'RRCCCRR', '.RRRRR.', '...G...', '..GG...'],
+];
+const GW_FLOWER_PALS: Record<string, string>[] = [
+  { R: '#F58AB0', C: '#FFE9A0', G: '#4E9E42' },
+  { R: '#F5C242', C: '#FFF4D0', G: '#4E9E42' },
+  { R: '#E86A6A', C: '#FFE0E0', G: '#4E9E42' },
+  { R: '#9A8AE8', C: '#F0ECFF', G: '#4E9E42' },
+];
+
+function GwPix({ map, pal, px = 4 }: { map: string[]; pal: Record<string, string>; px?: number }) {
+  return (
+    <div style={{ position: 'relative', width: map[0].length * px, height: map.length * px }}>
+      {map.flatMap((row, y) => [...row].map((ch, x) => ch === '.' ? null : (
+        <i key={`${x}-${y}`} style={{ position: 'absolute', left: x * px, top: y * px, width: px, height: px, background: pal[ch] }} />
+      )))}
+    </div>
+  );
+}
+
+type GwTime = 'morning' | 'day' | 'evening' | 'night';
+const GW_TIMES: GwTime[] = ['morning', 'day', 'evening', 'night'];
+const GW_TIME_EMOJI: Record<GwTime, string> = { morning: '🌅', day: '☀️', evening: '🌇', night: '🌙' };
+function gwTimeNow(): GwTime {
+  const h = new Date().getHours();
+  return h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'evening' : 'night';
+}
+
+function gwHash(id: number | string): number {
+  const s = String(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function completionStreak(todos: Todo[]): number {
+  const days = new Set(todos.filter(t => t.done && t.completedAt).map(t => t.completedAt!));
+  let streak = 0;
+  const d = new Date();
+  if (!days.has(localDateStr(d))) d.setDate(d.getDate() - 1);
+  while (days.has(localDateStr(d))) { streak++; d.setDate(d.getDate() - 1); }
+  return streak;
+}
+
+function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit }: {
+  signTodos: Todo[];
+  flowerTodos: Todo[];
+  streak: number;
+  onComplete: (t: Todo) => void;
+  onEdit: (t: Todo) => void;
+}) {
+  const [timeOverride, setTimeOverride] = useState<GwTime | null>(null);
+  const [pop, setPop] = useState<Todo | null>(null);
+  const stars = useMemo(() =>
+    Array.from({ length: 26 }, () => ({ left: Math.random() * 100, top: Math.random() * 55, delay: Math.random() * 2.4 })), []);
+  const time = timeOverride ?? gwTimeNow();
+
+  // pop対象が消えたら（完了・削除）閉じる
+  useEffect(() => {
+    if (pop && !signTodos.some(t => t.id === pop.id)) setPop(null);
+  }, [signTodos, pop]);
+
+  const signs = signTodos.slice(0, GW_SLOTS.length);
+
+  return (
+    <div className={`gw t-${time}`}>
+      <div className="gw-sun" />
+      <div className="gw-cloud gw-cloud1" />
+      <div className="gw-cloud gw-cloud2" />
+      <div className="gw-stars">
+        {stars.map((s, i) => (
+          <i key={i} style={{ left: `${s.left}%`, top: `${s.top}%`, animationDelay: `${s.delay}s` }} />
+        ))}
+      </div>
+      <div className="gw-hill" />
+      <div className="gw-ground" />
+      <div className="gw-tree gw-nightdim">
+        <div className="gw-leaf gw-l1" /><div className="gw-leaf gw-l2" /><div className="gw-leaf gw-l3" />
+        <div className="gw-trunk" />
+        {streak > 0 && <div className="gw-wchip">🔥 {streak}日連続</div>}
+      </div>
+      {signs.map((t, i) => (
+        <div
+          key={t.id}
+          className={`gw-sign gw-nightdim gw-sprout${t.startDate && (t.endDate || t.startDate) < todayStr ? ' gw-withered' : ''}`}
+          style={{ left: `${GW_SLOTS[i] * 100}%` }}
+          onClick={() => setPop(t)}
+        >
+          <div className="gw-cointag">🪙{t.coinReward ?? 10}</div>
+          {(t.attachments?.length ?? 0) > 0 && <div className="gw-clip">📎</div>}
+          <div className="gw-board gw-dot">{t.title}</div>
+          <div className="gw-pole" />
+        </div>
+      ))}
+      {flowerTodos.map(t => {
+        const h = gwHash(t.id);
+        return (
+          <div key={t.id} className="gw-flower gw-nightdim" style={{ left: `${8 + (h % 84)}%` }}>
+            <GwPix map={GW_FLOWER_MAPS[h % GW_FLOWER_MAPS.length]} pal={GW_FLOWER_PALS[(h >> 3) % GW_FLOWER_PALS.length]} px={4} />
+          </div>
+        );
+      })}
+      <button
+        className="gw-time-btn"
+        title="時間帯を切り替え"
+        onClick={() => setTimeOverride(prev => GW_TIMES[(GW_TIMES.indexOf(prev ?? gwTimeNow()) + 1) % GW_TIMES.length])}
+      >{GW_TIME_EMOJI[time]}</button>
+      {pop && (
+        <div className="gw-popcard">
+          <button className="gw-pop-close" onClick={() => setPop(null)}>✕</button>
+          <h3>{pop.title}</h3>
+          <div className="gw-pop-meta">
+            {(pop.tags || []).map(tg => <span key={tg} className="gw-pop-tag">{tg}</span>)}
+            <span className="gw-pop-coin">🪙 +{pop.coinReward ?? 10}</span>
+            {pop.time && <span className="gw-pop-time">🕐 {pop.time}</span>}
+          </div>
+          <div className="gw-pop-btns">
+            <button className="gw-pop-done" onClick={() => { const t = pop; setPop(null); onComplete(t); }}>できた！</button>
+            <button className="gw-pop-edit" onClick={() => { const t = pop; setPop(null); onEdit(t); }}>編集</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
@@ -3572,8 +3728,18 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
     }
   }
 
+  const gardenSigns   = [...overdueTodos, ...sortedDateTodos].filter(t => !t.done);
+  const gardenFlowers = dateTodos.filter(t => t.done);
+  const streak = useMemo(() => completionStreak(todos), [todos]);
+  const doneOfDay = dateTodos.filter(t => t.done).length;
+
+  function gardenComplete(t: Todo) {
+    if (soundEnabled) playSound(soundType);
+    onToggle(t.id);
+  }
+
   return (
-    <div className="todo-tab">
+    <div className="todo-tab garden">
       {editPicking && (
         <div className="modal-backdrop" onClick={() => setEditPicking(null)}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
@@ -3627,6 +3793,20 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         }
         setAdding(false);
       }} onClose={() => setAdding(false)} customTags={customTags} />}
+      <GardenWorld
+        signTodos={gardenSigns}
+        flowerTodos={gardenFlowers}
+        streak={streak}
+        onComplete={gardenComplete}
+        onEdit={handleEditStart}
+      />
+      <div className="gw-sheet">
+      <div className="gw-grab" />
+      <div className="gw-sheet-head">
+        <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
+        <span className="gw-prog">{doneOfDay} / {dateTodos.length}</span>
+      </div>
+      <div className="gw-sheet-body">
       <div className="todo-pane-left">
         <div className="todo-controls">
           <div className="filter-tags">
@@ -3687,6 +3867,8 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             🗑 ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
           </button>
         </div>
+      </div>
+      </div>
       </div>
       {showTrash && <TrashModal trash={trash} onRestore={onTrashRestore} onDelete={onTrashDelete} onEmpty={onTrashEmpty} onClose={() => setShowTrash(false)} />}
       {showSets && (
@@ -6451,11 +6633,14 @@ function SmartMemoApp() {
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
   const navItems: { key: Tab; label: string; Icon: React.FC<{ active: boolean }> }[] = [
-    { key: 'memo',     label: 'メモ入力', Icon: IcoMemoNav     },
-    { key: 'todo',     label: 'TODO',     Icon: IcoTodoNav     },
-    { key: 'idea',     label: 'ナレッジ', Icon: IcoIdeaNav     },
-    { key: 'settings', label: '設定',     Icon: IcoSettingsNav },
+    { key: 'todo',     label: 'にわ', Icon: IcoHomeNav },
+    { key: 'idea',     label: '書庫', Icon: IcoBookNav },
+    { key: 'settings', label: '設定', Icon: IcoGearNav },
   ];
+
+  const now = new Date();
+  const headerDate = `${now.getMonth() + 1}/${now.getDate()}`;
+  const headerDow  = DOW[now.getDay()];
 
   // ── Cloud sync helpers (Supabase) ─────────────────────────
   // Keep latest state in refs so the debounced push always sees the latest.
@@ -6573,8 +6758,8 @@ function SmartMemoApp() {
     <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
       <div className="app-header">
         <div className="header-left">
-          <h1>SmartMemo</h1>
-          <span className="tagline">AI でタスクを自動整理</span>
+          <div className="gw-date-chip">{headerDate}<span className="gw-dow">({headerDow})</span></div>
+          <span className="tagline">SmartMemo</span>
         </div>
         <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
       </div>
@@ -6585,8 +6770,9 @@ function SmartMemoApp() {
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
-        <button className="nav-center-mic" onClick={handleFabMic} title="音声入力">
-          <IcoMicFab />
+        <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">
+          <IcoPencilFab />
+          <span>メモ</span>
         </button>
         <div className="bottom-nav">
           {navItems.slice(0, 2).map(({ key, label, Icon }) => (
@@ -6596,6 +6782,10 @@ function SmartMemoApp() {
             </div>
           ))}
           <div className="nav-mic-slot" />
+          <div className={`nav-tab${showPlayground ? ' active' : ''}`} onClick={() => setShowPlayground(true)}>
+            <span className="nav-icon"><IcoEggNav active={showPlayground} /></span>
+            <span className="nav-label">ずかん</span>
+          </div>
           {navItems.slice(2).map(({ key, label, Icon }) => (
             <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
               <span className="nav-icon"><Icon active={tab === key} /></span>
