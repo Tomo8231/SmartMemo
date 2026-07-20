@@ -3257,6 +3257,8 @@
       z-index:2; transition:transform .15s;
     }
     .nav-center-memo:active { transform:translateX(-50%) scale(.94); }
+    /* にわのタスクシート（.gw-sheet z-index:11）より常に前面に出す */
+    .bottom-nav-wrapper { z-index:40; }
     .app.dark .bottom-nav { background:#1e1e21; }
     .app.dark .nav-center-memo { box-shadow:0 5px 14px rgba(232,114,46,.45), 0 0 0 5px #1e1e21; }
 
