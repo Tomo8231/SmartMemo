@@ -108,7 +108,7 @@ type IdeaDraft = {
 type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
 type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
-type Tab = 'memo' | 'todo' | 'idea' | 'settings';
+type Tab = 'memo' | 'todo' | 'idea' | 'zukan' | 'settings';
 type Attachment = { id: string; name: string; mime: string; data: string };
 type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?: Attachment[] };
 type TodoSetItem = { title: string; tags: string[]; coinReward?: number; };
@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.24.0';
+const APP_VERSION = '1.25.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4557,6 +4557,77 @@ function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: stri
 // ─────────────────────────────────────────────────────────────
 // Settings Tab
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Zukan Tab（メモモンずかん）
+// ─────────────────────────────────────────────────────────────
+const RARITY_STARS: Record<string, string> = { ultra: '★★★★★', super: '★★★★', rare: '★★★', common: '★★' };
+const RARITY_LABEL: Record<string, string> = { ultra: 'ウルトラ', super: 'スーパー', rare: 'レア', common: 'ノーマル' };
+
+function ZukanTab({ memoMons, onOpenPlayground }: {
+  memoMons: MemoMonInstance[];
+  onOpenPlayground: () => void;
+}) {
+  const [detail, setDetail] = useState<MemoMonDef | null>(null);
+  const ownedByDef = new Map<string, MemoMonInstance>();
+  memoMons.forEach(m => { if (!ownedByDef.has(m.defId)) ownedByDef.set(m.defId, m); });
+  const ownedCount = MEMOMON_DEFS.filter(d => ownedByDef.has(d.id)).length;
+
+  const detailInst = detail ? ownedByDef.get(detail.id) : undefined;
+  const detailFlavor = detail
+    ? (GACHA_ITEMS.find(i => i.type === 'memomon' && i.monDefId === detail.id)?.flavor || detail.desc)
+    : '';
+
+  return (
+    <div className="zukan-tab tab-pane">
+      <div className="zukan-head">
+        <div className="zukan-tt">
+          <h1>🥚 メモモンずかん</h1>
+          <p>あつめたメモモン {ownedCount} / {MEMOMON_DEFS.length}</p>
+        </div>
+        <button className="zukan-playground-btn" onClick={onOpenPlayground}>🏡 あそびば</button>
+      </div>
+      <div className="zukan-grid">
+        {MEMOMON_DEFS.map(def => {
+          const inst = ownedByDef.get(def.id);
+          return (
+            <div key={def.id} className={`zukan-card${inst ? '' : ' locked'}`} onClick={() => setDetail(def)}>
+              <div className="zukan-sprite-box">
+                <img src={MEMOMON_IMGS[def.id]} alt={inst ? def.name : '？？？'} className="zukan-sprite" />
+              </div>
+              <div className="zukan-name">{inst ? def.name : '???'}</div>
+              <div className="zukan-rarity">{RARITY_STARS[def.rarity] || '★★★'}</div>
+              <div className="zukan-sptag">{RARITY_LABEL[def.rarity] || def.rarity}</div>
+            </div>
+          );
+        })}
+      </div>
+      {detail && (
+        <div className="modal-backdrop zukan-detail-backdrop" onClick={() => setDetail(null)}>
+          <div className="zukan-detail" onClick={e => e.stopPropagation()}>
+            <button className="gw-pop-close" onClick={() => setDetail(null)}>✕</button>
+            <div className={`zukan-detail-sprite${detailInst ? '' : ' locked'}`}>
+              <img src={MEMOMON_IMGS[detail.id]} alt="" />
+            </div>
+            <div className="zukan-detail-name">{detailInst ? detail.name : '？？？'}</div>
+            <div className="zukan-detail-rarity">{RARITY_STARS[detail.rarity] || '★★★'}</div>
+            {detailInst ? (
+              <>
+                {(() => { const lv = affectionLevel(effectiveAffection(detailInst)); return (
+                  <div className="zukan-detail-bond">なかよし度 {lv.stars}（{lv.label}）</div>
+                ); })()}
+                <p className="zukan-detail-desc">{detailFlavor}</p>
+                <button className="zukan-detail-play" onClick={() => { setDetail(null); onOpenPlayground(); }}>🏡 あそびばで会う</button>
+              </>
+            ) : (
+              <p className="zukan-detail-desc">まだ出会っていないメモモン。ガチャのたまごから生まれるかも…</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, authUser, syncStatus, syncError, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
@@ -6845,6 +6916,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={() => setShowPlayground(true)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
@@ -6860,8 +6932,8 @@ function SmartMemoApp() {
             </div>
           ))}
           <div className="nav-mic-slot" />
-          <div className={`nav-tab${showPlayground ? ' active' : ''}`} onClick={() => setShowPlayground(true)}>
-            <span className="nav-icon"><IcoEggNav active={showPlayground} /></span>
+          <div className={`nav-tab${tab === 'zukan' ? ' active' : ''}`} onClick={() => setTab('zukan')}>
+            <span className="nav-icon"><IcoEggNav active={tab === 'zukan'} /></span>
             <span className="nav-label">ずかん</span>
           </div>
           {navItems.slice(2).map(({ key, label, Icon }) => (
