@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.26.1';
+const APP_VERSION = '1.26.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6161,7 +6161,10 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
     const { W, H } = boundsOf();
     mons.forEach(m => {
       if (!liveRef.current[m.uid]) {
-        const def = MEMOMON_DEFS.find(d => d.id === m.defId)!;
+        // 未知の defId（旧バージョン・クラウド同期・データ破損由来）でも
+        // クラッシュしないようにスキップする。
+        const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+        if (!def) return;
         const hoursElapsed = (now - m.lastFed) / 3600000;
         const hunger = Math.max(0, m.hunger - hoursElapsed * 10);
         const sc = scaleRef.current;
@@ -6815,11 +6818,13 @@ function SmartMemoApp() {
   // メモモンは庭（ガーデンワールド）の中でだけ歩く
   const monLayer = (() => {
     if (settings.memoMonVisible === false) return null;
+    // 表示できるのは MEMOMON_DEFS に定義がある個体だけ（未知 defId を除外）。
+    const known = memoMons.filter(m => MEMOMON_DEFS.some(d => d.id === m.defId));
     // Only one memomon is on screen at a time. Default to the first owned one.
     const activeUid = settings.activeMonUid;
-    const active = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
+    const active = (activeUid && known.find(m => m.uid === activeUid)) || known[0];
     if (!active) return null;
-    const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
+    const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'] ?? 1;
     return (
       <MemoMonLayer
         mons={[active]}
