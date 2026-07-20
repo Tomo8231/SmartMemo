@@ -3211,3 +3211,258 @@
       border-color: rgba(255,255,255,.10);
       color: #d4d4d0;
     }
+
+    /* ============================================================
+       GARDEN THEME — docs/smartmemo-garden-v4_1.html のUIを適用
+       （既存の機能スタイルの上に重ねる見た目のオーバーライド）
+    ============================================================ */
+    html, body { font-family:'M PLUS Rounded 1c','Inter',-apple-system,sans-serif; }
+    #root { background:#B9C6D4; }
+    .gw-dot { font-family:'DotGothic16','M PLUS Rounded 1c',monospace; }
+
+    /* ── ヘッダー：日付チップ + コイン ── */
+    .app-header { border-bottom:none; background:transparent; padding:10px 14px 6px; }
+    .header-left { align-items:center; }
+    .gw-date-chip {
+      background:#fff; border-radius:12px; padding:6px 11px;
+      font-size:13px; font-weight:800; color:#3A3532;
+      box-shadow:0 1px 4px rgba(0,0,0,.08);
+    }
+    .gw-dow { color:#96A0AB; font-weight:700; margin-left:4px; font-size:11px; }
+    .app-header .tagline { font-size:10px; color:#A8B2BD; font-weight:800; letter-spacing:.4px; }
+    .coin-badge {
+      background:#fff; border-radius:99px; padding:6px 12px;
+      box-shadow:0 1px 4px rgba(0,0,0,.08);
+    }
+    .coin-badge-count { color:#3A3532; font-weight:800; }
+    .app.dark .app-header { background:transparent; }
+    .app.dark .gw-date-chip { background:#242428; color:#e8e8e4; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+    .app.dark .coin-badge { background:#242428; }
+    .app.dark .coin-badge-count { color:#e8e8e4; }
+
+    /* ── ナビ：中央のメモボタン ── */
+    .bottom-nav { background:#FBFBF9; box-shadow:0 -1px 0 rgba(0,0,0,.06); border-radius:0; }
+    .nav-tab .nav-label { font-weight:700; color:#B7BEC7; font-size:10.5px; }
+    .nav-tab { color:#B7BEC7; }
+    .nav-tab.active { color:var(--accent); }
+    .nav-tab .nav-icon svg { width:22px; height:22px; }
+    .nav-center-memo {
+      position:absolute; left:50%; transform:translateX(-50%);
+      bottom:calc(100% - 40px);
+      width:70px; height:70px; border-radius:50%; border:none; cursor:pointer;
+      background:radial-gradient(circle at 32% 28%, #FF9A54, var(--accent, #E8722E)); color:#fff;
+      box-shadow:0 5px 14px rgba(232,114,46,.45), 0 0 0 5px #FBFBF9;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+      font-family:inherit; font-weight:800; font-size:10px;
+      z-index:2; transition:transform .15s;
+    }
+    .nav-center-memo:active { transform:translateX(-50%) scale(.94); }
+    .app.dark .bottom-nav { background:#1e1e21; }
+    .app.dark .nav-center-memo { box-shadow:0 5px 14px rgba(232,114,46,.45), 0 0 0 5px #1e1e21; }
+
+    /* ── にわ（ガーデンワールド） ── */
+    .gw { position:relative; flex:none; height:clamp(225px, 32vh, 330px); overflow:hidden; transition:background 1.2s ease; }
+    .gw.t-morning { background:linear-gradient(#FFE9C8 0%, #CBE7F2 70%); }
+    .gw.t-day     { background:linear-gradient(#8FD3F2 0%, #C8ECF7 75%); }
+    .gw.t-evening { background:linear-gradient(#FFB37A 0%, #C79ED0 70%); }
+    .gw.t-night   { background:linear-gradient(#232B52 0%, #3A4A7A 75%); }
+    .gw-sun { position:absolute; width:42px; height:42px; border-radius:50%; right:54px; top:24px; transition:all 1.2s ease; }
+    .t-morning .gw-sun, .t-day .gw-sun { background:radial-gradient(circle at 35% 35%, #FFF3B0, #FFCE3C); box-shadow:0 0 26px rgba(255,220,100,.8); }
+    .t-evening .gw-sun { background:radial-gradient(circle at 35% 35%, #FFD9A0, #FF8A4B); box-shadow:0 0 26px rgba(255,150,80,.8); top:86px; }
+    .t-night .gw-sun { background:radial-gradient(circle at 60% 35%, #FFFDF0, #E8E4C8); box-shadow:0 0 16px rgba(255,255,230,.5); }
+    .gw-cloud { position:absolute; background:rgba(255,255,255,.85); border-radius:999px; height:15px; }
+    .gw-cloud::before { content:""; position:absolute; background:inherit; border-radius:50%; width:20px; height:20px; top:-8px; left:11px; }
+    .gw-cloud::after  { content:""; position:absolute; background:inherit; border-radius:50%; width:15px; height:15px; top:-6px; right:9px; }
+    .gw-cloud1 { width:66px; top:30px; animation:gw-drift 46s linear infinite; }
+    .gw-cloud2 { width:50px; top:64px; animation:gw-drift 64s linear infinite reverse; }
+    .t-night .gw-cloud { opacity:.18; }
+    @keyframes gw-drift { from { left:-90px; } to { left:110%; } }
+    .gw-stars { position:absolute; inset:0; opacity:0; transition:opacity 1.2s; pointer-events:none; }
+    .t-night .gw-stars { opacity:1; }
+    .gw-stars i { position:absolute; width:2px; height:2px; background:#fff; border-radius:50%; animation:gw-tw 2.4s ease-in-out infinite; }
+    @keyframes gw-tw { 0%,100% { opacity:.9; } 50% { opacity:.25; } }
+    .gw-hill { position:absolute; bottom:48px; left:-10%; width:120%; height:64px; background:#9ED47B; border-radius:100% 100% 0 0; transition:filter 1.2s; }
+    .gw-ground { position:absolute; bottom:0; width:100%; height:60px; background:linear-gradient(#7FBF5A 0 8px, #5FA346 8px); transition:filter 1.2s; }
+    .t-evening .gw-hill, .t-evening .gw-ground { filter:brightness(.85) saturate(1.1); }
+    .t-night .gw-hill, .t-night .gw-ground { filter:brightness(.45) saturate(.7); }
+    .gw-nightdim { transition:filter 1.2s; }
+    .t-night .gw-nightdim { filter:brightness(.55); }
+    .gw-tree { position:absolute; bottom:52px; left:14px; width:62px; height:90px; }
+    .gw-trunk { position:absolute; bottom:0; left:25px; width:12px; height:36px; background:#A5713D; border:2px solid #7C5028; border-radius:3px; }
+    .gw-leaf { position:absolute; border-radius:45%; background:#5CB248; border:2px solid #43913A; }
+    .gw-l1 { width:42px; height:36px; left:10px; top:12px; }
+    .gw-l2 { width:30px; height:26px; left:0; top:28px; }
+    .gw-l3 { width:28px; height:24px; left:33px; top:30px; }
+    .gw-wchip {
+      position:absolute; bottom:-4px; left:-4px;
+      background:#fff; border:2px solid #F0E5DA; border-radius:10px;
+      padding:2px 7px; font-size:10px; font-weight:800; white-space:nowrap;
+      box-shadow:0 1px 3px rgba(0,0,0,.1); color:#D65A1F;
+    }
+    .gw-time-btn {
+      position:absolute; top:10px; right:12px; z-index:6;
+      border:none; background:rgba(255,255,255,.9); border-radius:12px;
+      padding:5px 9px; cursor:pointer; font-size:14px;
+      box-shadow:0 1px 4px rgba(0,0,0,.08);
+    }
+    /* タスクの立て札 */
+    .gw-sign {
+      position:absolute; bottom:54px; transform:translateX(-50%);
+      cursor:pointer; text-align:center; z-index:4; max-width:120px;
+      animation:gw-bob 3s ease-in-out infinite;
+    }
+    @keyframes gw-bob { 0%,100% { transform:translateX(-50%) translateY(0); } 50% { transform:translateX(-50%) translateY(-2px); } }
+    .gw-sprout { animation:gw-bob 3s ease-in-out infinite, gw-sprout-in .55s cubic-bezier(.2,1.8,.4,1); }
+    @keyframes gw-sprout-in { 0% { transform:translateX(-50%) scale(0) translateY(8px); } 100% { transform:translateX(-50%) scale(1) translateY(0); } }
+    .gw-board {
+      background:linear-gradient(#C08A52, #A5713D); border:2.5px solid #7C5028; border-radius:8px;
+      padding:5px 8px; font-size:10.5px; color:#FFF6E8; max-width:100px;
+      box-shadow:0 2px 0 #7C5028; line-height:1.35; overflow:hidden;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    }
+    /* 期限切れ＝枯れた札 */
+    .gw-sign.gw-withered { animation:none; filter:grayscale(.8) brightness(.92); }
+    .gw-sign.gw-withered .gw-board {
+      background:linear-gradient(#9C8B76, #7E6E5A); border-color:#5E5142;
+      color:#E8E0D2; transform:rotate(-4deg);
+    }
+    .gw-pole { width:8px; height:15px; background:#A5713D; border:2px solid #7C5028; margin:0 auto; border-top:none; }
+    .gw-cointag {
+      position:absolute; top:-11px; right:-9px; z-index:1;
+      background:#FFF6D9; border:2px solid #F0D98A; border-radius:99px;
+      font-size:9px; font-weight:800; color:#B98A12; padding:1px 6px; white-space:nowrap;
+    }
+    .gw-clip {
+      position:absolute; top:-10px; left:-8px; z-index:1;
+      background:#fff; border:2px solid #E4E9EF; border-radius:99px;
+      width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:10px;
+    }
+    .gw-flower { position:absolute; bottom:52px; transform:translateX(-50%); z-index:3; animation:gw-flower-in .6s cubic-bezier(.2,1.8,.4,1); }
+    @keyframes gw-flower-in { 0% { transform:translateX(-50%) scale(0) translateY(8px); } 100% { transform:translateX(-50%) scale(1) translateY(0); } }
+    /* 立て札ポップカード */
+    .gw-popcard {
+      position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+      width:calc(100% - 40px); max-width:360px; background:#fff;
+      border-radius:20px; box-shadow:0 8px 30px rgba(40,60,90,.25);
+      padding:16px; z-index:20; animation:gw-pop-in .22s cubic-bezier(.2,1.2,.4,1);
+    }
+    @keyframes gw-pop-in { from { opacity:0; transform:translateX(-50%) translateY(14px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    .gw-popcard h3 { font-size:14px; font-weight:800; line-height:1.5; padding-right:26px; color:#3A3532; }
+    .gw-pop-close {
+      position:absolute; top:10px; right:12px; border:none; background:#F0F2F5;
+      border-radius:50%; width:28px; height:28px; cursor:pointer; color:#8A94A0;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .gw-pop-meta { display:flex; gap:6px; margin:8px 0 10px; flex-wrap:wrap; }
+    .gw-pop-meta span { font-size:11px; font-weight:800; padding:2px 9px; border-radius:99px; }
+    .gw-pop-tag  { background:#F5E3D6; color:#D65A1F; }
+    .gw-pop-coin { background:#FFF6D9; color:#B98A12; }
+    .gw-pop-time { background:#EAF0F7; color:#5B7290; }
+    .gw-pop-btns { display:flex; gap:8px; }
+    .gw-pop-done {
+      flex:1; border:none; border-radius:14px; padding:12px; cursor:pointer;
+      background:linear-gradient(90deg,#F5A623,#E8722E); color:#fff;
+      font-family:inherit; font-weight:800; font-size:14px; box-shadow:0 3px 0 #B95A18;
+    }
+    .gw-pop-done:active { transform:translateY(2px); box-shadow:0 1px 0 #B95A18; }
+    .gw-pop-edit {
+      border:2.5px solid #E8DCC8; background:#fff; color:#8A7A66;
+      border-radius:14px; font-family:inherit; font-weight:800; font-size:13px;
+      padding:0 18px; cursor:pointer;
+    }
+
+    /* ── タスクシート（庭の下の白いシート） ── */
+    .gw-sheet {
+      flex:1; background:#F7F9FC; border-radius:24px 24px 0 0; margin-top:-18px;
+      position:relative; z-index:11; box-shadow:0 -4px 16px rgba(50,70,100,.10);
+      display:flex; flex-direction:column; overflow:hidden; min-height:0;
+    }
+    .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:9px auto 3px; flex:none; }
+    .gw-sheet-head { display:flex; align-items:baseline; gap:8px; padding:2px 20px 6px; flex:none; }
+    .gw-sheet-head h2 { font-size:15px; font-weight:800; color:#3A3532; }
+    .gw-prog { font-size:12px; font-weight:800; color:var(--accent); }
+    .gw-sheet-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+    @media (min-width:760px) {
+      .todo-tab.garden { flex-direction:column; }
+      .gw-sheet-body { flex-direction:row; }
+      .gw { height:clamp(190px, 26vh, 280px); }
+    }
+    .app.dark .gw-sheet { background:#1a1a1e; }
+    .app.dark .gw-sheet-head h2 { color:#e8e8e4; }
+    .app.dark .gw-grab { background:#3a3a40; }
+
+    /* シート内の既存要素をなじませる */
+    .todo-tab.garden .todo-controls { background:transparent; border-bottom:none; padding:6px 16px 4px; }
+    .todo-tab.garden .todo-list-header { background:transparent; border-bottom:none; }
+    .todo-tab.garden .calendar-section { background:transparent; }
+    .app.dark .todo-tab.garden .todo-controls,
+    .app.dark .todo-tab.garden .todo-list-header,
+    .app.dark .todo-tab.garden .calendar-section { background:transparent; }
+
+    /* ── タスク行（.row 風） ── */
+    .todo-item {
+      border:none; border-radius:16px; padding:12px 14px; margin-bottom:9px;
+      box-shadow:0 1px 3px rgba(60,80,110,.06); align-items:center;
+      transition:opacity .4s, background .4s;
+    }
+    .todo-item.done { opacity:.7; background:#F3FAF4; }
+    .todo-item.done .todo-title { color:#8FA79A; }
+    .todo-check {
+      width:26px; height:26px; border:2.5px solid #D9CFC6; margin-top:0;
+      transition:.2s;
+    }
+    .todo-check.checked { background:#3BAA5C; border-color:#3BAA5C; }
+    .todo-title { font-weight:700; color:#3A3532; }
+    .tag-pill { background:#F5E3D6; color:#D65A1F; border-radius:99px; font-weight:800; padding:2px 8px; font-size:10.5px; }
+    .filter-tag { border-radius:99px; font-weight:700; }
+    .filter-tag.active { box-shadow:0 1px 3px rgba(60,80,110,.15); }
+    .app.dark .todo-item { background:#1e1e21; box-shadow:none; }
+    .app.dark .todo-item.done { background:#1b241d; }
+    .app.dark .todo-title { color:#e8e8e4; }
+
+    /* ── メモ入力（紙のシート風） ── */
+    .memo-tab { background:#FBF6EC; }
+    .memo-card { background:#FBF6EC; border-bottom:none; }
+    .memo-textarea-wrap { margin:0 12px; background:#fff; border:2px solid #E8DCC8; border-radius:16px; }
+    .memo-textarea { padding:12px 36px 12px 13px; font-weight:600; }
+    .memo-textarea:focus { border-color:var(--accent); }
+    .memo-card-top { padding:10px 16px 6px; }
+    .memo-actions { border-top:none; padding:10px 12px; flex-wrap:wrap; }
+    .action-btn { border:2px solid #E8DCC8; border-radius:12px; color:#A08A68; font-weight:800; background:#fff; }
+    .action-btn:hover { background:#F5EDDD; }
+    .reflect-actions { background:#FBF6EC; }
+    .reflect-btn {
+      border-radius:16px; font-weight:800;
+      background:linear-gradient(90deg,#4CB86A,#2E9B52); box-shadow:0 3px 0 #1F7A3C;
+    }
+    .reflect-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #1F7A3C; }
+    .reflect-btn.reflect-btn-idea {
+      background:linear-gradient(90deg,#F0B429,#DE8F1F); box-shadow:0 3px 0 #B06E12;
+    }
+    .reflect-btn.reflect-btn-idea:active { transform:translateY(2px); box-shadow:0 1px 0 #B06E12; }
+    .app.dark .memo-tab, .app.dark .memo-card, .app.dark .reflect-actions { background:#141416; }
+    .app.dark .memo-textarea-wrap { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .action-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+
+    /* ── 書庫（ナレッジ）── */
+    .ideas-wrapper { background:linear-gradient(#EFE2CC, #E7D5B8); }
+    .ideas-header-row { background:transparent; border-bottom:none; }
+    .ideas-subtabs { background:transparent; border-bottom:none; }
+    .idea-card {
+      border:none; border-radius:16px;
+      box-shadow:0 1px 4px rgba(120,90,50,.12);
+    }
+    .idea-card:hover { background:#FFFDF8; }
+    .app.dark .ideas-wrapper { background:#141416; }
+    .app.dark .idea-card { background:#1e1e21; box-shadow:none; }
+
+    /* ── 設定 ── */
+    .settings-section-title { color:#96A0AB; font-weight:800; }
+    .settings-card { border:none; border-radius:18px; box-shadow:0 1px 3px rgba(60,80,110,.06); }
+    .settings-row-label { font-weight:800; }
+    .toggle { transition:background .2s; }
+    .app.dark .settings-card { background:#1e1e21; box-shadow:none; }
+
+    /* ── モーダル ── */
+    .modal-sheet, .memo-history-sheet, .confirm-sheet { border-radius:26px 26px 0 0; }
+    .modal-handle { width:44px; height:5px; border-radius:99px; }
