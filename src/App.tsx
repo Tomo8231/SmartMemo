@@ -3558,6 +3558,13 @@ function gwTimeNow(): GwTime {
   return h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 16 ? 'day' : h >= 16 && h < 19 ? 'evening' : 'night';
 }
 
+const LIB_SHELF_COLORS = ['#D96A4A', '#4A9BD9', '#5CB25C', '#8A6ACB', '#D9A24A', '#C46A9A', '#5CB2A5'];
+function libShade(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (v: number) => Math.max(0, v - 38);
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+}
+
 function gwHash(id: number | string): number {
   const s = String(id);
   let h = 0;
@@ -3914,6 +3921,8 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
   const [showChat,       setShowChat]       = useState(false);
+  const [libView,        setLibView]        = usePersistedState<'shelf' | 'list'>('smartmemo:ui:libView', 'shelf');
+  const [libQuery,       setLibQuery]       = useState('');
   const [activeSubTab,   setActiveSubTab]   = usePersistedState<string>('smartmemo:ui:subTab', 'all');
   const [addingTab,      setAddingTab]      = useState(false);
   const [newTabName,     setNewTabName]     = useState('');
@@ -4095,7 +4104,13 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
     </div>
   ) : null;
 
-  const ideaCards = filteredIdeas.map(i => {
+  // 検索（本棚・リスト共通）
+  const searchedIdeas = filteredIdeas.filter(i =>
+    !libQuery.trim() ||
+    (i.projectName + ' ' + (i.summary || '') + ' ' + (i.details || []).join(' ') + ' ' + (i.tags || []).join(' ')).includes(libQuery.trim())
+  );
+
+  const ideaCards = searchedIdeas.map(i => {
     const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
     const isTouchDragging = touchDragId === i.id;
     const isDragOver = dragOverIdeaId === i.id || touchDragOverId === String(i.id);
@@ -4140,6 +4155,40 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
     );
   });
 
+  // ── 本棚ビュー（書庫）: タグごとの棚に背表紙として並べる ──
+  const shelfGroups: { tag: string; items: Idea[] }[] = [];
+  searchedIdeas.forEach(i => {
+    const tag = (i.tags && i.tags[0]) || 'その他';
+    let g = shelfGroups.find(s => s.tag === tag);
+    if (!g) { g = { tag, items: [] }; shelfGroups.push(g); }
+    g.items.push(i);
+  });
+  const shelves = shelfGroups.map((g, gi) => {
+    const color = LIB_SHELF_COLORS[gi % LIB_SHELF_COLORS.length];
+    return (
+      <div className="lib-shelf" key={g.tag}>
+        <div className="lib-plaque">{g.tag}</div>
+        <div className="lib-books">
+          {g.items.map(i => {
+            const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
+            return (
+              <div
+                key={i.id}
+                className={`lib-spine gw-dot${justAdded ? ' new' : ''}`}
+                style={{ background: `linear-gradient(${color}, ${libShade(color)})` }}
+                onClick={() => setEditing(i)}
+                title={i.projectName}
+              >
+                {(i.attachments?.length ?? 0) > 0 && <span className="lib-mark" />}
+                {i.projectName || i.summary || '(無題)'}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  });
+
   return (
     <div className="ideas-wrapper">
       {editing && (
@@ -4163,22 +4212,51 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
           ideaTabs={ideaTabs}
         />
       )}
+      <div className="lib-head">
+        <div className="lib-tt">
+          <h1>📖 メモモンの書庫</h1>
+          <p>メモから育った知識が、本になって並びます</p>
+        </div>
+        <button className="lib-ask-btn" onClick={() => setShowChat(true)} aria-label="書庫にきく">💬 書庫にきく</button>
+      </div>
+      <div className="lib-search-row">
+        <div className="lib-search">
+          <span>🔍</span>
+          <input value={libQuery} onChange={e => setLibQuery(e.target.value)} placeholder="書庫をさがす" />
+        </div>
+        <button
+          className="lib-view-toggle"
+          onClick={() => setLibView(v => v === 'shelf' ? 'list' : 'shelf')}
+          title={libView === 'shelf' ? 'リスト表示に切り替え' : '本棚表示に切り替え'}
+        >{libView === 'shelf' ? '☰' : '📚'}</button>
+      </div>
       {subtabBar}
       {subtabInput}
+      {libView === 'shelf' ? (
+        <div className="ideas-tab tab-pane lib-body">
+          {searchedIdeas.length === 0
+            ? <div className="ideas-empty">{libQuery.trim() ? '見つかりませんでした' : 'まだ本がありません。メモから育てよう'}</div>
+            : shelves
+          }
+          <div className="ideas-bottom-actions">
+            <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
+              ＋ 新しいナレッジを追加
+            </button>
+          </div>
+        </div>
+      ) : (
       <div ref={ideasListRef} className={`ideas-tab tab-pane${touchDragId != null ? ' touch-dragging' : ''}`}>
-        {filteredIdeas.length === 0
+        {searchedIdeas.length === 0
           ? <div className="ideas-empty">まだナレッジがありません</div>
           : ideaCards
         }
         <div className="ideas-bottom-actions">
-          <button className="ideas-chat-btn" onClick={() => setShowChat(true)} aria-label="AIに聞く">
-            💬 AIに聞く
-          </button>
           <button className="ideas-add-row" onClick={() => setAddingIdea(true)}>
             ＋ 新しいナレッジを追加
           </button>
         </div>
       </div>
+      )}
       {showChat && (
         <KnowledgeChat
           ideas={ideas}
