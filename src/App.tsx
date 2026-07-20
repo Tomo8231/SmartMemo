@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.26.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3581,12 +3581,13 @@ function completionStreak(todos: Todo[]): number {
   return streak;
 }
 
-function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit }: {
+function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLayer }: {
   signTodos: Todo[];
   flowerTodos: Todo[];
   streak: number;
   onComplete: (t: Todo) => void;
   onEdit: (t: Todo) => void;
+  monLayer?: React.ReactNode;
 }) {
   const [timeOverride, setTimeOverride] = useState<GwTime | null>(null);
   const [pop, setPop] = useState<Todo | null>(null);
@@ -3639,6 +3640,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit }: {
           </div>
         );
       })}
+      {monLayer}
       <button
         className="gw-time-btn"
         title="時間帯を切り替え"
@@ -3663,7 +3665,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit }: {
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig }: {
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -3683,6 +3685,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   onSaveTodoSet: (s: TodoSet) => void;
   onDeleteTodoSet: (id: string) => void;
   holidayConfig?: HolidayConfig;
+  monLayer?: React.ReactNode;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editPicking,  setEditPicking] = useState<Todo | null>(null);
@@ -3806,6 +3809,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         streak={streak}
         onComplete={gardenComplete}
         onEdit={handleEditStart}
+        monLayer={monLayer}
       />
       <div className="gw-sheet">
       <div className="gw-grab" />
@@ -6135,12 +6139,26 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
   const bubbleRefs  = useRef<Record<string, HTMLDivElement | null>>({});
   const rafRef      = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
+  const rootRef     = useRef<HTMLDivElement | null>(null);
   const [monIds, setMonIds] = useState<string[]>([]);
+
+  // 庭（親コンテナ）の内側だけを歩く。座標はコンテナ相対
+  const boundsOf = () => ({
+    W: rootRef.current?.clientWidth || window.innerWidth,
+    H: rootRef.current?.clientHeight || window.innerHeight,
+  });
+  // 地面ゾーン：メモモンの足元が世界の下端から GROUND_MIN〜GROUND_MAX px の帯に収まる
+  const GROUND_MAX = 96;
+  const GROUND_MIN = 14;
+  const groundY = (H: number, mh: number) => {
+    const yMin = Math.max(0, H - mh - GROUND_MAX);
+    const yMax = Math.max(yMin, H - mh - GROUND_MIN);
+    return { yMin, yMax };
+  };
 
   useEffect(() => {
     const now = Date.now();
-    const W = window.innerWidth;
-    const H = window.innerHeight;
+    const { W, H } = boundsOf();
     mons.forEach(m => {
       if (!liveRef.current[m.uid]) {
         const def = MEMOMON_DEFS.find(d => d.id === m.defId)!;
@@ -6150,10 +6168,11 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
         const startSleep = initSleep && !!def.sprites;
         const personality: 'active' | 'lazy' = m.activity ?? (Math.random() < 0.5 ? 'active' : 'lazy');
         const initSpeed = personality === 'active' ? 45 : 18;
+        const gy = groundY(H, Math.round(def.monH * sc));
         liveRef.current[m.uid] = {
           ...m, hunger,
           x: Math.random() * Math.max(0, W - def.monW * sc),
-          y: 60 + Math.random() * Math.max(0, H * 0.3),
+          y: gy.yMin + Math.random() * (gy.yMax - gy.yMin),
           vx: startSleep ? 0 : (Math.random() > 0.5 ? 1 : -1) * initSpeed,
           vy: startSleep ? 0 : (Math.random() - 0.5) * (personality === 'active' ? 18 : 8),
           facing: 'r',
@@ -6176,8 +6195,7 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
       const dt = Math.min((time - (lastTimeRef.current || time)) / 1000, 0.05);
       lastTimeRef.current = time;
       const now = Date.now();
-      const W = window.innerWidth;
-      const H = window.innerHeight - 80;
+      const { W, H } = boundsOf();
 
       Object.values(liveRef.current).forEach(m => {
         const def = MEMOMON_DEFS.find(d => d.id === m.defId);
@@ -6229,7 +6247,6 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
               } else if (m.animState === 'dislike' && m.state === 'dislike-wait') {
                 const dirs = [
                   { dx: -250, dy: 0, dist: m.x }, { dx: 250, dy: 0, dist: W - m.x - mw },
-                  { dx: 0, dy: -250, dist: m.y - 60 }, { dx: 0, dy: 250, dist: H - m.y - mh },
                 ];
                 const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
                 m.vx = best.dx; m.vy = best.dy;
@@ -6264,9 +6281,11 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
             if (el) el.style.display = 'none';
             m.hideTimer = setTimeout(() => {
               const sc2 = scaleRef.current;
+              const b2 = boundsOf();
+              const gy2 = groundY(b2.H, Math.round(def.monH * sc2));
               m.state = 'idle'; m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
-              m.x = Math.random() * Math.max(0, W - Math.round(def.monW * sc2));
-              m.y = 60 + Math.random() * Math.max(0, H * 0.3);
+              m.x = Math.random() * Math.max(0, b2.W - Math.round(def.monW * sc2));
+              m.y = gy2.yMin + Math.random() * (gy2.yMax - gy2.yMin);
               m.vx = 0; m.vy = 0;
               m.stateUntil = Date.now() + 1500 + Math.random() * 2000;
               const reEl = elemRefs.current[m.uid];
@@ -6343,10 +6362,11 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
 
         if (m.animState !== 'walk') { m.vx = 0; m.vy = 0; }
         m.x += m.vx * dt; m.y += m.vy * dt;
+        const gy = groundY(H, mh);
         if (m.x < 0) { m.x = 0; m.vx = Math.abs(m.vx); }
         if (m.x > W - mw) { m.x = W - mw; m.vx = -Math.abs(m.vx); }
-        if (m.y < 60) { m.y = 60; m.vy = Math.abs(m.vy); }
-        if (m.y > H - mh) { m.y = H - mh; m.vy = -Math.abs(m.vy); }
+        if (m.y < gy.yMin) { m.y = gy.yMin; m.vy = Math.abs(m.vy); }
+        if (m.y > gy.yMax) { m.y = gy.yMax; m.vy = -Math.abs(m.vy); }
         if (m.vx !== 0) m.facing = m.vx < 0 ? 'l' : 'r';
 
         const el = elemRefs.current[m.uid];
@@ -6371,12 +6391,11 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
       m.animState = 'dislike'; m.frameTime = 0; m.frame = 0;
       m.state = 'dislike-wait';
     } else {
-      const W = window.innerWidth; const H = window.innerHeight - 80;
+      const { W } = boundsOf();
       const sc = scaleRef.current;
-      const mw = Math.round(def.monW * sc); const mh = Math.round(def.monH * sc);
+      const mw = Math.round(def.monW * sc);
       const dirs = [
         { dx: -250, dy: 0, dist: m.x }, { dx: 250, dy: 0, dist: W - m.x - mw },
-        { dx: 0, dy: -250, dist: m.y - 60 }, { dx: 0, dy: 250, dist: H - m.y - mh },
       ];
       const best = dirs.reduce((a, b) => a.dist < b.dist ? a : b);
       m.vx = best.dx; m.vy = best.dy;
@@ -6428,7 +6447,7 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 900, overflow: 'hidden' }}>
+    <div ref={rootRef} style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5, overflow: 'hidden' }}>
       {monIds.map(uid => {
         const m = liveRef.current[uid];
         if (!m) return null;
@@ -6791,6 +6810,25 @@ function SmartMemoApp() {
   const headerDate = `${now.getMonth() + 1}/${now.getDate()}`;
   const headerDow  = DOW[now.getDay()];
 
+  // メモモンは庭（ガーデンワールド）の中でだけ歩く
+  const monLayer = (() => {
+    if (settings.memoMonVisible === false) return null;
+    // Only one memomon is on screen at a time. Default to the first owned one.
+    const activeUid = settings.activeMonUid;
+    const active = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
+    if (!active) return null;
+    const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
+    return (
+      <MemoMonLayer
+        mons={[active]}
+        scale={monScale}
+        initSleep={monInitSleep}
+        speechEnabled={settings.memoMonSpeech !== false}
+        onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))}
+      />
+    );
+  })();
+
   // ── Cloud sync helpers (Supabase) ─────────────────────────
   // Keep latest state in refs so the debounced push always sees the latest.
   const cloudStateRef = useRef({ todos, todoSets, ideas, trash, memoMons, settings });
@@ -6914,7 +6952,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={() => setShowPlayground(true)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
@@ -6997,14 +7035,6 @@ function SmartMemoApp() {
           }}
         />
       )}
-      {settings.memoMonVisible !== false && (() => {
-        // Only one memomon is on screen at a time. Default to the first owned one.
-        const activeUid = settings.activeMonUid;
-        const active = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
-        const visible = active ? [active] : [];
-        const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'];
-        return visible.length > 0 ? <MemoMonLayer mons={visible} scale={monScale} initSleep={monInitSleep} speechEnabled={settings.memoMonSpeech !== false} onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))} /> : null;
-      })()}
       {showAccount && (
         <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
       )}
