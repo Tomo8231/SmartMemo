@@ -4648,7 +4648,11 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
   onPushNow: () => void;
   onPullNow: () => void;
 }) {
-  const { colorIdx, fontIdx, notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00', autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
+  const { notifEnabled, notifAdvanceMin = 30, notifDailyTime = '09:00', autoTag, autoDate, completeSound, geminiApiKey, darkMode } = settings;
+  // colorIdx / fontIdx は永続化やクラウド同期由来で undefined / 範囲外になりうる。
+  // 存在しないプリセットを参照してクラッシュしないよう有効範囲へ丸める。
+  const colorIdx = (settings.colorIdx != null && COLOR_PRESETS[settings.colorIdx]) ? settings.colorIdx : 0;
+  const fontIdx  = (settings.fontIdx  != null && FONT_SIZE_OPTS[settings.fontIdx]) ? settings.fontIdx  : 0;
   const soundOn = completeSound !== false;
   const [newTag, setNewTag]             = useState('');
   const [keyInput, setKeyInput]         = useState(geminiApiKey || '');
