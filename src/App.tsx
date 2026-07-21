@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.26.2';
+const APP_VERSION = '1.26.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3540,11 +3540,13 @@ const GW_FLOWER_PALS: Record<string, string>[] = [
   { R: '#9A8AE8', C: '#F0ECFF', G: '#4E9E42' },
 ];
 
-function GwPix({ map, pal, px = 4 }: { map: string[]; pal: Record<string, string>; px?: number }) {
+function GwPix({ map, pal, px = 4 }: { map?: string[]; pal?: Record<string, string>; px?: number }) {
+  if (!map || map.length === 0) return null;
+  const p = pal || {};
   return (
-    <div style={{ position: 'relative', width: map[0].length * px, height: map.length * px }}>
+    <div style={{ position: 'relative', width: (map[0]?.length ?? 0) * px, height: map.length * px }}>
       {map.flatMap((row, y) => [...row].map((ch, x) => ch === '.' ? null : (
-        <i key={`${x}-${y}`} style={{ position: 'absolute', left: x * px, top: y * px, width: px, height: px, background: pal[ch] }} />
+        <i key={`${x}-${y}`} style={{ position: 'absolute', left: x * px, top: y * px, width: px, height: px, background: p[ch] }} />
       )))}
     </div>
   );
@@ -3636,7 +3638,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
         const h = gwHash(t.id);
         return (
           <div key={t.id} className="gw-flower gw-nightdim" style={{ left: `${8 + (h % 84)}%` }}>
-            <GwPix map={GW_FLOWER_MAPS[h % GW_FLOWER_MAPS.length]} pal={GW_FLOWER_PALS[(h >> 3) % GW_FLOWER_PALS.length]} px={4} />
+            <GwPix map={GW_FLOWER_MAPS[(h >>> 0) % GW_FLOWER_MAPS.length]} pal={GW_FLOWER_PALS[(h >>> 3) % GW_FLOWER_PALS.length]} px={4} />
           </div>
         );
       })}
