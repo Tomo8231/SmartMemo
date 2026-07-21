@@ -1247,6 +1247,9 @@
     .bottom-nav-wrapper {
       position:relative; flex:0 0 auto;
       isolation:isolate;
+      /* にわのシート(.gw-sheet z-index:11)より前面に置き、中央メモFABが
+         シート内容に被って切れないようにする */
+      z-index:20;
     }
     .bottom-nav {
       display:flex; background:#fff;
@@ -3039,10 +3042,14 @@
        but DON'T touch fixed-position overlays (modal-backdrop etc.) — those
        must keep their position:fixed behavior. */
     .app.glass > .app-header,
-    .app.glass > .tab-content,
-    .app.glass > .bottom-nav-wrapper {
+    .app.glass > .tab-content {
       position: relative;
       z-index: 1;
+    }
+    /* ボトムナビは中央メモFABがシートに被らないよう最前面のまま維持 */
+    .app.glass > .bottom-nav-wrapper {
+      position: relative;
+      z-index: 20;
     }
 
     .app.glass .app-header {
