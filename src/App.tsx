@@ -48,6 +48,9 @@ type Settings = {
   completeSound: boolean;
   customTags: string[];
   geminiApiKey: string;
+  aiProvider?: 'gemini' | 'openai' | 'anthropic';
+  openaiApiKey?: string;
+  anthropicApiKey?: string;
   soundType?: string;
   ideaTabs?: string[];
   coins?: number;
@@ -119,7 +122,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.27.1';
+const APP_VERSION = '1.28.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -255,6 +258,132 @@ function blobToBase64(blob: Blob): Promise<string> {
     r.onerror = reject;
     r.readAsDataURL(blob);
   });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Unified AI layer — Gemini / OpenAI(GPT) / Anthropic(Claude)
+// ─────────────────────────────────────────────────────────────
+type AiProvider = 'gemini' | 'openai' | 'anthropic';
+type AiCfg = {
+  provider: AiProvider;
+  geminiKey: string;
+  openaiKey: string;
+  anthropicKey: string;
+};
+
+const OPENAI_TEXT_MODEL = 'gpt-4o-mini';
+const ANTHROPIC_TEXT_MODEL = 'claude-3-5-haiku-latest';
+const OPENAI_AUDIO_MODEL = 'whisper-1';
+
+const AI_LABEL: Record<AiProvider, string> = { gemini: 'Gemini', openai: 'GPT (OpenAI)', anthropic: 'Claude (Anthropic)' };
+
+function aiCfgFromSettings(s: { aiProvider?: AiProvider; geminiApiKey?: string; openaiApiKey?: string; anthropicApiKey?: string }): AiCfg {
+  return {
+    provider: s.aiProvider || 'gemini',
+    geminiKey: s.geminiApiKey || '',
+    openaiKey: s.openaiApiKey || '',
+    anthropicKey: s.anthropicApiKey || '',
+  };
+}
+function aiActiveKey(cfg: AiCfg): string {
+  return cfg.provider === 'openai' ? cfg.openaiKey : cfg.provider === 'anthropic' ? cfg.anthropicKey : cfg.geminiKey;
+}
+function aiConfigured(cfg: AiCfg): boolean {
+  return !!aiActiveKey(cfg);
+}
+// 音声の直接文字起こしに対応するのは Gemini / OpenAI(Whisper) のみ。
+function aiAudioSupported(cfg: AiCfg): boolean {
+  return (cfg.provider === 'gemini' && !!cfg.geminiKey) || (cfg.provider === 'openai' && !!cfg.openaiKey);
+}
+
+// ── OpenAI (GPT) ──
+async function callOpenAIChat(key: string, content: any): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    body: JSON.stringify({ model: OPENAI_TEXT_MODEL, messages: [{ role: 'user', content }] }),
+  });
+  if (!res.ok) {
+    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`OpenAI ${res.status}${d ? ': ' + d : ''}`);
+  }
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || '';
+}
+async function callOpenAIAudio(key: string, blob: Blob, mime: string): Promise<string> {
+  const ext = mime.includes('mp4') || mime.includes('aac') ? 'mp4' : mime.includes('ogg') ? 'ogg' : mime.includes('wav') ? 'wav' : 'webm';
+  const form = new FormData();
+  form.append('file', blob, `audio.${ext}`);
+  form.append('model', OPENAI_AUDIO_MODEL);
+  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  });
+  if (!res.ok) {
+    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`OpenAI(Whisper) ${res.status}${d ? ': ' + d : ''}`);
+  }
+  const data = await res.json();
+  return data.text || '';
+}
+
+// ── Anthropic (Claude) ──
+async function callAnthropicMessages(key: string, content: any): Promise<string> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: ANTHROPIC_TEXT_MODEL, max_tokens: 4096, messages: [{ role: 'user', content }] }),
+  });
+  if (!res.ok) {
+    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
+    throw new Error(`Anthropic ${res.status}${d ? ': ' + d : ''}`);
+  }
+  const data = await res.json();
+  return (Array.isArray(data.content) ? data.content.map((c: any) => c?.text || '').join('') : '') || '';
+}
+
+// ── Unified entry points ──
+async function aiText(cfg: AiCfg, prompt: string): Promise<string> {
+  const key = aiActiveKey(cfg);
+  if (!key) throw new Error('no_api_key');
+  if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt);
+  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }]);
+  return callGeminiText(key, prompt);
+}
+async function aiVision(cfg: AiCfg, prompt: string, base64: string, mime: string): Promise<string> {
+  const key = aiActiveKey(cfg);
+  if (!key) throw new Error('no_api_key');
+  if (cfg.provider === 'openai') {
+    return callOpenAIChat(key, [
+      { type: 'text', text: prompt },
+      { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
+    ]);
+  }
+  if (cfg.provider === 'anthropic') {
+    return callAnthropicMessages(key, [
+      { type: 'text', text: prompt },
+      { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
+    ]);
+  }
+  return callGeminiVision(key, prompt, base64, mime);
+}
+async function aiAudio(cfg: AiCfg, blob: Blob, mime: string): Promise<string> {
+  if (cfg.provider === 'openai') {
+    if (!cfg.openaiKey) throw new Error('no_api_key');
+    return callOpenAIAudio(cfg.openaiKey, blob, mime);
+  }
+  if (cfg.provider === 'gemini') {
+    if (!cfg.geminiKey) throw new Error('no_api_key');
+    const base64 = await blobToBase64(blob);
+    return callGeminiAudio(cfg.geminiKey, base64, mime);
+  }
+  throw new Error('audio_unsupported');
 }
 
 const MAX_ATTACHMENTS = 5;
@@ -1857,7 +1986,7 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
   return result;
 }
 
-async function parseMemoToItems(text: string, existingProjects: string[] = [], apiKey = '', mode: 'todo' | 'idea' | 'both' = 'both'): Promise<ParseResult> {
+async function parseMemoToItems(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both'): Promise<ParseResult> {
   // Empty-line-separated paragraphs become independent knowledge entries.
   // Splits on one or more blank lines (allowing trailing whitespace).
   const paragraphs = text
@@ -1866,11 +1995,11 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
     .filter(p => p.length > 0);
 
   if (paragraphs.length <= 1) {
-    return parseMemoSingleBlock(text, existingProjects, apiKey, mode, false);
+    return parseMemoSingleBlock(text, existingProjects, cfg, mode, false);
   }
 
   const results = await Promise.all(
-    paragraphs.map(p => parseMemoSingleBlock(p, existingProjects, apiKey, mode, true))
+    paragraphs.map(p => parseMemoSingleBlock(p, existingProjects, cfg, mode, true))
   );
   return {
     todos: results.flatMap(r => r.todos),
@@ -1878,7 +2007,7 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], a
   };
 }
 
-async function parseMemoSingleBlock(text: string, existingProjects: string[] = [], apiKey = '', mode: 'todo' | 'idea' | 'both' = 'both', oneParagraphOfMany = false): Promise<ParseResult> {
+async function parseMemoSingleBlock(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', oneParagraphOfMany = false): Promise<ParseResult> {
   const modeInstruction =
     mode === 'todo'
       ? `あなたはメモをTODOに変換するアシスタントです。以下のメモをTODOのみに変換し、ideas は必ず空配列で返してください。\n\n`
@@ -1943,13 +2072,13 @@ async function parseMemoSingleBlock(text: string, existingProjects: string[] = [
     } catch { return null; }
   };
 
-  if (apiKey) {
+  if (aiConfigured(cfg)) {
     try {
-      const out = await callGeminiText(apiKey, prompt);
+      const out = await aiText(cfg, prompt);
       const parsed = tryParseJson(out);
       if (parsed) return parsed;
     } catch (e) {
-      console.warn('[Gemini] memo parse failed:', e);
+      console.warn('[AI] memo parse failed:', e);
     }
   }
 
@@ -2797,10 +2926,10 @@ function formatHistoryDate(ts: number): string {
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], micTrigger = 0, splitReflectButtons = true, onCommit }: {
+function MemoTab({ existingProjects, customTags, aiCfg, ideaTabs = [], micTrigger = 0, splitReflectButtons = true, onCommit }: {
   existingProjects: string[];
   customTags: string[];
-  geminiApiKey: string;
+  aiCfg: AiCfg;
   ideaTabs?: string[];
   micTrigger?: number;
   splitReflectButtons?: boolean;
@@ -2859,7 +2988,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       return;
     }
 
-    if (geminiApiKey) {
+    if (aiAudioSupported(aiCfg)) {
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2889,10 +3018,9 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
         setRec(false);
         const blob = new Blob(chunks, { type: captureMime });
         if (blob.size === 0) { showToast('音声が録音されませんでした'); return; }
-        setLoading(true); setLMsg('Gemini で文字起こし中');
+        setLoading(true); setLMsg(`${AI_LABEL[aiCfg.provider]} で文字起こし中`);
         try {
-          const base64 = await blobToBase64(blob);
-          const transcript = await callGeminiAudio(geminiApiKey, base64, captureMime);
+          const transcript = await aiAudio(aiCfg, blob, captureMime);
           if (transcript) {
             setText(p => p ? p + '\n' + transcript : transcript);
             showToast('音声を文字起こししました');
@@ -2900,7 +3028,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
             showToast('文字起こし結果が空でした');
           }
         } catch (err) {
-          console.error('[Gemini audio]', err);
+          console.error('[AI audio]', err);
           showToast('文字起こしに失敗しました');
         }
         setLoading(false);
@@ -2919,7 +3047,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
 
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      showToast('このブラウザは音声入力に未対応です（設定でGemini APIキーを登録すると利用可能）');
+      showToast('このブラウザは音声入力に未対応です（設定でAI APIキーを登録すると利用可能）');
       return;
     }
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -2988,18 +3116,18 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
       const dataUrl = (ev.target?.result as string) || '';
       setImgPrev(dataUrl);
       const claude = (typeof window !== 'undefined' && (window as any).claude && (window as any).claude.complete);
-      if (!geminiApiKey && !claude) {
-        showToast('画像OCRには Gemini APIキー（設定）が必要です');
+      if (!aiConfigured(aiCfg) && !claude) {
+        showToast('画像OCRには AI の APIキー（設定）が必要です');
         return;
       }
       setLoading(true);
-      setLMsg(geminiApiKey ? 'Gemini で画像から文字を抽出中' : '画像からテキストを抽出中');
+      setLMsg(aiConfigured(aiCfg) ? `${AI_LABEL[aiCfg.provider]} で画像から文字を抽出中` : '画像からテキストを抽出中');
       try {
         const b64 = dataUrl.split(',')[1];
         let result = '';
-        if (geminiApiKey) {
-          result = await callGeminiVision(
-            geminiApiKey,
+        if (aiConfigured(aiCfg)) {
+          result = await aiVision(
+            aiCfg,
             'この画像に写っているテキストをすべて抽出してください。テキストのみを返してください。',
             b64,
             file.type
@@ -3032,7 +3160,7 @@ function MemoTab({ existingProjects, customTags, geminiApiKey, ideaTabs = [], mi
     setLoading(true);
     setLMsg(mode === 'todo' ? 'AI で TODO に変換中' : mode === 'idea' ? 'AI でナレッジに変換中' : 'AI で TODO とナレッジに自動分類中');
     try {
-      const result = await parseMemoToItems(text, existingProjects, geminiApiKey, mode);
+      const result = await parseMemoToItems(text, existingProjects, aiCfg, mode);
       const todos = result.todos || [];
       const ideas = result.ideas || [];
 
@@ -3913,9 +4041,9 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
   ideas: Idea[];
-  geminiApiKey?: string;
+  aiCfg: AiCfg;
   onUpdate: (i: Idea) => void;
   onDelete: (id: number | string) => void;
   onAdd: (i: Idea) => void;
@@ -4266,7 +4394,7 @@ function IdeasTab({ ideas, geminiApiKey = '', onUpdate, onDelete, onAdd, onReord
       {showChat && (
         <KnowledgeChat
           ideas={ideas}
-          apiKey={geminiApiKey}
+          aiCfg={aiCfg}
           onClose={() => setShowChat(false)}
         />
       )}
@@ -4400,7 +4528,7 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
   );
 }
 
-function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: string; onClose: () => void }) {
+function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg; onClose: () => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -4430,8 +4558,8 @@ function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: stri
   async function send() {
     const q = input.trim();
     if (!q) return;
-    if (!apiKey) {
-      setMessages(m => [...m, { role: 'assistant', text: 'Gemini API キーが未設定です。設定タブで API キーを登録してください。' }]);
+    if (!aiConfigured(aiCfg)) {
+      setMessages(m => [...m, { role: 'assistant', text: `${AI_LABEL[aiCfg.provider]} の API キーが未設定です。設定タブで API キーを登録してください。` }]);
       return;
     }
     setMessages(m => [...m, { role: 'user', text: q }]);
@@ -4459,7 +4587,7 @@ function KnowledgeChat({ ideas, apiKey, onClose }: { ideas: Idea[]; apiKey: stri
       `上記のユーザー最新の発言に対して回答してください。`;
 
     try {
-      const reply = await callGeminiText(apiKey, prompt);
+      const reply = await aiText(aiCfg, prompt);
       setMessages(m => [...m, { role: 'assistant', text: reply.trim() || '(回答が取得できませんでした)' }]);
     } catch (e: any) {
       setMessages(m => [...m, { role: 'assistant', text: `エラー: ${e?.message || e}` }]);
@@ -4688,10 +4816,24 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
     await showSWNotification('SmartMemo テスト', '通知が正常に動作しています！', 'test-' + Date.now());
   }
 
-  useEffect(() => { setKeyInput(geminiApiKey || ''); }, [geminiApiKey]);
+  // 選択中の AI プロバイダとその APIキー保存先
+  const aiProvider: AiProvider = settings.aiProvider || 'gemini';
+  const providerKeyField: Record<AiProvider, 'geminiApiKey' | 'openaiApiKey' | 'anthropicApiKey'> = {
+    gemini: 'geminiApiKey', openai: 'openaiApiKey', anthropic: 'anthropicApiKey',
+  };
+  const storedProviderKey = (settings[providerKeyField[aiProvider]] as string) || '';
+  const providerKeyPlaceholder: Record<AiProvider, string> = {
+    gemini: 'AIza...', openai: 'sk-...', anthropic: 'sk-ant-...',
+  };
+  const providerModel: Record<AiProvider, string> = {
+    gemini: GEMINI_MODEL, openai: OPENAI_TEXT_MODEL, anthropic: ANTHROPIC_TEXT_MODEL,
+  };
+
+  // プロバイダ切替時は、その保存済みキーを入力欄に反映
+  useEffect(() => { setKeyInput(storedProviderKey); }, [aiProvider, storedProviderKey]);
 
   function saveKey() {
-    onChange('geminiApiKey', keyInput.trim());
+    onChange(providerKeyField[aiProvider], keyInput.trim());
     setApiStatus({ kind: 'ok', msg: '保存しました' });
     setTimeout(() => setApiStatus({ kind: 'idle', msg: '' }), 2200);
   }
@@ -4701,8 +4843,14 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
     }
     setApiStatus({ kind: 'idle', msg: '接続テスト中...' });
     try {
-      const out = await callGeminiText(keyInput.trim(), 'Reply with the single word: OK');
-      if (out) setApiStatus({ kind: 'ok', msg: `接続成功（${GEMINI_MODEL}）` });
+      const testCfg: AiCfg = {
+        provider: aiProvider,
+        geminiKey: aiProvider === 'gemini' ? keyInput.trim() : '',
+        openaiKey: aiProvider === 'openai' ? keyInput.trim() : '',
+        anthropicKey: aiProvider === 'anthropic' ? keyInput.trim() : '',
+      };
+      const out = await aiText(testCfg, 'Reply with the single word: OK');
+      if (out) setApiStatus({ kind: 'ok', msg: `接続成功（${providerModel[aiProvider]}）` });
       else     setApiStatus({ kind: 'ng', msg: '応答が空でした' });
     } catch (e: any) {
       setApiStatus({ kind: 'ng', msg: String(e?.message || e).slice(0, 80) });
@@ -5018,21 +5166,37 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
         )}
       </div>
 
-      <div className="settings-section-title">AI 連携（Gemini）</div>
+      <div className="settings-section-title">AI 連携</div>
       <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">AI プロバイダ</div>
+            <div className="settings-row-sub">音声・画像・メモ解析・書庫チャットに使う AI を選べます</div>
+          </div>
+          <div className="font-size-opts">
+            {(['gemini', 'openai', 'anthropic'] as AiProvider[]).map(p => (
+              <button
+                key={p}
+                className={`font-size-opt${aiProvider === p ? ' sel' : ''}`}
+                onClick={() => onChange('aiProvider', p)}
+              >{p === 'gemini' ? 'Gemini' : p === 'openai' ? 'GPT' : 'Claude'}</button>
+            ))}
+          </div>
+        </div>
         <div className="api-row">
-          <div className="settings-row-label">Gemini APIキー</div>
+          <div className="settings-row-label">{AI_LABEL[aiProvider]} APIキー</div>
           <div className="settings-row-sub">
-            設定すると音声・画像・メモ解析に Gemini を使用します。
-            未設定時はローカル解析にフォールバック。
-            <br/>取得: aistudio.google.com → Get API key
+            {aiProvider === 'gemini' && <>取得: aistudio.google.com → Get API key（モデル: {GEMINI_MODEL}）</>}
+            {aiProvider === 'openai' && <>取得: platform.openai.com → API keys（モデル: {OPENAI_TEXT_MODEL} / 音声: Whisper）</>}
+            {aiProvider === 'anthropic' && <>取得: console.anthropic.com → API Keys（モデル: {ANTHROPIC_TEXT_MODEL}／音声入力は非対応）</>}
+            <br/>未設定時はローカル解析にフォールバック。キーは端末内にのみ保存されます。
           </div>
           <div className="api-input-row">
             <input
               type={keyVisible ? 'text' : 'password'}
               value={keyInput}
               onChange={e => setKeyInput(e.target.value)}
-              placeholder="AIza..."
+              placeholder={providerKeyPlaceholder[aiProvider]}
               autoComplete="off"
               spellCheck={false}
             />
@@ -5044,10 +5208,10 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
             </button>
           </div>
           <div className="api-input-row">
-            <button onClick={saveKey} disabled={keyInput.trim() === (geminiApiKey || '')}>保存</button>
+            <button onClick={saveKey} disabled={keyInput.trim() === storedProviderKey}>保存</button>
             <button className="secondary" onClick={testKey} disabled={!keyInput.trim()}>接続テスト</button>
-            {geminiApiKey && (
-              <button className="secondary" onClick={() => { setKeyInput(''); onChange('geminiApiKey', ''); setApiStatus({ kind: 'ok', msg: '削除しました' }); }}>削除</button>
+            {storedProviderKey && (
+              <button className="secondary" onClick={() => { setKeyInput(''); onChange(providerKeyField[aiProvider], ''); setApiStatus({ kind: 'ok', msg: '削除しました' }); }}>削除</button>
             )}
           </div>
           {apiStatus.msg && (
@@ -5066,10 +5230,10 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
           <button
             className="insights-run-btn"
             onClick={onInsights}
-            disabled={!geminiApiKey}
-            title={geminiApiKey ? 'AI分析を実行' : 'Gemini APIキーを設定してください'}
+            disabled={!storedProviderKey}
+            title={storedProviderKey ? 'AI分析を実行' : `${AI_LABEL[aiProvider]} のAPIキーを設定してください`}
           >
-            {geminiApiKey ? '🔍 分析する' : '🔒 要APIキー'}
+            {storedProviderKey ? '🔍 分析する' : '🔒 要APIキー'}
           </button>
         </div>
       </div>
@@ -5323,11 +5487,11 @@ function renderInsightText(text: string): React.ReactNode[] {
   });
 }
 
-function InsightsModal({ todos, ideas, trash, apiKey, onClose }: {
+function InsightsModal({ todos, ideas, trash, aiCfg, onClose }: {
   todos: Todo[];
   ideas: Idea[];
   trash: TrashedTodo[];
-  apiKey: string;
+  aiCfg: AiCfg;
   onClose: () => void;
 }) {
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
@@ -5348,8 +5512,8 @@ function InsightsModal({ todos, ideas, trash, apiKey, onClose }: {
 
       try {
         let out = '';
-        if (apiKey) {
-          out = await callGeminiText(apiKey, prompt);
+        if (aiConfigured(aiCfg)) {
+          out = await aiText(aiCfg, prompt);
         }
         if (!out) throw new Error('no response');
         setResult(out);
@@ -5380,7 +5544,7 @@ function InsightsModal({ todos, ideas, trash, apiKey, onClose }: {
             <div className="insights-error">
               <div style={{ fontSize: 32 }}>⚠️</div>
               <div style={{ marginTop: 8 }}>分析に失敗しました</div>
-              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>設定でGemini APIキーを確認してください</div>
+              <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>設定でAI APIキーを確認してください</div>
             </div>
           )}
           {status === 'done' && (
@@ -6729,6 +6893,7 @@ function SmartMemoApp() {
   };
 
   const existingProjects = ideas.map(i => i.projectName);
+  const aiCfg = aiCfgFromSettings(settings);
 
   function commit({ todos: newTodos = [], ideas: newIdeas = [], unlockCoins = false }: { todos?: Todo[]; ideas?: IdeaDraft[]; unlockCoins?: boolean }) {
     if (unlockCoins) setSetting('infiniteCoinsUnlocked', true);
@@ -6966,9 +7131,9 @@ function SmartMemoApp() {
         <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
       </div>
       <div className="tab-content">
-        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} geminiApiKey={settings.geminiApiKey || ''} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
+        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} geminiApiKey={settings.geminiApiKey || ''} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={() => setShowPlayground(true)} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
@@ -7105,7 +7270,7 @@ function SmartMemoApp() {
           todos={todos}
           ideas={ideas}
           trash={trash}
-          apiKey={settings.geminiApiKey || ''}
+          aiCfg={aiCfg}
           onClose={() => setShowInsights(false)}
         />
       )}
