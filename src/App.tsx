@@ -119,7 +119,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.26.3';
+const APP_VERSION = '1.27.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6252,7 +6252,9 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
               if (m.animState === 'happy') {
                 m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
               } else if (m.animState === 'surprise') {
-                m.animState = 'sit'; m.frameTime = 0; m.frame = 0; m.tapCount = 0;
+                // tapCount はリセットしない（コイン獲得は通算3回まで／寝起きの
+                // タップもカウントに含める）
+                m.animState = 'sit'; m.frameTime = 0; m.frame = 0;
               } else if (m.animState === 'dislike' && m.state === 'dislike-wait') {
                 const dirs = [
                   { dx: -250, dy: 0, dist: m.x }, { dx: 250, dy: 0, dist: W - m.x - mw },
@@ -6418,21 +6420,23 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
     const def = MEMOMON_DEFS.find(d => d.id === m.defId);
     if (!def) return;
 
+    // リアクション再生中の連打は無視（sit / sleep のときだけ反応）
+    if (m.animState === 'happy' || m.animState === 'surprise') return;
+
+    m.tapCount++;
+    const rewardable = m.tapCount <= 3; // コイン獲得はタップ3回まで
+
+    // スプライトの無いレガシー個体：逃げずにコインだけ
     if (!def.sprites) {
-      startHide(m, def);
+      if (rewardable) onTapReward();
       return;
     }
 
     if (m.animState === 'sleep') {
+      // 寝てる子を起こす → 驚く
       m.animState = 'surprise'; m.frameTime = 0; m.frame = 0;
-      onTapReward();
-      return;
-    }
-
-    if (m.animState === 'happy' || m.animState === 'surprise') return;
-
-    m.tapCount++;
-    if (m.tapCount <= 3) {
+    } else {
+      // 起きてる子 → 喜ぶ（4回目以降も逃げない）
       m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
       m.vx = 0; m.vy = 0; m.state = 'idle';
       if (speechEnabledRef.current) {
@@ -6446,13 +6450,8 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
           }
         }
       }
-      onTapReward();
-    } else {
-      m.speech = undefined;
-      const bubble = bubbleRefs.current[m.uid];
-      if (bubble) bubble.style.display = 'none';
-      startHide(m, def);
     }
+    if (rewardable) onTapReward();
   }
 
   return (
