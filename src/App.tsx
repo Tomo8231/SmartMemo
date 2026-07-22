@@ -122,7 +122,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.28.0';
+const APP_VERSION = '1.28.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4699,7 +4699,7 @@ const RARITY_LABEL: Record<string, string> = { ultra: 'ウルトラ', super: '�
 
 function ZukanTab({ memoMons, onOpenPlayground }: {
   memoMons: MemoMonInstance[];
-  onOpenPlayground: () => void;
+  onOpenPlayground: (uid?: string) => void;
 }) {
   const [detail, setDetail] = useState<MemoMonDef | null>(null);
   const ownedByDef = new Map<string, MemoMonInstance>();
@@ -4718,13 +4718,17 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
           <h1>🥚 メモモンずかん</h1>
           <p>あつめたメモモン {ownedCount} / {MEMOMON_DEFS.length}</p>
         </div>
-        <button className="zukan-playground-btn" onClick={onOpenPlayground}>🏡 あそびば</button>
+        <button className="zukan-playground-btn" onClick={() => onOpenPlayground()}>🏡 あそびば</button>
       </div>
       <div className="zukan-grid">
         {MEMOMON_DEFS.map(def => {
           const inst = ownedByDef.get(def.id);
           return (
-            <div key={def.id} className={`zukan-card${inst ? '' : ' locked'}`} onClick={() => setDetail(def)}>
+            <div
+              key={def.id}
+              className={`zukan-card${inst ? '' : ' locked'}`}
+              onClick={() => inst ? onOpenPlayground(inst.uid) : setDetail(def)}
+            >
               <div className="zukan-sprite-box">
                 <img src={MEMOMON_IMGS[def.id]} alt={inst ? def.name : '？？？'} className="zukan-sprite" />
               </div>
@@ -5730,11 +5734,12 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
-function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventory, itemInventory, unlockedSounds, unlockedBgs, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem, onUnlockSound, onUnlockBg }: {
+function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, foodInventory, itemInventory, unlockedSounds, unlockedBgs, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem, onUnlockSound, onUnlockBg }: {
   memoMons: MemoMonInstance[];
   coins: number;
   infinite: boolean;
   activeMonUid: string | undefined;
+  initialUid?: string | null;
   foodInventory: Record<string, number>;
   itemInventory: Record<string, number>;
   unlockedSounds: string[];
@@ -5750,7 +5755,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, foodInventor
   onUnlockBg: (bgIdx: number) => void;
 }) {
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
-  const [selectedUid, setSelectedUid] = useState<string | null>(visibleMons[0]?.uid ?? null);
+  const [selectedUid, setSelectedUid] = useState<string | null>(
+    (initialUid && visibleMons.some(m => m.uid === initialUid) ? initialUid : visibleMons[0]?.uid) ?? null
+  );
   const [showFoodPicker, setShowFoodPicker] = useState(false);
   const [inspectItemId, setInspectItemId] = useState<string | null>(null);
   const [giftReveal, setGiftReveal] = useState<{ itemId: string; monName: string } | null>(null);
@@ -6751,6 +6758,9 @@ function SmartMemoApp() {
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
+  // あそびばを開くときに最初に選択するメモモン（ずかんタップ時に指定）
+  const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
+  const openPlayground = (uid?: string) => { setPlaygroundInitUid(uid ?? null); setShowPlayground(true); };
   const [showAccount, setShowAccount] = useState(false);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
@@ -7134,8 +7144,8 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
-        {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={() => setShowPlayground(true)} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => setShowPlayground(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
+        {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => openPlayground()} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">
@@ -7224,11 +7234,12 @@ function SmartMemoApp() {
           coins={settings.coins || 0}
           infinite={!!settings.infiniteCoins}
           activeMonUid={settings.activeMonUid}
+          initialUid={playgroundInitUid}
           foodInventory={settings.foodInventory || {}}
           itemInventory={settings.itemInventory || {}}
           unlockedSounds={(settings.gachaUnlocked || { sounds: [], bgs: [] }).sounds}
           unlockedBgs={(settings.gachaUnlocked || { sounds: [], bgs: [] }).bgs}
-          onClose={() => setShowPlayground(false)}
+          onClose={() => { setShowPlayground(false); setPlaygroundInitUid(null); }}
           onUpdateMons={updater => setMemoMons(updater)}
           onSpendCoins={amount => setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) - amount) }))}
           onGainCoins={amount => setSettings(p => ({ ...p, coins: (p.coins || 0) + amount }))}
