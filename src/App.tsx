@@ -122,7 +122,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.28.1';
+const APP_VERSION = '1.28.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -7024,13 +7024,36 @@ function SmartMemoApp() {
   function describeSyncError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e);
     const code = (e as { code?: string })?.code;
+    const details = (e as { details?: string })?.details || '';
+    const hint = (e as { hint?: string })?.hint || '';
     const uid = authUser?.id;
+    // 実際に Postgres が返した生の情報。原因を隠さないよう常に末尾へ付ける。
+    const techParts: string[] = [];
+    if (code) techParts.push(`code: ${code}`);
+    if (raw) techParts.push(`message: ${raw}`);
+    if (details) techParts.push(`details: ${details}`);
+    if (hint) techParts.push(`hint: ${hint}`);
+    const tech = techParts.length ? `\n\n［技術詳細］\n${techParts.join('\n')}` : '';
+    const blob = `${raw} ${details} ${hint}`;
+
     // PostgREST: table not found
-    if (code === '42P01' || /relation .* does not exist|table .* not found/i.test(raw)) {
-      return 'サーバーに user_data テーブルがありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。';
+    if (code === '42P01' || /relation .* does not exist|table .* not found/i.test(blob)) {
+      return 'サーバーに user_data テーブルがありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。' + tech;
     }
-    // PostgREST: RLS denied (no policy or auth.uid() not matching)
-    if (code === '42501' || /row-level security|new row violates|permission denied for table/i.test(raw)) {
+    // 42501 のうち「テーブルへの GRANT 不足」。RLS ポリシーとは別問題で、
+    // ポリシーをいくら確認しても直らない（＝記載の①〜④では解決しない）。
+    if (/permission denied for (table|relation)/i.test(blob)) {
+      return (
+        'テーブルへのアクセス権（GRANT）が不足しています。これは RLS ポリシーとは別の問題で、ポリシーを確認しても直りません。\n\n' +
+        'Supabase の SQL Editor で最新の db/schema.sql を実行し直してください（GRANT 文が追加されています）。\n' +
+        '手早く直すには次を実行:\n' +
+        '   grant usage on schema public to authenticated;\n' +
+        '   grant select, insert, update, delete on public.user_data to authenticated;'
+        + tech
+      );
+    }
+    // 42501: 本当の RLS 行チェック失敗（auth.uid() が user_id と一致しない等）
+    if (code === '42501' || /row-level security|new row violates/i.test(blob)) {
       return (
         'RLS ポリシーで拒否されました。以下を順に確認してください。\n\n' +
         '① まず「ログアウト → 再ログイン」で JWT をリフレッシュ（一番よくある原因）\n\n' +
@@ -7041,17 +7064,18 @@ function SmartMemoApp() {
         (uid ? `   あなたの user_id: ${uid}\n` : '   （現在ログインしていません）\n') +
         (uid ? `   SQL Editor で: select id, email, email_confirmed_at from auth.users where id = '${uid}';\n\n` : '\n') +
         '④ 未確認メールなら Authentication → Providers → Email の "Confirm email" を OFF にしてから再登録するのが最短。'
+        + tech
       );
     }
     // PostgREST: schema cache stale (often "could not find ... in schema cache")
-    if (/schema cache|PGRST205|PGRST106/i.test(raw)) {
-      return 'スキーマキャッシュが古いようです。Supabase の SQL Editor で schema.sql を実行 → ダッシュボードの Database → Reload schema cache を試してください。';
+    if (/schema cache|PGRST205|PGRST106/i.test(blob)) {
+      return 'スキーマキャッシュが古いようです。Supabase の SQL Editor で schema.sql を実行 → ダッシュボードの Database → Reload schema cache を試してください。' + tech;
     }
     // PostgREST: JWT/Auth
-    if (code === 'PGRST301' || /JWT|invalid token|not authenticated/i.test(raw)) {
-      return '認証トークンが無効です。一度ログアウトして再ログインしてください。';
+    if (code === 'PGRST301' || /JWT|invalid token|not authenticated/i.test(blob)) {
+      return '認証トークンが無効です。一度ログアウトして再ログインしてください。' + tech;
     }
-    return raw || '不明なエラー';
+    return (raw || '不明なエラー') + tech;
   }
 
   async function pushSnapshot() {
