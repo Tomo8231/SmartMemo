@@ -122,7 +122,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.28.2';
+const APP_VERSION = '1.28.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1450,7 +1450,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const singleObtainedMsg = singleResult
     ? singleDup ? 'すでに解放済み！ コイン +10 獲得'
     : singleResult.type === 'memomon' ? `${labelParts.slice(1).join(' ')} がメモ画面を歩き回り始めた！`
-    : singleResult.type === 'food' ? `${labelParts.slice(1).join(' ')} を 1個 ゲット！遊び場で使えます`
+    : singleResult.type === 'food' ? `${labelParts.slice(1).join(' ')} を 1個 ゲット！メモモンずかんで使えます`
     : `${labelParts.slice(1).join(' ')} をゲット！設定に反映されました`
     : '';
   const modeCostLabel: Record<GachaMode, string> = {
@@ -4718,7 +4718,6 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
           <h1>🥚 メモモンずかん</h1>
           <p>あつめたメモモン {ownedCount} / {MEMOMON_DEFS.length}</p>
         </div>
-        <button className="zukan-playground-btn" onClick={() => onOpenPlayground()}>🏡 あそびば</button>
       </div>
       <div className="zukan-grid">
         {MEMOMON_DEFS.map(def => {
@@ -4754,7 +4753,6 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
                   <div className="zukan-detail-bond">なかよし度 {lv.stars}（{lv.label}）</div>
                 ); })()}
                 <p className="zukan-detail-desc">{detailFlavor}</p>
-                <button className="zukan-detail-play" onClick={() => { setDetail(null); onOpenPlayground(); }}>🏡 あそびばで会う</button>
               </>
             ) : (
               <p className="zukan-detail-desc">まだ出会っていないメモモン。ガチャのたまごから生まれるかも…</p>
@@ -4766,12 +4764,11 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
   );
 }
 
-function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, authUser, syncStatus, syncError, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
   onInsights: () => void;
-  onPlayground: () => void;
   authUser: User | null;
   syncStatus: 'idle' | 'syncing' | 'error';
   syncError: string | null;
@@ -5304,14 +5301,6 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, onPlayground, a
       {memoMons.length > 0 && <>
         <div className="settings-section-title">メモモン</div>
         <div className="settings-card">
-          <button className="playground-open-btn" onClick={onPlayground}>
-            <span className="playground-open-btn-emoji">🎪</span>
-            <span className="playground-open-btn-text">
-              <span className="playground-open-btn-title">メモモンの遊び場</span>
-              <span className="playground-open-btn-sub">選ぶ・餌をあげる・なでる</span>
-            </span>
-            <span className="playground-open-btn-arrow">›</span>
-          </button>
           <div className="settings-row">
             <div>
               <div className="settings-row-label">メモモンを表示する</div>
@@ -5762,7 +5751,6 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   const [inspectItemId, setInspectItemId] = useState<string | null>(null);
   const [giftReveal, setGiftReveal] = useState<{ itemId: string; monName: string } | null>(null);
   const [bonusReveal, setBonusReveal] = useState<{ kind: 'sound' | 'bg'; label: string; color: string } | null>(null);
-  const [showMonList, setShowMonList] = useState(false);
   const swipeStartXRef = useRef<number | null>(null);
   const [swipeNudge, setSwipeNudge] = useState<'prev' | 'next' | null>(null);
   const [toast, setToast] = useState<{ text: string; tone: 'fav' | 'dis' | 'normal' | 'pet' | 'cooldown' | 'broke' | 'full' } | null>(null);
@@ -5996,25 +5984,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   return (
     <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="playground-modal">
-        <button className="gacha-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
-        {visibleMons.length > 1 && (
-          <button
-            className="playground-list-btn"
-            onClick={() => setShowMonList(true)}
-            aria-label="メモモン一覧"
-            title="メモモン一覧"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="20" y2="6" />
-              <line x1="8" y1="12" x2="20" y2="12" />
-              <line x1="8" y1="18" x2="20" y2="18" />
-              <circle cx="4" cy="6" r="1.4" fill="currentColor"/>
-              <circle cx="4" cy="12" r="1.4" fill="currentColor"/>
-              <circle cx="4" cy="18" r="1.4" fill="currentColor"/>
-            </svg>
-          </button>
-        )}
-        <div className="playground-title">🎪 メモモンの遊び場</div>
+        <button className="playground-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
+        <div className="playground-title">メモモンずかん</div>
         <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
 
         {visibleMons.length === 0 ? (
@@ -6162,47 +6133,6 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
 
         {toast && (
           <div className={`playground-toast playground-toast-${toast.tone}`}>{toast.text}</div>
-        )}
-
-        {showMonList && (
-          <div className="playground-list-overlay" onClick={() => setShowMonList(false)}>
-            <div className="playground-list-sheet" onClick={e => e.stopPropagation()}>
-              <div className="playground-list-title">メモモン一覧</div>
-              <div className="playground-list-scroll">
-                {visibleMons.map(m => {
-                  const def = MEMOMON_DEFS.find(d => d.id === m.defId);
-                  if (!def) return null;
-                  const isOnScreen = m.uid === activeMonUid || (!activeMonUid && m.uid === visibleMons[0]?.uid);
-                  const isSelected = m.uid === selected?.uid;
-                  const a = effectiveAffection(m, nowMs);
-                  const aLvl = affectionLevel(a);
-                  return (
-                    <button
-                      key={m.uid}
-                      className={`playground-list-row${isSelected ? ' selected' : ''}`}
-                      onClick={() => { setSelectedUid(m.uid); setShowMonList(false); }}
-                    >
-                      <img src={MEMOMON_IMGS[def.id]} alt={def.name} />
-                      <div className="playground-list-row-info">
-                        <div className="playground-list-row-name">
-                          {def.name}
-                          {isOnScreen && <span className="playground-list-row-onscreen">画面</span>}
-                        </div>
-                        <div className="playground-list-row-level">{aLvl.stars} <span>{aLvl.label}</span></div>
-                        <div className="playground-list-row-meter">
-                          <div className="playground-list-row-meter-bar">
-                            <div className="playground-list-row-meter-fill" style={{ width: `${a}%` }} />
-                          </div>
-                          <span className="playground-list-row-meter-val">♥ {a}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <button className="playground-food-cancel" onClick={() => setShowMonList(false)}>閉じる</button>
-            </div>
-          </div>
         )}
 
         {bonusReveal && (
@@ -6758,7 +6688,7 @@ function SmartMemoApp() {
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
-  // あそびばを開くときに最初に選択するメモモン（ずかんタップ時に指定）
+  // メモモン画面を開くときに最初に選択するメモモン（ずかんタップ時に指定）
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
   const openPlayground = (uid?: string) => { setPlaygroundInitUid(uid ?? null); setShowPlayground(true); };
   const [showAccount, setShowAccount] = useState(false);
@@ -7169,7 +7099,7 @@ function SmartMemoApp() {
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} onPlayground={() => openPlayground()} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">
