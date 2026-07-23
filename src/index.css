@@ -693,23 +693,26 @@
       background: #4caf50; color: #fff;
     }
 
-    .playground-list-btn {
+    /* あそびば（メモモンずかん）モーダルの閉じるボタン。
+       背景がクリーム色で明るいので、濃い色にして視認できるようにする。 */
+    .playground-close-btn {
       position: absolute;
-      top: 10px; right: 50px;
-      width: 30px; height: 30px;
+      top: 12px; right: 12px;
+      width: 32px; height: 32px;
       border-radius: 50%;
       border: none;
-      background: rgba(0,0,0,.08);
+      background: rgba(0,0,0,.10);
       color: #5a3818;
+      font-size: 15px; line-height: 1;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
       transition: background .12s, transform .08s;
-      z-index: 4;
+      z-index: 5;
     }
-    .playground-list-btn:hover { background: rgba(0,0,0,.14); }
-    .playground-list-btn:active { transform: scale(.94); }
-    .app.dark .playground-list-btn { background: rgba(255,255,255,.10); color: #f0e2c8; }
-    .app.dark .playground-list-btn:hover { background: rgba(255,255,255,.16); }
+    .playground-close-btn:hover { background: rgba(0,0,0,.18); }
+    .playground-close-btn:active { transform: scale(.94); }
+    .app.dark .playground-close-btn { background: rgba(255,255,255,.12); color: #f0e2c8; }
+    .app.dark .playground-close-btn:hover { background: rgba(255,255,255,.20); }
 
     .playground-nav-arrow {
       position: absolute;
