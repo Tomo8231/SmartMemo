@@ -2612,6 +2612,12 @@
       margin-top:8px; font-size:10px; font-weight:600;
       letter-spacing:.3px;
     }
+    /* Claude モデル指定欄。APIキー欄と区切るため上に薄い境界を置く。 */
+    .api-model-row {
+      margin-top:14px; padding-top:14px;
+      border-top:1px solid rgba(0,0,0,.08);
+    }
+    .app.dark .api-model-row { border-top-color:rgba(255,255,255,.10); }
     .api-status.ok   { color:#2A8C5A; }
     .api-status.ng   { color:#c0392b; }
     .api-status.idle { color:#a0a09c; }

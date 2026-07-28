@@ -51,6 +51,7 @@ type Settings = {
   aiProvider?: 'gemini' | 'openai' | 'anthropic';
   openaiApiKey?: string;
   anthropicApiKey?: string;
+  anthropicModel?: string;
   soundType?: string;
   ideaTabs?: string[];
   coins?: number;
@@ -122,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.28.3';
+const APP_VERSION = '1.28.4';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -269,20 +270,23 @@ type AiCfg = {
   geminiKey: string;
   openaiKey: string;
   anthropicKey: string;
+  anthropicModel: string;
 };
 
 const OPENAI_TEXT_MODEL = 'gpt-4o-mini';
-const ANTHROPIC_TEXT_MODEL = 'claude-3-5-haiku-latest';
+// Claude はモデルを設定画面でテキスト指定できる。未指定時はこれをデフォルトに使う。
+const ANTHROPIC_TEXT_MODEL = 'claude-haiku-4-5';
 const OPENAI_AUDIO_MODEL = 'whisper-1';
 
 const AI_LABEL: Record<AiProvider, string> = { gemini: 'Gemini', openai: 'GPT (OpenAI)', anthropic: 'Claude (Anthropic)' };
 
-function aiCfgFromSettings(s: { aiProvider?: AiProvider; geminiApiKey?: string; openaiApiKey?: string; anthropicApiKey?: string }): AiCfg {
+function aiCfgFromSettings(s: { aiProvider?: AiProvider; geminiApiKey?: string; openaiApiKey?: string; anthropicApiKey?: string; anthropicModel?: string }): AiCfg {
   return {
     provider: s.aiProvider || 'gemini',
     geminiKey: s.geminiApiKey || '',
     openaiKey: s.openaiApiKey || '',
     anthropicKey: s.anthropicApiKey || '',
+    anthropicModel: (s.anthropicModel || '').trim() || ANTHROPIC_TEXT_MODEL,
   };
 }
 function aiActiveKey(cfg: AiCfg): string {
@@ -329,7 +333,7 @@ async function callOpenAIAudio(key: string, blob: Blob, mime: string): Promise<s
 }
 
 // ── Anthropic (Claude) ──
-async function callAnthropicMessages(key: string, content: any): Promise<string> {
+async function callAnthropicMessages(key: string, content: any, model?: string): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -338,7 +342,7 @@ async function callAnthropicMessages(key: string, content: any): Promise<string>
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: ANTHROPIC_TEXT_MODEL, max_tokens: 4096, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ model: (model || '').trim() || ANTHROPIC_TEXT_MODEL, max_tokens: 4096, messages: [{ role: 'user', content }] }),
   });
   if (!res.ok) {
     let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
@@ -353,7 +357,7 @@ async function aiText(cfg: AiCfg, prompt: string): Promise<string> {
   const key = aiActiveKey(cfg);
   if (!key) throw new Error('no_api_key');
   if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt);
-  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }]);
+  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }], cfg.anthropicModel);
   return callGeminiText(key, prompt);
 }
 async function aiVision(cfg: AiCfg, prompt: string, base64: string, mime: string): Promise<string> {
@@ -369,7 +373,7 @@ async function aiVision(cfg: AiCfg, prompt: string, base64: string, mime: string
     return callAnthropicMessages(key, [
       { type: 'text', text: prompt },
       { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
-    ]);
+    ], cfg.anthropicModel);
   }
   return callGeminiVision(key, prompt, base64, mime);
 }
@@ -4826,8 +4830,10 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
   const providerKeyPlaceholder: Record<AiProvider, string> = {
     gemini: 'AIza...', openai: 'sk-...', anthropic: 'sk-ant-...',
   };
+  // Claude はモデルをテキスト指定できる。未指定時はデフォルトを使う。
+  const anthropicModel = (settings.anthropicModel || '').trim() || ANTHROPIC_TEXT_MODEL;
   const providerModel: Record<AiProvider, string> = {
-    gemini: GEMINI_MODEL, openai: OPENAI_TEXT_MODEL, anthropic: ANTHROPIC_TEXT_MODEL,
+    gemini: GEMINI_MODEL, openai: OPENAI_TEXT_MODEL, anthropic: anthropicModel,
   };
 
   // プロバイダ切替時は、その保存済みキーを入力欄に反映
@@ -4849,6 +4855,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
         geminiKey: aiProvider === 'gemini' ? keyInput.trim() : '',
         openaiKey: aiProvider === 'openai' ? keyInput.trim() : '',
         anthropicKey: aiProvider === 'anthropic' ? keyInput.trim() : '',
+        anthropicModel,
       };
       const out = await aiText(testCfg, 'Reply with the single word: OK');
       if (out) setApiStatus({ kind: 'ok', msg: `接続成功（${providerModel[aiProvider]}）` });
@@ -5189,7 +5196,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
           <div className="settings-row-sub">
             {aiProvider === 'gemini' && <>取得: aistudio.google.com → Get API key（モデル: {GEMINI_MODEL}）</>}
             {aiProvider === 'openai' && <>取得: platform.openai.com → API keys（モデル: {OPENAI_TEXT_MODEL} / 音声: Whisper）</>}
-            {aiProvider === 'anthropic' && <>取得: console.anthropic.com → API Keys（モデル: {ANTHROPIC_TEXT_MODEL}／音声入力は非対応）</>}
+            {aiProvider === 'anthropic' && <>取得: console.anthropic.com → API Keys（モデルは下で指定・既定 {ANTHROPIC_TEXT_MODEL}／音声入力は非対応）</>}
             <br/>未設定時はローカル解析にフォールバック。キーは端末内にのみ保存されます。
           </div>
           <div className="api-input-row">
@@ -5217,6 +5224,29 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
           </div>
           {apiStatus.msg && (
             <div className={`api-status ${apiStatus.kind}`}>{apiStatus.msg}</div>
+          )}
+          {aiProvider === 'anthropic' && (
+            <div className="api-model-row">
+              <div className="settings-row-label">Claude モデル</div>
+              <div className="settings-row-sub">
+                使用するモデル ID をテキストで指定できます（例: claude-haiku-4-5 / claude-sonnet-4-5）。
+                空欄にすると既定の {ANTHROPIC_TEXT_MODEL} を使います。
+              </div>
+              <div className="api-input-row">
+                <input
+                  type="text"
+                  value={settings.anthropicModel || ''}
+                  onChange={e => onChange('anthropicModel', e.target.value)}
+                  placeholder={ANTHROPIC_TEXT_MODEL}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                {(settings.anthropicModel || '').trim() && (settings.anthropicModel || '').trim() !== ANTHROPIC_TEXT_MODEL && (
+                  <button className="secondary" onClick={() => onChange('anthropicModel', '')}>既定に戻す</button>
+                )}
+              </div>
+              <div className="settings-row-sub">現在のモデル: <strong>{anthropicModel}</strong></div>
+            </div>
           )}
         </div>
       </div>
