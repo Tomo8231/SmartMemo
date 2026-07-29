@@ -123,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.28.4';
+const APP_VERSION = '1.29.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3715,13 +3715,14 @@ function completionStreak(todos: Todo[]): number {
   return streak;
 }
 
-function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLayer }: {
+function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLayer, onOpenFocus }: {
   signTodos: Todo[];
   flowerTodos: Todo[];
   streak: number;
   onComplete: (t: Todo) => void;
   onEdit: (t: Todo) => void;
   monLayer?: React.ReactNode;
+  onOpenFocus?: () => void;
 }) {
   const [timeOverride, setTimeOverride] = useState<GwTime | null>(null);
   const [pop, setPop] = useState<Todo | null>(null);
@@ -3775,6 +3776,9 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
         );
       })}
       {monLayer}
+      {onOpenFocus && (
+        <button className="gw-focus-btn" onClick={onOpenFocus}>⏱ 集中モード</button>
+      )}
       <button
         className="gw-time-btn"
         title="時間帯を切り替え"
@@ -3799,7 +3803,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer }: {
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer, onOpenFocus }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -3820,6 +3824,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   onDeleteTodoSet: (id: string) => void;
   holidayConfig?: HolidayConfig;
   monLayer?: React.ReactNode;
+  onOpenFocus?: () => void;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editPicking,  setEditPicking] = useState<Todo | null>(null);
@@ -3944,6 +3949,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         onComplete={gardenComplete}
         onEdit={handleEditStart}
         monLayer={monLayer}
+        onOpenFocus={onOpenFocus}
       />
       <div className="gw-sheet">
       <div className="gw-grab" />
@@ -6709,6 +6715,283 @@ function useNotificationScheduler(todos: Todo[], settings: Settings) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// Focus Mode（タスク集中モード）
+// 単一タスクに集中して時間を計測する。計測は開始時刻(startedAt)を保持する
+// 方式なので、アプリを閉じても now - startedAt で正しい経過を復元できる。
+// ─────────────────────────────────────────────────────────────
+type FocusSession = {
+  date: string;
+  curId: string | number | null;
+  startedAt: number | null;
+  suspendedId: string | number | null;
+  acc: Record<string, number>; // taskId -> きょうの累計 ms
+};
+
+const FOCUS_MON_PAL: Record<string, string> = { B: '#FFE45C', S: '#F0C93F', K: '#3A3532', O: '#F08A24', P: '#FFB3B3' };
+const FOCUS_MON_MAP: Record<'work' | 'rest', string[]> = {
+  work: ['...BBBB...', '..BBBBBB..', '.BBBBBBBB.', '.BKBBBBKB.', 'BBBBOOBBBB', 'BPBBBBBBPB', 'BBBBBBBBBB', '.BBBBBBBB.', '..BSSSSB..', '...O..O...'],
+  rest: ['..........', '...BBBB...', '..BBBBBB..', '.BBBBBBBB.', '.KKBBBBKK.', 'BBBBOOBBBB', 'BPBBBBBBPB', 'BBBBBBBBBB', '.BSSSSSSB.', '..O....O..'],
+};
+function FocusMon({ state }: { state: 'work' | 'rest' }) {
+  return (
+    <div className={`fm-mon ${state}`}>
+      {FOCUS_MON_MAP[state].flatMap((row, y) =>
+        [...row].map((c, x) => c === '.' ? null : (
+          <div key={`${x}-${y}`} className="fm-px" style={{ left: x * 4, top: y * 4, background: FOCUS_MON_PAL[c] }} />
+        ))
+      )}
+    </div>
+  );
+}
+
+const FOCUS_TAG_COLORS = ['#E8722E', '#4A9BD9', '#5CB25C', '#2E9B9B', '#D9534F', '#B98A12', '#C86FB0'];
+function focusTagColor(tag: string | undefined): string {
+  if (!tag) return '#8A94A0';
+  if (tag === '割り込み') return '#7A5AB8';
+  let h = 0;
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0;
+  return FOCUS_TAG_COLORS[h % FOCUS_TAG_COLORS.length];
+}
+function fmtDur(ms: number): string {
+  const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}` : `${m}:${String(ss).padStart(2, '0')}`;
+}
+function fmtDurShort(ms: number): string {
+  const m = Math.round(ms / 60000);
+  return m >= 60 ? `${Math.floor(m / 60)}時間${m % 60 ? m % 60 + '分' : ''}` : `${m}分`;
+}
+
+function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose }: {
+  todos: Todo[];
+  coins: number;
+  infinite: boolean;
+  onComplete: (id: number | string) => void;
+  onAddInterrupt: (t: Todo) => void;
+  onClose: () => void;
+}) {
+  const [sess, setSess] = usePersistedState<FocusSession>('smartmemo:focus:v1', {
+    date: todayStr, curId: null, startedAt: null, suspendedId: null, acc: {},
+  });
+  const [iText, setIText] = useState('');
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [, setTick] = useState(0);
+
+  // 日付が変わったら「きょう」の計測をリセット
+  useEffect(() => {
+    if (sess.date !== todayStr) {
+      setSess({ date: todayStr, curId: null, startedAt: null, suspendedId: null, acc: {} });
+    }
+  }, [sess.date]);
+
+  // 走っている間だけ毎秒再描画（計測は startedAt 依存なのでズレない）
+  useEffect(() => {
+    if (!(sess.curId != null && sess.startedAt)) return;
+    const iv = setInterval(() => setTick(x => x + 1), 1000);
+    return () => clearInterval(iv);
+  }, [sess.curId, sess.startedAt]);
+
+  function showToast(m: string) {
+    setToast(m);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), 2400);
+  }
+
+  const allById = new Map<string | number, Todo>(todos.map(t => [t.id, t]));
+  const curTask = sess.curId != null ? allById.get(sess.curId) : null;
+  const suspTask = sess.suspendedId != null ? allById.get(sess.suspendedId) : null;
+  const running = !!(sess.curId != null && sess.startedAt);
+
+  const accOf = (id: string | number) => sess.acc[String(id)] || 0;
+  const elapsedOf = (t: Todo | null | undefined): number =>
+    !t ? 0 : accOf(t.id) + (t.id === sess.curId && sess.startedAt ? Date.now() - sess.startedAt : 0);
+
+  // きょうのタスク: 未完了で（日付なし or 開始日が今日以前＝今日・繰越）、または今日完了したもの
+  const focusTasks = todos.filter(t => {
+    if (t.done) return t.completedAt === todayStr;
+    if (!t.startDate) return true;
+    return t.startDate <= todayStr;
+  });
+  const ordered = [...focusTasks.filter(t => !t.done), ...focusTasks.filter(t => t.done)];
+
+  // セッションを開始する低レベル関数。id と title だけを受け取るので、
+  // 親 state に反映される前の割り込みタスクでもすぐ開始できる。
+  function beginSession(id: string | number, title: string, fromSuspend = false) {
+    setSess(p => {
+      const now = Date.now();
+      let { curId, startedAt, suspendedId } = p;
+      const acc = { ...p.acc };
+      if (curId != null && curId !== id) {
+        if (startedAt) acc[String(curId)] = (acc[String(curId)] || 0) + (now - startedAt);
+        startedAt = null;
+        if (!fromSuspend) suspendedId = curId; // 直前のタスクは中断として覚えておく
+      }
+      if (suspendedId === id) suspendedId = null;
+      return { date: p.date, acc, curId: id, startedAt: now, suspendedId };
+    });
+    showToast(`「${title}」を開始`);
+  }
+  function focusStart(id: string | number, fromSuspend = false) {
+    const t = allById.get(id);
+    if (!t || t.done) return;
+    beginSession(id, t.title, fromSuspend);
+  }
+  function focusPause() {
+    setSess(p => {
+      if (p.curId == null || !p.startedAt) return p;
+      const acc = { ...p.acc };
+      acc[String(p.curId)] = (acc[String(p.curId)] || 0) + (Date.now() - p.startedAt);
+      return { ...p, acc, startedAt: null };
+    });
+  }
+  function focusResume() {
+    setSess(p => (p.curId == null || p.startedAt) ? p : { ...p, startedAt: Date.now() });
+  }
+  function focusFinish() {
+    const cur = sess.curId;
+    if (cur == null) return;
+    const curT = allById.get(cur);
+    const suspId = sess.suspendedId;
+    const susp = suspId != null ? allById.get(suspId) : null;
+    const willResume = !!(susp && !susp.done);
+    const spent = accOf(cur) + (sess.startedAt ? Date.now() - sess.startedAt : 0);
+    setSess(p => {
+      if (p.curId == null) return p;
+      const acc = { ...p.acc };
+      if (p.startedAt) acc[String(p.curId)] = (acc[String(p.curId)] || 0) + (Date.now() - p.startedAt);
+      return { date: p.date, acc, curId: null, startedAt: null, suspendedId: willResume ? null : p.suspendedId };
+    });
+    onComplete(cur); // TODO を完了に（コインは既存ロジックで加算）
+    if (willResume && suspId != null) {
+      focusStart(suspId, true);
+      showToast(`${fmtDurShort(spent)}を記録 → 「${susp!.title}」に戻りました`);
+    } else {
+      showToast(`${fmtDurShort(spent)}を記録${infinite ? '' : ` 🪙+${curT?.coinReward ?? 10}`}`);
+    }
+  }
+  function addInterrupt(title: string) {
+    const t: Todo = {
+      id: Date.now(), title, startDate: todayStr, endDate: todayStr, time: '',
+      tags: ['割り込み'], done: false, addedAt: Date.now(),
+      coinReward: estimateCoinReward(title, ['割り込み']),
+    };
+    onAddInterrupt(t);
+    beginSession(t.id, t.title);
+  }
+
+  const totalMs = focusTasks.reduce((n, t) => n + elapsedOf(t), 0);
+  const timelineItems = focusTasks.filter(t => elapsedOf(t) > 0).sort((a, b) => elapsedOf(b) - elapsedOf(a));
+  const restOn = running && sess.startedAt ? (Date.now() - sess.startedAt) > 50 * 60000 : false;
+  const chips = ['電話対応', '急ぎの修正', '打ち合わせ', '質問対応'];
+  const curColor = focusTagColor((curTask?.tags || [])[0]);
+
+  return (
+    <div className="fm-overlay">
+      <div className="fm-app">
+        <header className="fm-header">
+          <button className="fm-back" onClick={onClose} aria-label="にわに戻る">‹ にわ</button>
+          <div className="fm-b">集中モード</div>
+          <div className="fm-coin">🪙 {infinite ? '∞' : coins}</div>
+        </header>
+        <main className="fm-main">
+          {/* 進行中 */}
+          <section className={`fm-now ${running ? 'running' : (curTask ? 'paused' : '')}`}>
+            <FocusMon state={running ? 'work' : 'rest'} />
+            <div className="fm-nowhead">
+              <span className="fm-badge"><span className="fm-dot" />{running ? '進行中' : (curTask ? '一時停止中' : '待機中')}</span>
+              {curTask && (curTask.tags || [])[0] && (
+                <span className="fm-nowtag" style={{ background: curColor + '22', color: curColor }}>{(curTask.tags || [])[0]}</span>
+              )}
+            </div>
+            <div className={`fm-nowtitle ${curTask ? '' : 'empty'}`}>{curTask ? curTask.title : '下から選ぶか、割り込みを入力'}</div>
+            <div className="fm-timerow">
+              <div className={`fm-timer num ${curTask ? '' : 'idle'}`}>{fmtDur(elapsedOf(curTask))}</div>
+            </div>
+            <div className="fm-acts">
+              <button className={running ? 'fm-bpause' : 'fm-bstart'} disabled={!curTask} onClick={() => running ? focusPause() : focusResume()}>
+                {running ? '一時停止' : '再開'}
+              </button>
+              <button className="fm-bdone" disabled={!curTask} onClick={focusFinish}>完了</button>
+            </div>
+            {restOn && <div className="fm-rest">☕ 50分たちました。少し休みませんか</div>}
+          </section>
+
+          {/* 割り込み */}
+          <section className="fm-intr">
+            <div className="fm-ilabel">⚡ 割り込みが入ったとき</div>
+            <div className="fm-irow">
+              <input
+                className="fm-itext" value={iText} placeholder="やることを入力してすぐ開始" enterKeyHint="go"
+                onChange={e => setIText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}
+              />
+              <button className="fm-igo" disabled={!iText.trim()} onClick={() => { if (iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}>開始</button>
+            </div>
+            <div className="fm-ichips">
+              {chips.map(l => <button key={l} className="fm-ichip" onClick={() => addInterrupt(l)}>＋ {l}</button>)}
+            </div>
+          </section>
+
+          {/* 中断中 */}
+          {suspTask && !suspTask.done && (
+            <button className="fm-susp" onClick={() => focusStart(suspTask.id, true)}>
+              <span style={{ fontSize: 18 }}>⏸</span>
+              <span className="fm-susp-t"><b>{suspTask.title}</b><span>ここまで {fmtDur(accOf(suspTask.id))}</span></span>
+              <span className="fm-susp-go">もどる</span>
+            </button>
+          )}
+
+          {/* 一覧 */}
+          <div className="fm-seclabel">☀️ きょうのタスク {totalMs > 0 && <span className="fm-tot num">合計 {fmtDur(totalMs)}</span>}</div>
+          <div className="fm-list">
+            {ordered.length === 0 && <div className="fm-empty">きょうのタスクはありません</div>}
+            {ordered.map(t => {
+              const cur = t.id === sess.curId;
+              const el = elapsedOf(t);
+              const tag = (t.tags || [])[0];
+              const c = focusTagColor(tag);
+              return (
+                <div key={t.id} className={`fm-task ${cur ? 'cur' : ''} ${t.done ? 'done' : ''}`}>
+                  <button className="fm-play" onClick={() => {
+                    if (t.done) return;
+                    if (cur && sess.startedAt) focusPause();
+                    else if (cur) focusResume();
+                    else focusStart(t.id);
+                  }}>
+                    {t.done ? '✓' : (cur && sess.startedAt ? '❚❚' : '▶')}
+                  </button>
+                  <div className="fm-tbody">
+                    <div className="fm-tt">{t.title}</div>
+                    {tag && <div className="fm-tmeta"><span className="fm-tag" style={{ background: c + '22', color: c }}>{tag}</span></div>}
+                  </div>
+                  <span className={`fm-telapsed num ${el ? '' : 'zero'} ${cur && sess.startedAt ? 'live' : ''}`}>{el ? fmtDur(el) : '–:––'}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* タイムライン */}
+          <div className="fm-seclabel">📊 きょうの内訳</div>
+          <div className="fm-tl">
+            <div className="fm-tlbar">
+              {totalMs === 0
+                ? <i style={{ flex: 1, background: '#EFF3F7' }} />
+                : timelineItems.map(t => <i key={t.id} style={{ flex: elapsedOf(t) / totalMs, background: focusTagColor((t.tags || [])[0]) }} />)}
+            </div>
+            <div className="fm-tlnote">
+              {totalMs === 0
+                ? 'まだ計測がありません'
+                : <>合計 <b>{fmtDur(totalMs)}</b> ／ いちばん時間を使ったのは「{timelineItems[0].title}」の <b>{fmtDurShort(elapsedOf(timelineItems[0]))}</b></>}
+            </div>
+          </div>
+        </main>
+        {toast && <div className="fm-toast on">{toast}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
@@ -6717,6 +7000,7 @@ function SmartMemoApp() {
   const [micTrigger, setMicTrigger] = useState(0);
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [showFocus, setShowFocus] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
   // メモモン画面を開くときに最初に選択するメモモン（ずかんタップ時に指定）
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
@@ -7126,7 +7410,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
@@ -7211,6 +7495,16 @@ function SmartMemoApp() {
       )}
       {showAccount && (
         <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
+      )}
+      {showFocus && (
+        <FocusMode
+          todos={todos}
+          coins={settings.coins || 0}
+          infinite={!!settings.infiniteCoins}
+          onComplete={id => { const t = todos.find(x => x.id === id); if (t && !t.done) toggle(id); }}
+          onAddInterrupt={addTodo}
+          onClose={() => setShowFocus(false)}
+        />
       )}
       {showPlayground && (
         <PlaygroundModal
