@@ -123,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.30.1';
+const APP_VERSION = '1.31.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3944,8 +3944,79 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
     onToggle(t.id);
   }
 
+  // ── タスクシートのドラッグ（上に引くと庭の絵を覆い隠す）──
+  // .gw（庭）は flex:none、.gw-sheet は flex:1 なので、シートの margin-top を
+  // マイナス方向に伸ばすとシートがせり上がり、その分だけ高さも広がって
+  // 庭（メモモンのいる絵）を覆う。
+  const gardenRootRef = useRef<HTMLDivElement | null>(null);
+  const [sheetLift, setSheetLift] = useState(0);
+  const [sheetDragging, setSheetDragging] = useState(false);
+  const sheetDragRef = useRef<{ startY: number; startLift: number; maxLift: number; moved: boolean } | null>(null);
+
+  // シートは既定で庭に 18px 重ねている（CSS の margin-top:-18px）。
+  // 引き上げ量の上限はその重なり分を差し引いた値。これを超えるとシートが
+  // 庭の上端より上に行き、つまみがヘッダーの裏に隠れて戻せなくなる。
+  const GW_SHEET_OVERLAP = 18;
+  const maxSheetLift = () => {
+    const gw = gardenRootRef.current?.querySelector('.gw') as HTMLElement | null;
+    return gw ? Math.max(0, gw.clientHeight - GW_SHEET_OVERLAP) : 0;
+  };
+
+  // 画面回転などで庭の高さが変わったら、はみ出さないよう丸める
+  useEffect(() => {
+    const onResize = () => setSheetLift(prev => Math.min(prev, maxSheetLift()));
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!sheetDragging) return;
+    const move = (e: PointerEvent) => {
+      const d = sheetDragRef.current;
+      if (!d) return;
+      const dy = d.startY - e.clientY; // 上方向を正にする
+      if (Math.abs(dy) > 3) d.moved = true;
+      setSheetLift(Math.max(0, Math.min(d.maxLift, d.startLift + dy)));
+    };
+    const end = () => {
+      const d = sheetDragRef.current;
+      sheetDragRef.current = null;
+      setSheetDragging(false);
+      if (!d) return;
+      if (!d.moved) {
+        // ドラッグせずタップしたときは開閉をトグル
+        setSheetLift(d.startLift > d.maxLift / 2 ? 0 : d.maxLift);
+        return;
+      }
+      // 離した位置でスナップ（3割以上引き上げていれば庭を覆いきる）
+      setSheetLift(prev => (prev > d.maxLift * 0.35 ? d.maxLift : 0));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, [sheetDragging]);
+
+  function onSheetGrabDown(e: React.PointerEvent) {
+    // ポインタをつまみに固定する。これをしないと、シートが指の下から動いた
+    // 瞬間にイベントの送り先が変わり、途中でドラッグが止まってしまう。
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch {}
+    // テキスト選択やネイティブのドラッグが割り込むのを防ぐ
+    e.preventDefault();
+    sheetDragRef.current = { startY: e.clientY, startLift: sheetLift, maxLift: maxSheetLift(), moved: false };
+    setSheetDragging(true);
+  }
+
   return (
-    <div className="todo-tab garden">
+    <div className="todo-tab garden" ref={gardenRootRef}>
       {editPicking && (
         <div className="modal-backdrop" onClick={() => setEditPicking(null)}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
@@ -4008,8 +4079,22 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         monLayer={monLayer}
         onOpenFocus={onOpenFocus}
       />
-      <div className="gw-sheet">
-      <div className="gw-grab" />
+      <div
+        className={`gw-sheet${sheetDragging ? ' dragging' : ''}${sheetLift > 0 ? ' lifted' : ''}`}
+        style={{ marginTop: -(18 + sheetLift) }}
+      >
+      <div
+        className="gw-grab-zone"
+        onPointerDown={onSheetGrabDown}
+        role="button"
+        tabIndex={0}
+        aria-label={sheetLift > 0 ? 'タスクシートを下げて庭を表示' : 'タスクシートを上げて庭を隠す'}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSheetLift(sheetLift > 0 ? 0 : maxSheetLift()); }
+        }}
+      >
+        <div className="gw-grab" />
+      </div>
       <div className="gw-sheet-head">
         <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
         <span className="gw-prog">{doneOfDay} / {dateTodos.length}</span>

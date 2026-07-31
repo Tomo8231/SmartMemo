@@ -3402,7 +3402,19 @@
       position:relative; z-index:11; box-shadow:0 -4px 16px rgba(50,70,100,.10);
       display:flex; flex-direction:column; overflow:hidden; min-height:0;
     }
-    .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:9px auto 3px; flex:none; }
+    /* 引き上げ／戻しのスナップをなめらかに。ドラッグ中は追従優先で切る */
+    .gw-sheet { transition:margin-top .28s cubic-bezier(.2,.8,.3,1); }
+    .gw-sheet.dragging { transition:none; }
+    /* つまみ部分。指で掴みやすいよう当たり判定を広めに取り、
+       ドラッグ中にブラウザのスクロールが割り込まないよう touch-action を切る */
+    .gw-grab-zone {
+      flex:none; padding:10px 0 6px; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+      display:flex; justify-content:center; align-items:center;
+    }
+    .gw-grab-zone:active { cursor:grabbing; }
+    .gw-sheet.dragging .gw-grab-zone { cursor:grabbing; }
+    .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:2px auto; flex:none; transition:background .15s, width .15s; }
+    .gw-grab-zone:hover .gw-grab, .gw-sheet.dragging .gw-grab { background:#A9B6C4; width:56px; }
     .gw-sheet-head { display:flex; align-items:baseline; gap:8px; padding:2px 20px 6px; flex:none; }
     .gw-sheet-head h2 { font-size:15px; font-weight:800; color:#3A3532; }
     .gw-prog { font-size:12px; font-weight:800; color:var(--accent); }
