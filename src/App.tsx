@@ -123,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.30.0';
+const APP_VERSION = '1.30.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -342,7 +342,9 @@ async function callAnthropicMessages(key: string, content: any, model?: string):
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: (model || '').trim() || ANTHROPIC_TEXT_MODEL, max_tokens: 4096, messages: [{ role: 'user', content }] }),
+    // メモ全体を1回で解析するため出力が長くなりうる。JSON が途中で切れると
+    // 解析に失敗してローカル解析へ落ちてしまうので上限に余裕を持たせる。
+    body: JSON.stringify({ model: (model || '').trim() || ANTHROPIC_TEXT_MODEL, max_tokens: 8192, messages: [{ role: 'user', content }] }),
   });
   if (!res.ok) {
     let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
@@ -1903,13 +1905,21 @@ function extractIdeaFromLine(line: string, existingProjects: string[]): IdeaDraf
     }
   }
 
+  // 既存ナレッジへの追記は破壊的なので、部分一致での安易なマージはしない。
+  // 以前は双方向の部分一致（pl.includes(c) || c.includes(pl)）だったため、
+  // 「案」のような短い語が無関係な既存ナレッジに吸い込まれていた。
+  const MIN_MATCH_LEN = 4;
   const tryMatch = (candidate: string) => {
     if (!candidate || !existingProjects.length) return null;
-    const c = candidate.toLowerCase();
+    const c = candidate.toLowerCase().trim();
+    if (!c) return null;
+    const exact = existingProjects.find(p => p && p.toLowerCase().trim() === c);
+    if (exact) return exact;
+    // 完全一致でない場合は、十分に長い名前が丸ごと含まれるときだけ許容
+    if (c.length < MIN_MATCH_LEN) return null;
     return existingProjects.find(p => {
-      if (!p) return false;
-      const pl = p.toLowerCase();
-      return pl === c || pl.includes(c) || c.includes(pl);
+      if (!p || p.trim().length < MIN_MATCH_LEN) return false;
+      return c.includes(p.toLowerCase().trim());
     }) || null;
   };
   if (projectName) {
@@ -1917,7 +1927,7 @@ function extractIdeaFromLine(line: string, existingProjects: string[]): IdeaDraf
     if (matched) projectName = matched;
   }
   if (!projectName) {
-    const matched = existingProjects.find(p => p && line.includes(p));
+    const matched = existingProjects.find(p => p && p.trim().length >= MIN_MATCH_LEN && line.includes(p));
     if (matched) projectName = matched;
   }
   if (!projectName) {
@@ -1990,28 +2000,35 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
   return result;
 }
 
-async function parseMemoToItems(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both'): Promise<ParseResult> {
-  // Empty-line-separated paragraphs become independent knowledge entries.
-  // Splits on one or more blank lines (allowing trailing whitespace).
-  const paragraphs = text
+// 既存ナレッジの要約。projectName だけだと AI が主題の一致を判断できず、
+// 名前が似ているだけの無関係なナレッジに追記されてしまうため概要も渡す。
+type IdeaBrief = { name: string; summary?: string };
+const MAX_IDEA_BRIEFS = 50;
+
+async function parseMemoToItems(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', existingBriefs: IdeaBrief[] = []): Promise<ParseResult> {
+  // 空行区切りは「話題の区切りの目安」として AI に伝える。
+  // 以前は段落ごとに独立した AI 呼び出しを並列で行っていたため、AI がメモ全体を
+  // 見られず「同じ主題なのに複数ナレッジに分割される」原因になっていた。
+  // 1 回の呼び出しでメモ全体を渡し、まとめる判断を AI ができるようにする。
+  const paragraphCount = text
     .split(/\n[ \t　]*\n+/)
     .map(p => p.trim())
-    .filter(p => p.length > 0);
+    .filter(p => p.length > 0)
+    .length;
 
-  if (paragraphs.length <= 1) {
-    return parseMemoSingleBlock(text, existingProjects, cfg, mode, false);
-  }
-
-  const results = await Promise.all(
-    paragraphs.map(p => parseMemoSingleBlock(p, existingProjects, cfg, mode, true))
-  );
-  return {
-    todos: results.flatMap(r => r.todos),
-    ideas: results.flatMap(r => r.ideas),
-  };
+  return parseMemoWithAi(text, existingProjects, cfg, mode, paragraphCount, existingBriefs);
 }
 
-async function parseMemoSingleBlock(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', oneParagraphOfMany = false): Promise<ParseResult> {
+async function parseMemoWithAi(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', paragraphCount = 1, existingBriefs: IdeaBrief[] = []): Promise<ParseResult> {
+  // 既存ナレッジは「名前: 概要」の形で渡す。多すぎるとプロンプトが薄まり
+  // 誤マッチが増えるので直近 MAX_IDEA_BRIEFS 件までに制限する。
+  const briefs: IdeaBrief[] = (existingBriefs.length
+    ? existingBriefs
+    : existingProjects.map((name): IdeaBrief => ({ name }))
+  ).filter(b => b && b.name).slice(-MAX_IDEA_BRIEFS);
+  const briefLines = briefs.length
+    ? briefs.map(b => `   - ${b.name}${b.summary ? `: ${b.summary.slice(0, 60)}` : ''}`).join('\n')
+    : '   （既存ナレッジなし → 必ず新規作成）';
   const modeInstruction =
     mode === 'todo'
       ? `あなたはメモをTODOに変換するアシスタントです。以下のメモをTODOのみに変換し、ideas は必ず空配列で返してください。\n\n`
@@ -2031,7 +2048,8 @@ async function parseMemoSingleBlock(text: string, existingProjects: string[] = [
     `  - 企画・コンセプト・仕様検討など\n` +
     `  ※ 「〜のアイデアを考える」のように行動自体はTODO\n\n` +
     `【各フィールドのルール】\n` +
-    `1. 複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」はstartDateへ）\n` +
+    `1. TODOの複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」はstartDateへ）\n` +
+    `   ※この分割ルールはTODOのみに適用。ナレッジには適用しない（ナレッジは10を参照）\n` +
     `2. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
     `   - 「8月中」         → startDate=${today.getFullYear()}-08-01, endDate=${today.getFullYear()}-08-31\n` +
     `   - 「7月1日〜15日」  → startDate=${today.getFullYear()}-07-01, endDate=${today.getFullYear()}-07-15\n` +
@@ -2043,8 +2061,13 @@ async function parseMemoSingleBlock(text: string, existingProjects: string[] = [
     `   TODO: 難易度・手間・所要時間で設定\n` +
     `   ナレッジ: 内容の深さ・独自性・有用性で設定\n` +
     `   10〜30=数分の簡単タスク、40〜80=30分〜1時間、90〜150=複雑な作業、160〜200=大型タスク\n` +
-    `6. ナレッジは projectName で分類。既存プロジェクトと類似なら必ずその名前を使用\n` +
-    `7. 既存プロジェクト: ${JSON.stringify(existingProjects)}\n` +
+    `6. ナレッジの projectName（＝既存への追記か、新規作成かの判定）:\n` +
+    `   - 既存ナレッジのいずれかと【主題が同じ】ときだけ、その名前を一字一句そのまま使う（＝追記される）\n` +
+    `   - 主題が少しでも違う場合、迷った場合は【必ず新しい名前で新規作成】する（追記は破壊的なので慎重に）\n` +
+    `   - 名前が似ている・同じ単語を含むだけでは追記しない\n` +
+    `     例:「旅行の持ち物」と「旅行の予算」は別。「React最適化」と「Reactの学習計画」も別\n` +
+    `   - 判定は下の一覧の「概要」まで読んで、内容が地続きかどうかで決めること\n` +
+    `7. 既存ナレッジ一覧（名前: 概要）— ここに無い主題は必ず新規作成:\n${briefLines}\n` +
     `8. 本日: ${todayStr}（年未指定の月日は${today.getFullYear()}年とする）\n` +
     `9. 定期予定（毎日・毎週・隔週・毎月）は recurring + recurringDay を設定:\n` +
     `   recurring値: "daily" / "weekly" / "biweekly" / "monthly" / ""（非定期）\n` +
@@ -2057,9 +2080,14 @@ async function parseMemoSingleBlock(text: string, existingProjects: string[] = [
     `     例「毎月15日」  → recurring="monthly", recurringDay=15\n` +
     `   - daily: recurringDay不要\n` +
     `   startDate=本日（または指定の開始日）、endDate=6ヶ月後（または指定の終了日）\n` +
-    (oneParagraphOfMany
-      ? `10. 【重要】このメモは、ユーザーが空行で区切った1段落分を抜き出したものです。同一段落内の内容はひと続きの「1つのナレッジentry」としてまとめてください（明確に複数の独立トピックが含まれる場合のみ分割可）。TODOは独立した行動それぞれをentryにしてください。\n\n`
-      : `\n`) +
+    `10. 【重要】ナレッジのまとめ方（無駄に分割しないこと）:\n` +
+    `   - 同じ主題の内容は必ず【1つのナレッジentry】にまとめる\n` +
+    `   - 1つの主題の中の複数のポイントは details 配列の要素にする（entryを増やさない）\n` +
+    `   - entryを分けてよいのは、主題が明確に別だと言い切れる場合のみ\n` +
+    `   - 迷ったら「分ける」ではなく「まとめる」を選ぶ\n` +
+    (paragraphCount > 1
+      ? `11. このメモはユーザーが空行で ${paragraphCount} 個の段落に区切っています。空行は話題の区切りの目安なので、原則として段落ごとに別のナレッジにしてください。ただし複数の段落が明らかに同一主題の続きなら1つにまとめて構いません。1つの段落の中身は原則1つのナレッジにまとめます。\n\n`
+      : `11. このメモは段落が1つです。ナレッジは原則【1件】にまとめてください（明確に無関係な複数トピックが混在する場合のみ分割可）。\n\n`) +
     `形式（JSONのみ、コードブロック不要）:\n` +
     `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[],"coinReward":20}]}\n\n` +
     `メモ:\n${text}`;
@@ -2958,8 +2986,9 @@ function formatHistoryDate(ts: number): string {
 // ─────────────────────────────────────────────────────────────
 // Memo Tab
 // ─────────────────────────────────────────────────────────────
-function MemoTab({ existingProjects, customTags, aiCfg, ideaTabs = [], micTrigger = 0, splitReflectButtons = true, onCommit }: {
+function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg, ideaTabs = [], micTrigger = 0, splitReflectButtons = true, onCommit }: {
   existingProjects: string[];
+  existingIdeaBriefs?: IdeaBrief[];
   customTags: string[];
   aiCfg: AiCfg;
   ideaTabs?: string[];
@@ -3192,7 +3221,7 @@ function MemoTab({ existingProjects, customTags, aiCfg, ideaTabs = [], micTrigge
     setLoading(true);
     setLMsg(mode === 'todo' ? 'AI で TODO に変換中' : mode === 'idea' ? 'AI でナレッジに変換中' : 'AI で TODO とナレッジに自動分類中');
     try {
-      const result = await parseMemoToItems(text, existingProjects, aiCfg, mode);
+      const result = await parseMemoToItems(text, existingProjects, aiCfg, mode, existingIdeaBriefs);
       const todos = result.todos || [];
       const ideas = result.ideas || [];
 
@@ -7228,7 +7257,20 @@ function SmartMemoApp() {
     background: appBg,
   };
 
-  const existingProjects = ideas.map(i => i.projectName);
+  // 重複したプロジェクト名はプロンプトを薄めて誤マッチを増やすので除外する
+  const existingProjects = Array.from(new Set(ideas.map(i => i.projectName).filter(Boolean)));
+  // AI が「主題が同じか」を判断できるよう、名前だけでなく概要も渡す
+  const existingIdeaBriefs: IdeaBrief[] = useMemo(() => {
+    const seen = new Set<string>();
+    const out: IdeaBrief[] = [];
+    for (const i of ideas) {
+      const name = (i.projectName || '').trim();
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ name, summary: i.summary || (i.details || [])[0] || '' });
+    }
+    return out;
+  }, [ideas]);
   const aiCfg = aiCfgFromSettings(settings);
 
   function commit({ todos: newTodos = [], ideas: newIdeas = [], unlockCoins = false }: { todos?: Todo[]; ideas?: IdeaDraft[]; unlockCoins?: boolean }) {
@@ -7491,7 +7533,7 @@ function SmartMemoApp() {
         <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
       </div>
       <div className="tab-content">
-        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
+        {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
