@@ -3508,6 +3508,55 @@
       cursor:pointer; box-shadow:0 1px 4px rgba(120,90,50,.12);
       font-size:16px; color:#9A8468; flex:none;
     }
+    .lib-head-btns { display:flex; flex-direction:column; gap:6px; flex:none; }
+    .lib-export-btn {
+      border:none; border-radius:14px; flex:none;
+      background:linear-gradient(135deg,#4FA36B,#2E8B52); color:#fff;
+      font-family:inherit; font-weight:800; font-size:12px; padding:9px 13px;
+      cursor:pointer; box-shadow:0 3px 0 #216E3E; white-space:nowrap;
+    }
+    .lib-export-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #216E3E; }
+
+    /* 出力（複数選択）バー */
+    .ideas-export-bar {
+      display:flex; align-items:center; gap:8px; flex:none;
+      margin:10px 18px 0; padding:9px 11px; border-radius:14px;
+      background:#EAF5EE; border:1.5px solid #BCE3C9;
+    }
+    .ideas-export-count { font-size:12px; font-weight:800; color:#2E8B52; margin-right:auto; }
+    .ideas-export-all {
+      border:none; border-radius:10px; background:#fff; color:#3A7A54;
+      font-family:inherit; font-weight:800; font-size:11.5px; padding:7px 10px;
+      cursor:pointer; box-shadow:0 1px 3px rgba(46,139,82,.18);
+    }
+    .ideas-export-act {
+      border:none; border-radius:10px; background:#2E8B52; color:#fff;
+      font-family:inherit; font-weight:800; font-size:12px; padding:8px 11px;
+      cursor:pointer; white-space:nowrap;
+    }
+    .ideas-export-act:disabled { opacity:.4; cursor:default; }
+    .ideas-export-cancel {
+      border:none; border-radius:10px; background:rgba(0,0,0,.06); color:#5a5a58;
+      font-family:inherit; font-weight:800; font-size:13px; width:32px; height:32px;
+      cursor:pointer; flex:none;
+    }
+    .app.dark .ideas-export-bar { background:#17251c; border-color:#2c4a37; }
+    .app.dark .ideas-export-all { background:#1e1e21; color:#8fd7a6; }
+
+    /* 選択モードのカードとチェック */
+    .idea-card.select-mode { cursor:pointer; }
+    .idea-card.select-mode.selected { box-shadow:0 0 0 2.5px #2E8B52 inset; }
+    .idea-select-check {
+      position:absolute; top:10px; right:10px; z-index:2;
+      width:24px; height:24px; border-radius:50%;
+      border:2px solid #b7c2bb; background:#f3f6f4;
+      box-shadow:0 1px 2px rgba(0,0,0,.06);
+      display:flex; align-items:center; justify-content:center;
+      font-size:13px; font-weight:900; color:#fff;
+    }
+    .idea-select-check.on { background:#2E8B52; border-color:#2E8B52; }
+    .app.dark .idea-select-check { background:#2a2a2e; border-color:#44443f; }
+    .app.dark .idea-select-check.on { background:#2E8B52; border-color:#2E8B52; }
     /* 本棚と背表紙 */
     .lib-body { padding:0 10px 24px; }
     .lib-shelf { margin:16px 8px 0; }

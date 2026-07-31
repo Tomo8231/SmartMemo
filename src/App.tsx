@@ -123,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.29.0';
+const APP_VERSION = '1.30.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -2236,6 +2236,34 @@ function buildIdeaCopyText(i: Idea): string {
   (i.details || []).forEach(d => lines.push(`・${d}`));
   return lines.join('\n');
 }
+// ナレッジ1件を Markdown に整形
+function buildIdeaMarkdown(i: Idea): string {
+  const lines: string[] = [`# ${i.projectName || '(無題)'}`, ''];
+  if (i.summary) { lines.push(i.summary, ''); }
+  (i.details || []).forEach(d => lines.push(`- ${d}`));
+  if ((i.details || []).length) lines.push('');
+  const meta: string[] = [];
+  if ((i.tags || []).length) meta.push(`タグ: ${i.tags.join(', ')}`);
+  if (i.updatedAt) meta.push(`更新: ${i.updatedAt}`);
+  if (meta.length) lines.push(`> ${meta.join(' ／ ')}`);
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+// 複数のナレッジを1つの Markdown テキストに結合（--- で区切る）
+function buildIdeasMarkdown(list: Idea[]): string {
+  return list.map(buildIdeaMarkdown).join('\n\n---\n\n') + '\n';
+}
+// テキストをファイルとしてダウンロードさせる
+function downloadTextFile(filename: string, text: string, mime = 'text/markdown;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
 
 // ─────────────────────────────────────────────────────────────
 // Boss Item
@@ -4065,6 +4093,8 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
   const [showChat,       setShowChat]       = useState(false);
+  const [selectMode,     setSelectMode]     = useState(false);
+  const [selectedIds,    setSelectedIds]    = useState<Set<number | string>>(new Set());
   const [libView,        setLibView]        = usePersistedState<'shelf' | 'list'>('smartmemo:ui:libView', 'shelf');
   const [libQuery,       setLibQuery]       = useState('');
   const [activeSubTab,   setActiveSubTab]   = usePersistedState<string>('smartmemo:ui:subTab', 'all');
@@ -4254,31 +4284,61 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
     (i.projectName + ' ' + (i.summary || '') + ' ' + (i.details || []).join(' ') + ' ' + (i.tags || []).join(' ')).includes(libQuery.trim())
   );
 
+  // ── 出力（エクスポート）: 複数選択して1つのテキストにまとめる ──
+  function enterSelectMode() { setSelectMode(true); setSelectedIds(new Set()); setLibView('list'); }
+  function exitSelectMode() { setSelectMode(false); setSelectedIds(new Set()); }
+  function toggleSelect(id: number | string) {
+    setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  }
+  const selectedIdeas = searchedIdeas.filter(i => selectedIds.has(i.id));
+  const allSelected = searchedIdeas.length > 0 && searchedIdeas.every(i => selectedIds.has(i.id));
+  function toggleSelectAll() {
+    setSelectedIds(allSelected ? new Set() : new Set(searchedIdeas.map(i => i.id)));
+  }
+  function handleCopySelected() {
+    if (!selectedIdeas.length) return;
+    copyToClipboard(buildIdeasMarkdown(selectedIdeas));
+  }
+  function handleDownloadSelected() {
+    if (!selectedIdeas.length) return;
+    const base = selectedIdeas.length === 1
+      ? (selectedIdeas[0].projectName || 'knowledge').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40)
+      : `ナレッジ_${todayStr}`;
+    downloadTextFile(`${base}.md`, buildIdeasMarkdown(selectedIdeas));
+    window.dispatchEvent(new CustomEvent('app-toast', { detail: `Markdown を保存しました（${selectedIdeas.length}件）✓` }));
+  }
+
   const ideaCards = searchedIdeas.map(i => {
     const justAdded = !!i.addedAt && (Date.now() - i.addedAt) < 800;
     const isTouchDragging = touchDragId === i.id;
     const isDragOver = dragOverIdeaId === i.id || touchDragOverId === String(i.id);
+    const isSelected = selectedIds.has(i.id);
     return (
       <div
         key={i.id}
         data-idea-id={String(i.id)}
-        draggable
+        draggable={!selectMode}
         className={[
           'idea-card',
           justAdded ? 'just-added' : '',
           dragIdeaId === i.id ? 'dragging' : '',
           isTouchDragging ? 'touch-dragging' : '',
           isDragOver ? 'drag-over-top' : '',
+          selectMode ? 'select-mode' : '',
+          selectMode && isSelected ? 'selected' : '',
         ].filter(Boolean).join(' ')}
         onDragStart={e => onIdeaDragStart(e, i.id)}
         onDragEnd={onIdeaDragEnd}
         onDragOver={e => onIdeaDragOverCard(e, i.id)}
         onDrop={e => onIdeaDropCard(e, i.id)}
-        onTouchStart={e => onIdeaTouchStart(e, i.id)}
+        onTouchStart={e => { if (!selectMode) onIdeaTouchStart(e, i.id); }}
         onTouchMove={onIdeaTouchMove}
         onTouchEnd={onIdeaTouchEnd}
-        onClick={() => { if (justDraggedRef.current) return; setEditing(i); }}
+        onClick={() => { if (selectMode) { toggleSelect(i.id); return; } if (justDraggedRef.current) return; setEditing(i); }}
       >
+        {selectMode && (
+          <div className={`idea-select-check${isSelected ? ' on' : ''}`} aria-hidden>{isSelected ? '✓' : ''}</div>
+        )}
         <div className="idea-card-body">
           <div className="idea-project">{i.projectName}</div>
           {i.summary && <div className="idea-summary">{i.summary}</div>}
@@ -4293,8 +4353,8 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
           </div>
           <AttachmentRow attachments={i.attachments || []} />
         </div>
-        <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildIdeaCopyText(i)); }} title="コピー"><IcoCopy /></button>
-        <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>
+        {!selectMode && <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildIdeaCopyText(i)); }} title="コピー"><IcoCopy /></button>}
+        {!selectMode && <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>}
       </div>
     );
   });
@@ -4361,8 +4421,22 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
           <h1>📖 メモモンの書庫</h1>
           <p>メモから育った知識が、本になって並びます</p>
         </div>
-        <button className="lib-ask-btn" onClick={() => setShowChat(true)} aria-label="書庫にきく">💬 書庫にきく</button>
+        <div className="lib-head-btns">
+          <button className="lib-ask-btn" onClick={() => setShowChat(true)} aria-label="書庫にきく">💬 書庫にきく</button>
+          {searchedIdeas.length > 0 && !selectMode && (
+            <button className="lib-export-btn" onClick={enterSelectMode} aria-label="出力">📤 出力</button>
+          )}
+        </div>
       </div>
+      {selectMode && (
+        <div className="ideas-export-bar">
+          <button className="ideas-export-all" onClick={toggleSelectAll}>{allSelected ? '全解除' : '全選択'}</button>
+          <span className="ideas-export-count">{selectedIds.size} 件選択中</span>
+          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleCopySelected} title="コピー">📋 コピー</button>
+          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleDownloadSelected} title="Markdownで保存">⬇️ .md</button>
+          <button className="ideas-export-cancel" onClick={exitSelectMode} aria-label="やめる">✕</button>
+        </div>
+      )}
       <div className="lib-search-row">
         <div className="lib-search">
           <span>🔍</span>
@@ -4376,7 +4450,7 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
       </div>
       {subtabBar}
       {subtabInput}
-      {libView === 'shelf' ? (
+      {libView === 'shelf' && !selectMode ? (
         <div className="ideas-tab tab-pane lib-body">
           {searchedIdeas.length === 0
             ? <div className="ideas-empty">{libQuery.trim() ? '見つかりませんでした' : 'まだ本がありません。メモから育てよう'}</div>
@@ -7102,8 +7176,16 @@ function SmartMemoApp() {
 
   useEffect(() => {
     const handler = () => showAppToast('コピーしました ✓');
+    const toastHandler = (e: Event) => {
+      const msg = (e as CustomEvent).detail;
+      if (typeof msg === 'string' && msg) showAppToast(msg);
+    };
     window.addEventListener('copy-success', handler);
-    return () => window.removeEventListener('copy-success', handler);
+    window.addEventListener('app-toast', toastHandler);
+    return () => {
+      window.removeEventListener('copy-success', handler);
+      window.removeEventListener('app-toast', toastHandler);
+    };
   }, []);
 
   useEffect(() => {
