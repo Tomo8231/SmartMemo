@@ -123,7 +123,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.31.0';
+const APP_VERSION = '1.31.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -3888,7 +3888,8 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   const [editing,      setEditing]    = useState<{todo: Todo; scope: 'single' | 'all'} | null>(null);
   const [adding,       setAdding]     = useState(false);
   const [showTrash,    setShowTrash]  = useState(false);
-  const [showCalendar, setShowCalendar] = useState(true);
+  // カレンダー（スケジュール）は既定で閉じておき、必要なときだけ開く
+  const [showCalendar, setShowCalendar] = useState(false);
   const [selTagsArr,   setSelTagsArr] = usePersistedState<string[]>('smartmemo:ui:tags', []);
   const [calendarMode, setCalendarMode] = usePersistedState<'month' | 'week'>('smartmemo:ui:calMode', 'month');
   const [undatedOpen,  setUndatedOpen]  = useState(true);
