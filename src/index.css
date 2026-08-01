@@ -3016,6 +3016,47 @@
     .app.dark .memomon-bubble::after { border-top-color: #5a5a58; }
     .app.dark .memomon-bubble::before { border-top-color: #28282c; }
 
+    /* にわのメモモンのおねだり（タップで応える） */
+    .memomon-request {
+      position: absolute;
+      pointer-events: auto;
+      cursor: pointer;
+      align-items: center;
+      gap: 5px;
+      background: #FFF6E0;
+      color: #8A5A12;
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 2px solid #E8A33D;
+      white-space: nowrap;
+      transform: translate(-50%, -100%);
+      transform-origin: 50% 100%;
+      z-index: 902;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
+      font-family: inherit;
+      animation: monReqBob .9s ease-in-out infinite;
+      user-select: none; -webkit-user-select: none;
+    }
+    .memomon-request:active { transform: translate(-50%, -100%) scale(.94); }
+    .memomon-request::after {
+      content: '';
+      position: absolute;
+      bottom: -8px; left: 50%;
+      transform: translateX(-50%);
+      border: 7px solid transparent;
+      border-top-color: #E8A33D;
+    }
+    .memomon-request-emoji { font-size: 14px; }
+    @keyframes monReqBob {
+      0%, 100% { transform: translate(-50%, -100%) translateY(0); }
+      50%      { transform: translate(-50%, -100%) translateY(-4px); }
+    }
+    .app.dark .memomon-request { background: #3a2f1c; color: #F3D9A4; border-color: #C98C2E; }
+    .app.dark .memomon-request::after { border-top-color: #C98C2E; }
+
     /* MemoMon animations */
     @keyframes monBob {
       0%, 100% { transform: translateY(0); }

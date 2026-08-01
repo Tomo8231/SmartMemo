@@ -78,7 +78,9 @@ type Settings = {
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; };
+// 庭のメモモンが出す「おねだり」。応えるとなつき度が上がる。
+type MonRequestKind = 'food' | 'toilet' | 'play';
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; request?: MonRequestKind; requestAt?: number; lastRequestDoneAt?: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon' | 'food';
   label: string; rarity: string; stars: string; color: string;
@@ -123,7 +125,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.31.1';
+const APP_VERSION = '1.32.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1186,20 +1188,32 @@ const ITEM_DROP_CHANCE_FEED_FAV = 0.10; // 10% on favorite food (rare gift item)
 const BONUS_DROP_CHANCE_PET = 0.50;     // 50% on pet
 const BONUS_DROP_CHANCE_FEED_FAV = 0.80; // 80% on favorite food
 
-// Affection decays 1 point per ~4 hours when the mon isn't being displayed
-const AFFECTION_DECAY_HOURS = 4;
 // Hunger decays 10 points per hour regardless of whether the mon is displayed
 // (the mon gets hungry just by existing)
 const HUNGER_DECAY_PER_HOUR = 10;
 
-// "Effective" affection considering decay since lastSeenAt
-function effectiveAffection(mon: MemoMonInstance, now: number = Date.now()): number {
-  const stored = mon.affection ?? 0;
-  if (stored <= 0) return 0;
-  const last = mon.lastSeenAt ?? mon.lastFed ?? now;
-  const hours = Math.max(0, (now - last) / 3600000);
-  const decay = Math.floor(hours / AFFECTION_DECAY_HOURS);
-  return Math.max(0, stored - decay);
+// なつき度は時間経過では下がらない。にわに出していない間も維持される。
+// （以前は lastSeenAt からの経過時間で 4 時間ごとに 1 減っていた）
+// 第2引数は呼び出し側の互換のために残している。
+function effectiveAffection(mon: MemoMonInstance, _now: number = Date.now()): number {
+  return Math.max(0, Math.min(100, mon.affection ?? 0));
+}
+
+// ── 庭のメモモンのおねだり ──
+const MON_REQUEST_INTERVAL_MS = 20 * 60 * 1000; // 前回応えてから次のおねだりまで
+const MON_REQUEST_AFFECTION = 3;                // 応えたときのなつき度上昇
+const MON_REQUEST_COINS = 5;                    // 応えたときのコイン
+const MON_REQUEST_FEED_HUNGER = 25;             // ごはんの要求に応えたときの満腹度回復
+const MON_REQUEST_INFO: Record<MonRequestKind, { emoji: string; label: string; done: string }> = {
+  food:   { emoji: '🍚', label: 'おなかすいた！', done: 'ごはんをあげた' },
+  toilet: { emoji: '🚽', label: 'トイレ…！',      done: 'トイレをきれいにした' },
+  play:   { emoji: '🎾', label: 'あそんで！',      done: 'いっしょに遊んだ' },
+};
+// お腹が空いているときは「ごはん」を出しやすくする
+function pickMonRequest(hunger: number): MonRequestKind {
+  if (hunger < 40 && Math.random() < 0.7) return 'food';
+  const kinds: MonRequestKind[] = ['food', 'toilet', 'play'];
+  return kinds[Math.floor(Math.random() * kinds.length)];
 }
 
 // "Effective" hunger considering decay since lastFed
@@ -6138,8 +6152,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
     const affBefore = effectiveAffection(selected, now);
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
-      const baseAff = effectiveAffection(m, now); // honor decay before adding bonus
-      const baseHun = effectiveHunger(m, now); // honor decay before adding bonus
+      const baseAff = effectiveAffection(m);
+      const baseHun = effectiveHunger(m, now); // 満腹度は時間で減るので現在値を基準にする
       return {
         ...m,
         affection: Math.max(0, Math.min(100, baseAff + eff.affectionDelta)),
@@ -6184,7 +6198,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
     const affBefore = effectiveAffection(selected, now);
     onUpdateMons(prev => prev.map(m => {
       if (m.uid !== selected.uid) return m;
-      const baseAff = effectiveAffection(m, now); // honor decay first
+      const baseAff = effectiveAffection(m);
       return { ...m, affection: Math.min(100, baseAff + 2), lastPetAt: now, lastSeenAt: now };
     }));
     if (!infinite) onGainCoins(5);
@@ -6321,7 +6335,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                       disabled={isOnScreen}
                     >
                       {isOnScreen
-                        ? '🏠 画面にお出かけ中（なつき度は減らない）'
+                        ? '🏠 にわにお出かけ中'
                         : '🚪 この子を画面に出す'}
                     </button>
                   );
@@ -6460,15 +6474,19 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   );
 }
 
-function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; onTapReward: () => void }) {
+function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
   const speechEnabledRef = useRef(speechEnabled);
   speechEnabledRef.current = speechEnabled;
+  // おねだり中かどうかを RAF ループから参照するための鏡
+  const requestsRef = useRef<Record<string, MonRequestKind | undefined>>({});
+  requestsRef.current = Object.fromEntries(mons.map(m => [m.uid, m.request]));
   const liveRef     = useRef<Record<string, LiveMon>>({});
   const elemRefs    = useRef<Record<string, HTMLDivElement | null>>({});
   const imgRefs     = useRef<Record<string, HTMLImageElement | null>>({});
   const bubbleRefs  = useRef<Record<string, HTMLDivElement | null>>({});
+  const reqRefs     = useRef<Record<string, HTMLDivElement | null>>({});
   const rafRef      = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const rootRef     = useRef<HTMLDivElement | null>(null);
@@ -6538,18 +6556,34 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
         const sc = scaleRef.current;
         const mw = Math.round(def.monW * sc);
 
+        const offscreen = m.state === 'hidden' || m.state === 'hiding' || m.state === 'dislike-wait';
+        const pendingReq = requestsRef.current[m.uid];
+
         // Update speech bubble (uses position from previous frame — invisible at 60fps)
         const bubble = bubbleRefs.current[m.uid];
         if (bubble) {
           const expired = m.speech && Date.now() > m.speech.until;
           if (expired || !speechEnabledRef.current) m.speech = undefined;
-          const hide = !m.speech || m.state === 'hidden' || m.state === 'hiding' || m.state === 'dislike-wait';
+          // おねだり中は吹き出しと重なるので、おねだりを優先して表示する
+          const hide = !m.speech || offscreen || !!pendingReq;
           if (hide) {
             if (bubble.style.display !== 'none') bubble.style.display = 'none';
           } else {
             bubble.style.left = `${Math.round(m.x + mw / 2)}px`;
             bubble.style.top  = `${Math.round(m.y) - 6}px`;
             if (bubble.style.display !== 'block') bubble.style.display = 'block';
+          }
+        }
+
+        // おねだりバッジもメモモンの頭上に追従させる
+        const reqEl = reqRefs.current[m.uid];
+        if (reqEl) {
+          if (!pendingReq || offscreen) {
+            if (reqEl.style.display !== 'none') reqEl.style.display = 'none';
+          } else {
+            reqEl.style.left = `${Math.round(m.x + mw / 2)}px`;
+            reqEl.style.top  = `${Math.round(m.y) - 6}px`;
+            if (reqEl.style.display !== 'flex') reqEl.style.display = 'flex';
           }
         }
         const mh = Math.round(def.monH * sc);
@@ -6830,6 +6864,24 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward }: { 
           style={{ display: 'none' }}
         />
       ))}
+      {mons.map(m => {
+        if (!m.request) return null;
+        const info = MON_REQUEST_INFO[m.request];
+        return (
+          <div
+            key={`req-${m.uid}`}
+            ref={el => { reqRefs.current[m.uid] = el; }}
+            className="memomon-request"
+            style={{ display: 'none' }}
+            onClick={e => { e.stopPropagation(); onFulfillRequest?.(m.uid); }}
+            role="button"
+            title={info.label}
+          >
+            <span className="memomon-request-emoji">{info.emoji}</span>
+            <span className="memomon-request-text">{info.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -7234,20 +7286,54 @@ function SmartMemoApp() {
     }
   }, []);
 
-  // Keep the active mon's lastSeenAt fresh so its affection doesn't decay while displayed.
-  // Updates every 60s and once on mount; non-active mons stay frozen at their last lastSeenAt.
+  // 庭にいるメモモンが時間経過で えさ / トイレ / あそび をおねだりする。
+  // なつき度は減らなくなったので lastSeenAt の定期更新は不要になり、
+  // 代わりにこのタイマーでおねだりを発生させる。
   useEffect(() => {
     if (settings.memoMonVisible === false) return;
     const tick = () => {
       const activeUid = settings.activeMonUid;
-      const target = (activeUid && memoMons.find(m => m.uid === activeUid)) || memoMons[0];
-      if (!target) return;
-      setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, lastSeenAt: Date.now() } : m));
+      const now = Date.now();
+      setMemoMons(prev => {
+        const target = (activeUid && prev.find(m => m.uid === activeUid)) || prev[0];
+        if (!target || target.request) return prev;
+        const since = target.lastRequestDoneAt ?? target.requestAt ?? target.lastFed ?? now;
+        if (now - since < MON_REQUEST_INTERVAL_MS) return prev;
+        const kind = pickMonRequest(effectiveHunger(target, now));
+        return prev.map(m => m.uid === target.uid ? { ...m, request: kind, requestAt: now } : m);
+      });
     };
     tick();
     const id = setInterval(tick, 60 * 1000);
     return () => clearInterval(id);
   }, [settings.activeMonUid, settings.memoMonVisible, memoMons.length]);
+
+  // おねだりに応える：なつき度とコインが増え、ごはんなら満腹度も回復する
+  function fulfillMonRequest(uid: string) {
+    const mon = memoMons.find(m => m.uid === uid);
+    const kind = mon?.request;
+    if (!mon || !kind) return;
+    const now = Date.now();
+    setMemoMons(prev => prev.map(m => {
+      if (m.uid !== uid) return m;
+      const baseAff = effectiveAffection(m);
+      const baseHun = effectiveHunger(m, now);
+      return {
+        ...m,
+        affection: Math.min(100, baseAff + MON_REQUEST_AFFECTION),
+        hunger: kind === 'food' ? Math.min(100, baseHun + MON_REQUEST_FEED_HUNGER) : baseHun,
+        lastFed: kind === 'food' ? now : m.lastFed,
+        request: undefined,
+        requestAt: undefined,
+        lastRequestDoneAt: now,
+      };
+    }));
+    if (!settings.infiniteCoins) {
+      setSettings(p => ({ ...p, coins: (p.coins || 0) + MON_REQUEST_COINS }));
+    }
+    const coinPart = settings.infiniteCoins ? '' : ` 🪙+${MON_REQUEST_COINS}`;
+    showAppToast(`${MON_REQUEST_INFO[kind].done}！ なつき +${MON_REQUEST_AFFECTION}${coinPart}`);
+  }
 
   useEffect(() => {
     if (navigator.storage && (navigator.storage as any).persist) {
@@ -7466,6 +7552,7 @@ function SmartMemoApp() {
         initSleep={monInitSleep}
         speechEnabled={settings.memoMonSpeech !== false}
         onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))}
+        onFulfillRequest={fulfillMonRequest}
       />
     );
   })();
