@@ -125,7 +125,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.32.0';
+const APP_VERSION = '1.33.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5962,6 +5962,52 @@ function affectionLevel(a: number): { label: string; stars: string } {
   return { label: 'おはつ', stars: '★' };
 }
 
+// 餌をえらぶシート。メモモンずかん（あそび画面）と、にわのおねだりの
+// 両方から使う共通コンポーネント。
+function FoodPickerSheet({ foodInventory, coins, infinite, title = '餌をえらぶ', standalone = false, onPick, onClose }: {
+  foodInventory: Record<string, number>;
+  coins: number;
+  infinite: boolean;
+  title?: string;
+  // にわから直接開くときは画面全体を覆う（ずかんではモーダル内に収める）
+  standalone?: boolean;
+  onPick: (f: Food) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className={`playground-food-overlay${standalone ? ' standalone' : ''}`} onClick={onClose}>
+      <div className="playground-food-sheet" onClick={e => e.stopPropagation()}>
+        <div className="playground-food-title">{title}</div>
+        <div className="playground-food-grid">
+          {FOODS.map(f => {
+            const stock = foodInventory[f.id] || 0;
+            const canAfford = stock > 0 || infinite || coins >= f.cost;
+            return (
+              <button
+                key={f.id}
+                className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}${stock > 0 ? ' in-stock' : ''}`}
+                onClick={() => canAfford && onPick(f)}
+                disabled={!canAfford}
+              >
+                {stock > 0 && <div className="playground-food-stock">×{stock}</div>}
+                <div className="playground-food-emoji">{f.emoji}</div>
+                <div className="playground-food-name">{f.name}</div>
+                <div className="playground-food-grade">{'★'.repeat(f.grade)}</div>
+                <div className="playground-food-cost">
+                  {stock > 0
+                    ? <span className="playground-food-stock-label">在庫から</span>
+                    : <><IcoCoin />&nbsp;{f.cost}</>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <button className="playground-food-cancel" onClick={onClose}>キャンセル</button>
+      </div>
+    </div>
+  );
+}
+
 function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, foodInventory, itemInventory, unlockedSounds, unlockedBgs, onClose, onUpdateMons, onSpendCoins, onGainCoins, onSetActive, onConsumeFood, onCollectItem, onUnlockSound, onUnlockBg }: {
   memoMons: MemoMonInstance[];
   coins: number;
@@ -6438,36 +6484,13 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
         })()}
 
         {showFoodPicker && selectedDef && (
-          <div className="playground-food-overlay" onClick={() => setShowFoodPicker(false)}>
-            <div className="playground-food-sheet" onClick={e => e.stopPropagation()}>
-              <div className="playground-food-title">餌をえらぶ</div>
-              <div className="playground-food-grid">
-                {FOODS.map(f => {
-                  const stock = foodInventory[f.id] || 0;
-                  const canAfford = stock > 0 || infinite || coins >= f.cost;
-                  return (
-                    <button
-                      key={f.id}
-                      className={`playground-food-card grade-${f.grade}${!canAfford ? ' disabled' : ''}${stock > 0 ? ' in-stock' : ''}`}
-                      onClick={() => canAfford && handleFeed(f)}
-                      disabled={!canAfford}
-                    >
-                      {stock > 0 && <div className="playground-food-stock">×{stock}</div>}
-                      <div className="playground-food-emoji">{f.emoji}</div>
-                      <div className="playground-food-name">{f.name}</div>
-                      <div className="playground-food-grade">{'★'.repeat(f.grade)}</div>
-                      <div className="playground-food-cost">
-                        {stock > 0
-                          ? <span className="playground-food-stock-label">在庫から</span>
-                          : <><IcoCoin />&nbsp;{f.cost}</>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              <button className="playground-food-cancel" onClick={() => setShowFoodPicker(false)}>キャンセル</button>
-            </div>
-          </div>
+          <FoodPickerSheet
+            foodInventory={foodInventory}
+            coins={coins}
+            infinite={infinite}
+            onPick={handleFeed}
+            onClose={() => setShowFoodPicker(false)}
+          />
         )}
       </div>
     </div>
@@ -7242,6 +7265,8 @@ function SmartMemoApp() {
   const [showGacha, setShowGacha] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showFocus, setShowFocus] = useState(false);
+  // にわの「ごはん」おねだりに応えるときの餌えらび対象
+  const [feedRequestUid, setFeedRequestUid] = useState<string | null>(null);
   const [showPlayground, setShowPlayground] = useState(false);
   // メモモン画面を開くときに最初に選択するメモモン（ずかんタップ時に指定）
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
@@ -7308,31 +7333,70 @@ function SmartMemoApp() {
     return () => clearInterval(id);
   }, [settings.activeMonUid, settings.memoMonVisible, memoMons.length]);
 
-  // おねだりに応える：なつき度とコインが増え、ごはんなら満腹度も回復する
+  // おねだりに応える。ごはんの要求は餌えらびのシートを開き、
+  // それ以外（トイレ・あそび）はその場で応える。
   function fulfillMonRequest(uid: string) {
     const mon = memoMons.find(m => m.uid === uid);
     const kind = mon?.request;
     if (!mon || !kind) return;
+    if (kind === 'food') { setFeedRequestUid(uid); return; }
     const now = Date.now();
-    setMemoMons(prev => prev.map(m => {
-      if (m.uid !== uid) return m;
-      const baseAff = effectiveAffection(m);
-      const baseHun = effectiveHunger(m, now);
-      return {
-        ...m,
-        affection: Math.min(100, baseAff + MON_REQUEST_AFFECTION),
-        hunger: kind === 'food' ? Math.min(100, baseHun + MON_REQUEST_FEED_HUNGER) : baseHun,
-        lastFed: kind === 'food' ? now : m.lastFed,
-        request: undefined,
-        requestAt: undefined,
-        lastRequestDoneAt: now,
-      };
-    }));
+    setMemoMons(prev => prev.map(m => m.uid === uid ? {
+      ...m,
+      affection: Math.min(100, effectiveAffection(m) + MON_REQUEST_AFFECTION),
+      request: undefined,
+      requestAt: undefined,
+      lastRequestDoneAt: now,
+    } : m));
     if (!settings.infiniteCoins) {
       setSettings(p => ({ ...p, coins: (p.coins || 0) + MON_REQUEST_COINS }));
     }
     const coinPart = settings.infiniteCoins ? '' : ` 🪙+${MON_REQUEST_COINS}`;
     showAppToast(`${MON_REQUEST_INFO[kind].done}！ なつき +${MON_REQUEST_AFFECTION}${coinPart}`);
+  }
+
+  // ごはんのおねだりに、選んだ餌で応える。
+  // 餌ごとの好き嫌い（computeFeedingEffect）はずかんの餌やりと同じ扱い。
+  function feedMonRequest(food: Food) {
+    const uid = feedRequestUid;
+    const mon = uid ? memoMons.find(m => m.uid === uid) : null;
+    if (!uid || !mon) { setFeedRequestUid(null); return; }
+    const stock = (settings.foodInventory || {})[food.id] || 0;
+    const useInventory = stock > 0;
+    if (!useInventory && !settings.infiniteCoins && (settings.coins || 0) < food.cost) {
+      showAppToast('コインが足りません');
+      return;
+    }
+    const eff = computeFeedingEffect(mon.defId, food.id);
+    const now = Date.now();
+    // おねだりに応えたぶんのボーナスを、餌ごとの好き嫌いに上乗せする
+    const totalAff = eff.affectionDelta + MON_REQUEST_AFFECTION;
+    setMemoMons(prev => prev.map(m => m.uid === uid ? {
+      ...m,
+      affection: Math.max(0, Math.min(100, effectiveAffection(m) + totalAff)),
+      hunger:    Math.max(0, Math.min(100, effectiveHunger(m, now) + eff.hungerDelta)),
+      lastFed:   now,
+      request: undefined,
+      requestAt: undefined,
+      lastRequestDoneAt: now,
+    } : m));
+    setSettings(p => {
+      const inv = { ...(p.foodInventory || {}) };
+      let c = p.coins || 0;
+      if (useInventory) {
+        const n = inv[food.id] || 0;
+        if (n <= 1) delete inv[food.id]; else inv[food.id] = n - 1;
+      } else if (!p.infiniteCoins) {
+        c = Math.max(0, c - food.cost);
+      }
+      if (!p.infiniteCoins) c += MON_REQUEST_COINS;
+      return { ...p, foodInventory: inv, coins: c };
+    });
+    const prefix = eff.reaction === 'fav' ? '大好物！' : eff.reaction === 'dis' ? '嫌いみたい…' : '満足げ';
+    const sign = totalAff >= 0 ? '+' : '';
+    const coinPart = settings.infiniteCoins ? '' : ` 🪙+${MON_REQUEST_COINS}`;
+    showAppToast(`${prefix} ${food.name}をあげた／なつき ${sign}${totalAff}${coinPart}`);
+    setFeedRequestUid(null);
   }
 
   useEffect(() => {
@@ -7792,6 +7856,17 @@ function SmartMemoApp() {
       )}
       {showAccount && (
         <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
+      )}
+      {feedRequestUid && (
+        <FoodPickerSheet
+          foodInventory={settings.foodInventory || {}}
+          coins={settings.coins || 0}
+          infinite={!!settings.infiniteCoins}
+          title="なにをあげる？"
+          standalone
+          onPick={feedMonRequest}
+          onClose={() => setFeedRequestUid(null)}
+        />
       )}
       {showFocus && (
         <FocusMode

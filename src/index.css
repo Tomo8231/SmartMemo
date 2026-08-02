@@ -1115,6 +1115,10 @@
       border-radius: inherit;
       animation: fade-in .18s ease;
     }
+    /* にわのおねだりから直接開くときは画面全体を覆う */
+    .playground-food-overlay.standalone {
+      position: fixed; z-index: 1000; border-radius: 0;
+    }
     .playground-food-sheet {
       background: #fff;
       border-radius: 16px;
