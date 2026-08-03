@@ -12,8 +12,12 @@ create table if not exists public.user_data (
   memo_mons    jsonb       not null default '[]'::jsonb,
   settings     jsonb       not null default '{}'::jsonb,
   memo_history jsonb       not null default '[]'::jsonb,
+  deleted_ids  jsonb       not null default '{}'::jsonb,
   updated_at   timestamptz not null default now()
 );
+
+-- 既存テーブルにも後から追加できるようにする（冪等）
+alter table public.user_data add column if not exists deleted_ids jsonb not null default '{}'::jsonb;
 
 alter table public.user_data enable row level security;
 

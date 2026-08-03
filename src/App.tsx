@@ -25,6 +25,7 @@ type Todo = {
   recurringDay?: number;
   recurringGroupId?: string;
   attachments?: Attachment[];
+  mtime?: number; // 端末間マージ用の最終更新時刻
 };
 type Idea = {
   id: number | string;
@@ -38,6 +39,7 @@ type Idea = {
   subTab?: string;
   coinReward?: number;
   attachments?: Attachment[];
+  mtime?: number; // 端末間マージ用の最終更新時刻
 };
 type Settings = {
   colorIdx: number;
@@ -80,7 +82,7 @@ type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
 type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
 // 庭のメモモンが出す「おねだり」。応えるとなつき度が上がる。
 type MonRequestKind = 'food' | 'toilet' | 'play';
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; request?: MonRequestKind; requestAt?: number; lastRequestDoneAt?: number; };
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; request?: MonRequestKind; requestAt?: number; lastRequestDoneAt?: number; mtime?: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon' | 'food';
   label: string; rarity: string; stars: string; color: string;
@@ -118,14 +120,14 @@ type Tab = 'memo' | 'todo' | 'idea' | 'zukan' | 'settings';
 type Attachment = { id: string; name: string; mime: string; data: string };
 type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?: Attachment[] };
 type TodoSetItem = { title: string; tags: string[]; coinReward?: number; };
-type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: number; };
+type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: number; mtime?: number; };
 
 // ─────────────────────────────────────────────────────────────
 // App version — bump on every change (see CLAUDE.md versioning rule)
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.34.0';
+const APP_VERSION = '1.35.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -134,6 +136,15 @@ const LS_TODOS    = 'smartmemo:todos';
 const LS_IDEAS    = 'smartmemo:ideas';
 const LS_SETTINGS = 'smartmemo:settings';
 const LS_TRASH    = 'smartmemo:trash';
+const LS_DELETIONS = 'smartmemo:deletions';
+// 墓標の保持期間。これを過ぎたら捨てる（無限に増えないように）。
+const TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000;
+function pruneTombstones(t: Record<string, number>): Record<string, number> {
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(t || {})) if (Number(v) >= cutoff) out[k] = Number(v);
+  return out;
+}
 const LS_TODO_SETS = 'smartmemo:todosets';
 
 function loadStored<T>(key: string, fallback: T): T {
@@ -7312,6 +7323,11 @@ function SmartMemoApp() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const initialSyncDoneRef = useRef(false);
+  // 初回同期が「完了」したか。自動送信はこれが立つまで始めない。
+  const initialSyncReadyRef = useRef(false);
+  // 最後に見たサーバの updated_at（楽観的排他制御の基準）
+  const cloudBaseRef = useRef<string | null>(null);
+  const pushingRef = useRef(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -7454,7 +7470,11 @@ function SmartMemoApp() {
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthUser(session?.user ?? null);
-      if (!session?.user) initialSyncDoneRef.current = false;
+      if (!session?.user) {
+        initialSyncDoneRef.current = false;
+        initialSyncReadyRef.current = false;
+        cloudBaseRef.current = null;
+      }
     });
     return () => { sub.subscription.unsubscribe(); };
   }, []);
@@ -7597,13 +7617,30 @@ function SmartMemoApp() {
     if (todo && !todo.done) cheerMon(pickCheerLine());
     setTodos(p => p.map(t => {
       if (t.id !== id) return t;
-      const next = { ...t, done: !t.done };
+      const next = { ...t, done: !t.done, mtime: Date.now() };
       if (next.done) next.completedAt = todayStr;
       else delete next.completedAt;
       return next;
     }));
   };
   const [trash, setTrash] = usePersistedState<TrashedTodo[]>(LS_TRASH, []);
+  const [deletions, setDeletions] = usePersistedState<Record<string, number>>(LS_DELETIONS, {});
+  // 削除した項目を墓標として覚えておく。これが無いと、他端末とマージした
+  // ときに「相手がまだ持っている」削除済み項目が復活してしまう。
+  const tombstone = (...ids: (number | string)[]) =>
+    setDeletions(prev => {
+      const next = { ...prev };
+      const now = Date.now();
+      ids.forEach(id => { next[String(id)] = now; });
+      return pruneTombstones(next);
+    });
+  const untombstone = (...ids: (number | string)[]) =>
+    setDeletions(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { delete next[String(id)]; });
+      return next;
+    });
+
   const remove     = (id: number | string) => {
     const t = todos.find(x => x.id === id);
     if (t) setTrash(p => [{ ...t, trashedAt: Date.now() }, ...p].slice(0, 200));
@@ -7613,22 +7650,23 @@ function SmartMemoApp() {
     const item = trash.find(x => x.id === id);
     if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, t as Todo]); }
     setTrash(p => p.filter(x => x.id !== id));
+    untombstone(id);
   };
-  const trashDelete  = (id: number | string) => setTrash(p => p.filter(x => x.id !== id));
-  const trashEmpty   = () => setTrash([]);
-  const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? item : t));
-  const addTodo    = (item: Todo)          => setTodos(p => [...p, item]);
-  const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()) } : i));
-  const removeIdea = (id: number | string) => setIdeas(p => p.filter(i => i.id !== id));
+  const trashDelete  = (id: number | string) => { setTrash(p => p.filter(x => x.id !== id)); tombstone(id); };
+  const trashEmpty   = () => { tombstone(...trash.map(t => t.id)); setTrash([]); };
+  const update     = (item: Todo)          => setTodos(p => p.map(t => t.id === item.id ? { ...item, mtime: Date.now() } : t));
+  const addTodo    = (item: Todo)          => setTodos(p => [...p, { ...item, mtime: Date.now() }]);
+  const updateIdea = (item: Idea)          => setIdeas(p => p.map(i => i.id === item.id ? { ...item, updatedAt: formatDate(new Date()), mtime: Date.now() } : i));
+  const removeIdea = (id: number | string) => { setIdeas(p => p.filter(i => i.id !== id)); tombstone(id); };
   const addIdea    = (item: Idea) => {
     if (!settings.infiniteCoins && (item.coinReward ?? 0) > 0) {
       setSettings(p => ({ ...p, coins: (p.coins || 0) + (item.coinReward ?? 0) }));
     }
-    setIdeas(p => [...p, item]);
+    setIdeas(p => [...p, { ...item, mtime: Date.now() }]);
   };
   const setSetting = <K extends keyof Settings>(k: K, v: Settings[K]) => setSettings(p => ({ ...p, [k]: v }));
-  const saveTodoSet    = (s: TodoSet) => setTodoSets(p => { const i = p.findIndex(x => x.id === s.id); return i >= 0 ? p.map(x => x.id === s.id ? s : x) : [...p, s]; });
-  const deleteTodoSet  = (id: string) => setTodoSets(p => p.filter(x => x.id !== id));
+  const saveTodoSet    = (s: TodoSet) => setTodoSets(p => { const v = { ...s, mtime: Date.now() }; const i = p.findIndex(x => x.id === s.id); return i >= 0 ? p.map(x => x.id === s.id ? v : x) : [...p, v]; });
+  const deleteTodoSet  = (id: string) => { setTodoSets(p => p.filter(x => x.id !== id)); tombstone(id); };
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
@@ -7667,8 +7705,8 @@ function SmartMemoApp() {
 
   // ── Cloud sync helpers (Supabase) ─────────────────────────
   // Keep latest state in refs so the debounced push always sees the latest.
-  const cloudStateRef = useRef({ todos, todoSets, ideas, trash, memoMons, settings });
-  cloudStateRef.current = { todos, todoSets, ideas, trash, memoMons, settings };
+  const cloudStateRef = useRef({ todos, todoSets, ideas, trash, memoMons, settings, deletions });
+  cloudStateRef.current = { todos, todoSets, ideas, trash, memoMons, settings, deletions };
 
   function describeSyncError(e: unknown): string {
     const raw = e instanceof Error ? e.message : String(e);
@@ -7727,27 +7765,134 @@ function SmartMemoApp() {
     return (raw || '不明なエラー') + tech;
   }
 
-  async function pushSnapshot() {
+  // ── 複数端末のマージ ─────────────────────────────────────
+  // 方針: どちらか片方にしか無い項目は必ず残す（＝消さない）。
+  // 両方にある項目は mtime が新しい方を採用。削除は墓標(deleted_ids)で表現する。
+  function mergeById<T extends Record<string, any>>(
+    remote: T[] | undefined, local: T[] | undefined, key: 'id' | 'uid', tomb: Record<string, number>,
+  ): T[] {
+    const out = new Map<string, T>();
+    const put = (arr: T[] | undefined) => {
+      for (const it of arr || []) {
+        const k = String(it?.[key] ?? '');
+        if (!k) continue;
+        const prev = out.get(k);
+        if (!prev) { out.set(k, it); continue; }
+        const a = Number(prev.mtime ?? 0);
+        const b = Number(it.mtime ?? 0);
+        // mtime が無い古いデータは後から入れた方（ローカル）を優先
+        if (b >= a) out.set(k, it);
+      }
+    };
+    put(remote);
+    put(local);
+    return Array.from(out.entries()).filter(([k]) => !tomb[k]).map(([, v]) => v);
+  }
+  // 個数を持つ在庫は多い方を採用（減る方向に倒すと獲得が消えてしまう）
+  function mergeCounts(a?: Record<string, number>, b?: Record<string, number>): Record<string, number> {
+    const out: Record<string, number> = { ...(a || {}) };
+    for (const [k, v] of Object.entries(b || {})) out[k] = Math.max(out[k] || 0, Number(v) || 0);
+    return out;
+  }
+  const uniq = <T,>(a?: T[], b?: T[]): T[] => Array.from(new Set([...(a || []), ...(b || [])]));
+
+  function mergeSettings(remote: any, local: any): Settings {
+    const merged: any = { ...(remote || {}), ...(local || {}) };
+    // 数え上げ系・解放済み系は「失われない」方向へ寄せる
+    merged.coins = Math.max(Number(remote?.coins ?? 0), Number(local?.coins ?? 0));
+    merged.customTags     = uniq(remote?.customTags, local?.customTags);
+    merged.ideaTabs       = uniq(remote?.ideaTabs, local?.ideaTabs);
+    merged.usedGiftCodes  = uniq(remote?.usedGiftCodes, local?.usedGiftCodes);
+    merged.customHolidays = uniq(remote?.customHolidays, local?.customHolidays);
+    merged.gachaUnlocked = {
+      sounds: uniq(remote?.gachaUnlocked?.sounds, local?.gachaUnlocked?.sounds),
+      bgs:    uniq(remote?.gachaUnlocked?.bgs, local?.gachaUnlocked?.bgs),
+    };
+    merged.foodInventory = mergeCounts(remote?.foodInventory, local?.foodInventory);
+    merged.itemInventory = mergeCounts(remote?.itemInventory, local?.itemInventory);
+    return merged as Settings;
+  }
+
+  function mergeSnapshots(remote: CloudSnapshot, local: CloudSnapshot): CloudSnapshot {
+    const tomb: Record<string, number> = {
+      ...((remote.deleted_ids as Record<string, number>) || {}),
+      ...((local.deleted_ids as Record<string, number>) || {}),
+    };
+    return {
+      todos:     mergeById(remote.todos as any[],     local.todos as any[],     'id',  tomb),
+      ideas:     mergeById(remote.ideas as any[],     local.ideas as any[],     'id',  tomb),
+      todo_sets: mergeById(remote.todo_sets as any[], local.todo_sets as any[], 'id',  tomb),
+      trash:     mergeById(remote.trash as any[],     local.trash as any[],     'id',  tomb),
+      memo_mons: mergeById(remote.memo_mons as any[], local.memo_mons as any[], 'uid', tomb),
+      settings:  mergeSettings(remote.settings, local.settings) as unknown as Record<string, unknown>,
+      deleted_ids: tomb,
+    };
+  }
+
+  function buildLocalSnapshot(): CloudSnapshot {
+    const s = cloudStateRef.current;
+    return {
+      ideas: s.ideas,
+      todos: s.todos,
+      todo_sets: s.todoSets,
+      trash: s.trash,
+      memo_mons: s.memoMons,
+      settings: s.settings as unknown as Record<string, unknown>,
+      deleted_ids: s.deletions,
+    };
+  }
+
+  // マージ結果を画面（ローカル state）へ反映する
+  function applySnapshot(snap: CloudSnapshot) {
+    if (Array.isArray(snap.todos))     setTodos(snap.todos as Todo[]);
+    if (Array.isArray(snap.ideas))     setIdeas(snap.ideas as Idea[]);
+    if (Array.isArray(snap.todo_sets)) setTodoSets(snap.todo_sets as TodoSet[]);
+    if (Array.isArray(snap.trash))     setTrash(snap.trash as TrashedTodo[]);
+    if (Array.isArray(snap.memo_mons)) setMemoMons(snap.memo_mons as MemoMonInstance[]);
+    if (snap.settings && typeof snap.settings === 'object') {
+      // クラウド側に欠けている必須フィールドを消さないよう既存へマージする
+      setSettings(prev => ({ ...prev, ...(snap.settings as unknown as Settings) }));
+    }
+    if (snap.deleted_ids && typeof snap.deleted_ids === 'object') {
+      setDeletions(prev => pruneTombstones({ ...prev, ...(snap.deleted_ids as Record<string, number>) }));
+    }
+  }
+
+  // explicit を渡すとその内容を送る。setState は即座に cloudStateRef へ
+  // 反映されないため、マージ直後の送信では必ず明示的に渡すこと。
+  async function pushSnapshot(explicit?: CloudSnapshot) {
     if (!authUser) return;
+    // 送信が重なると片方が競合し続けるので直列化する
+    if (pushingRef.current) return;
+    pushingRef.current = true;
     setSyncStatus('syncing');
     setSyncError(null);
     try {
-      const s = cloudStateRef.current;
-      const snap: CloudSnapshot = {
-        ideas: s.ideas,
-        todos: s.todos,
-        todo_sets: s.todoSets,
-        trash: s.trash,
-        memo_mons: s.memoMons,
-        settings: s.settings as unknown as Record<string, unknown>,
-      };
-      await pushCloud(snap);
-      setLastSyncAt(new Date().toISOString());
-      setSyncStatus('idle');
+      let snap = explicit ?? buildLocalSnapshot();
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const res = await pushCloud(snap, cloudBaseRef.current);
+        if (!res.conflict) {
+          cloudBaseRef.current = res.updatedAt;
+          setLastSyncAt(res.updatedAt || new Date().toISOString());
+          setSyncStatus('idle');
+          return;
+        }
+        // 競合＝この端末が知らない更新がサーバにある。
+        // 取り込んでマージし、どちらの変更も残したうえで再送する。
+        const { data, updatedAt } = await fetchCloud();
+        cloudBaseRef.current = updatedAt;
+        if (data) {
+          snap = mergeSnapshots(data, snap);
+          applySnapshot(snap);
+        }
+      }
+      throw new Error('他の端末の更新と競合しました。もう一度お試しください。');
     } catch (e) {
       console.error('[cloud push]', e);
       setSyncError(describeSyncError(e));
       setSyncStatus('error');
+    } finally {
+      pushingRef.current = false;
     }
   }
 
@@ -7757,21 +7902,14 @@ function SmartMemoApp() {
     setSyncError(null);
     try {
       const { data, updatedAt } = await fetchCloud();
+      cloudBaseRef.current = updatedAt;
       if (!data) {
         setSyncStatus('idle');
         return false;
       }
-      if (Array.isArray(data.ideas))      setIdeas(data.ideas as Idea[]);
-      if (Array.isArray(data.todos))      setTodos(data.todos as Todo[]);
-      if (Array.isArray(data.todo_sets))  setTodoSets(data.todo_sets as TodoSet[]);
-      if (Array.isArray(data.trash))      setTrash(data.trash as TrashedTodo[]);
-      if (Array.isArray(data.memo_mons))  setMemoMons(data.memo_mons as MemoMonInstance[]);
-      if (data.settings && typeof data.settings === 'object') {
-        // クラウドの settings をローカルにマージ。クラウド側に欠けている
-        // 必須フィールド（colorIdx / fontIdx など）を消さないようにして
-        // undefined 参照によるクラッシュを防ぐ。
-        setSettings(prev => ({ ...prev, ...(data.settings as unknown as Settings) }));
-      }
+      // 上書きではなくマージして取り込む。こうしないと、この端末でしか
+      // 作っていない項目（オフライン中の追加など）が消えてしまう。
+      applySnapshot(mergeSnapshots(data, buildLocalSnapshot()));
       setLastSyncAt(updatedAt || new Date().toISOString());
       setSyncStatus('idle');
       return true;
@@ -7783,26 +7921,47 @@ function SmartMemoApp() {
     }
   }
 
-  // On login: if cloud empty → push; else pull. Once per session.
+  // ログイン直後の初回同期。サーバの内容とローカルをマージしてから送り返す。
   useEffect(() => {
     if (!authUser || initialSyncDoneRef.current) return;
     initialSyncDoneRef.current = true;
     (async () => {
-      const { data } = await fetchCloud();
-      if (!data) {
-        await pushSnapshot();
-      } else {
-        await pullSnapshot();
-      }
-    })().catch(e => console.error('[initial sync]', e));
+      const { data, updatedAt } = await fetchCloud();
+      cloudBaseRef.current = updatedAt;
+      const merged = data ? mergeSnapshots(data, buildLocalSnapshot()) : buildLocalSnapshot();
+      if (data) applySnapshot(merged);
+      // マージ結果をそのまま送る（state 反映を待たない）
+      await pushSnapshot(merged);
+    })()
+      .catch(e => console.error('[initial sync]', e))
+      // 初回同期が終わるまで自動送信を始めない。ここを同期的に立てていたため、
+      // 取得が5秒を超えると空のローカル内容でサーバを上書きしていた。
+      .finally(() => { initialSyncReadyRef.current = true; });
   }, [authUser]);
 
   // Auto-push on any data change, debounced 5s after the last edit.
   useEffect(() => {
-    if (!authUser || !initialSyncDoneRef.current) return;
+    if (!authUser || !initialSyncReadyRef.current) return;
     const t = setTimeout(() => { pushSnapshot(); }, 5000);
     return () => clearTimeout(t);
-  }, [authUser, todos, todoSets, ideas, trash, memoMons, settings]);
+  }, [authUser, todos, todoSets, ideas, trash, memoMons, settings, deletions]);
+
+  // 画面に戻ってきたら取得し直す。これが無いと、この端末はログイン時の
+  // 一度しか取得せず、他端末の更新を知らないまま上書きし続ける。
+  useEffect(() => {
+    if (!authUser) return;
+    const onBack = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!initialSyncReadyRef.current || pushingRef.current) return;
+      pullSnapshot();
+    };
+    document.addEventListener('visibilitychange', onBack);
+    window.addEventListener('focus', onBack);
+    return () => {
+      document.removeEventListener('visibilitychange', onBack);
+      window.removeEventListener('focus', onBack);
+    };
+  }, [authUser]);
 
   return (
     <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
