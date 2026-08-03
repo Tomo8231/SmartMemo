@@ -125,7 +125,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.33.0';
+const APP_VERSION = '1.34.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5865,6 +5865,12 @@ function pickMemoMonLine(defId: string): string | null {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// タスク完了時など、メモモン別の台詞が用意されていない場面で使う汎用の喜び台詞
+const CHEER_LINES_TASK = ['やったね！', 'すごい！', 'えらい！', 'がんばったね', 'その調子！', 'おつかれさま！'];
+function pickCheerLine(): string {
+  return CHEER_LINES_TASK[Math.floor(Math.random() * CHEER_LINES_TASK.length)];
+}
+
 // ─────────────────────────────────────────────────────────────
 // Playground Modal (feed & pet memomons)
 // ─────────────────────────────────────────────────────────────
@@ -6497,7 +6503,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   );
 }
 
-function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
+function MemoMonLayer({ mons, scale, initSleep, speechEnabled, cheer, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; cheer?: { n: number; text?: string }; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
   const speechEnabledRef = useRef(speechEnabled);
@@ -6796,6 +6802,32 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, onTapReward, onFu
       m.state = 'hiding'; m.stateUntil = Date.now() + 10000;
     }
   }
+
+  // 餌やり・トイレ・タスク完了などに反応して、にわのメモモンが喜ぶ。
+  // cheer.n が増えるたびに 1 回だけ発火する。
+  const cheerN = cheer?.n ?? 0;
+  const cheerText = cheer?.text;
+  useEffect(() => {
+    if (!cheerN) return;
+    const now = Date.now();
+    Object.values(liveRef.current).forEach(m => {
+      const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+      if (!def) return;
+      // 画面外に隠れている最中や、嫌がって離れている最中は反応させない
+      if (m.state === 'hidden' || m.state === 'hiding' || m.state === 'dislike-wait') return;
+      if (def.sprites?.happy) {
+        m.animState = 'happy'; m.frame = 0; m.frameTime = 0;
+      }
+      // その場で立ち止まって喜ぶ（happy はアニメ終了時に自動で sit へ戻る）
+      m.vx = 0; m.vy = 0; m.state = 'idle';
+      m.stateUntil = now + 1800;
+      if (cheerText && speechEnabledRef.current) {
+        m.speech = { text: cheerText, until: now + 3000 };
+        const bubble = bubbleRefs.current[m.uid];
+        if (bubble) bubble.textContent = cheerText;
+      }
+    });
+  }, [cheerN]);
 
   function handleTap(uid: string) {
     const m = liveRef.current[uid];
@@ -7267,6 +7299,9 @@ function SmartMemoApp() {
   const [showFocus, setShowFocus] = useState(false);
   // にわの「ごはん」おねだりに応えるときの餌えらび対象
   const [feedRequestUid, setFeedRequestUid] = useState<string | null>(null);
+  // にわのメモモンを喜ばせるトリガー（n を増やすたびに 1 回喜ぶ）
+  const [monCheer, setMonCheer] = useState<{ n: number; text?: string }>({ n: 0 });
+  const cheerMon = (text?: string) => setMonCheer(p => ({ n: p.n + 1, text }));
   const [showPlayground, setShowPlayground] = useState(false);
   // メモモン画面を開くときに最初に選択するメモモン（ずかんタップ時に指定）
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
@@ -7353,6 +7388,7 @@ function SmartMemoApp() {
     }
     const coinPart = settings.infiniteCoins ? '' : ` 🪙+${MON_REQUEST_COINS}`;
     showAppToast(`${MON_REQUEST_INFO[kind].done}！ なつき +${MON_REQUEST_AFFECTION}${coinPart}`);
+    cheerMon(pickReaction(mon.defId, 'pet') || pickCheerLine());
   }
 
   // ごはんのおねだりに、選んだ餌で応える。
@@ -7396,6 +7432,11 @@ function SmartMemoApp() {
     const sign = totalAff >= 0 ? '+' : '';
     const coinPart = settings.infiniteCoins ? '' : ` 🪙+${MON_REQUEST_COINS}`;
     showAppToast(`${prefix} ${food.name}をあげた／なつき ${sign}${totalAff}${coinPart}`);
+    // 嫌いな餌のときは喜ばせない。それ以外はずかんの餌やりと同じ台詞プールで反応させる
+    if (eff.reaction !== 'dis') {
+      const reactionKind: ReactionKind = eff.reaction === 'fav' ? 'feedFav' : 'feedNormal';
+      cheerMon(pickReaction(mon.defId, reactionKind) || pickCheerLine());
+    }
     setFeedRequestUid(null);
   }
 
@@ -7552,6 +7593,8 @@ function SmartMemoApp() {
       const delta = todo.done ? -reward : reward;
       setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
     }
+    // 完了したときだけ、にわのメモモンが喜ぶ（未完了に戻したときは反応しない）
+    if (todo && !todo.done) cheerMon(pickCheerLine());
     setTodos(p => p.map(t => {
       if (t.id !== id) return t;
       const next = { ...t, done: !t.done };
@@ -7615,6 +7658,7 @@ function SmartMemoApp() {
         scale={monScale}
         initSleep={monInitSleep}
         speechEnabled={settings.memoMonSpeech !== false}
+        cheer={monCheer}
         onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))}
         onFulfillRequest={fulfillMonRequest}
       />
