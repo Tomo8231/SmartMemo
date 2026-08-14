@@ -11,6 +11,8 @@ create table if not exists public.user_data (
   trash        jsonb       not null default '[]'::jsonb,
   memo_mons    jsonb       not null default '[]'::jsonb,
   settings     jsonb       not null default '{}'::jsonb,
+  -- memo_history はアプリから読み書きしていない（端末ローカルのみ）。
+  -- 既存環境との互換のため列は残すが、常に空。
   memo_history jsonb       not null default '[]'::jsonb,
   deleted_ids  jsonb       not null default '{}'::jsonb,
   updated_at   timestamptz not null default now()

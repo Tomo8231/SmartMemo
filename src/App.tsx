@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.35.0';
+const APP_VERSION = '1.35.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -147,15 +147,36 @@ function pruneTombstones(t: Record<string, number>): Record<string, number> {
 }
 const LS_TODO_SETS = 'smartmemo:todosets';
 
+// AI プロバイダの API キーは端末ローカルにだけ置く。クラウドへ送ると
+// user_data.settings の jsonb 列に平文で残り、DB のバックアップやダッシュボード
+// にも露出してしまう。送信前・受信後の両方でこのキーを落とす。
+const SECRET_SETTING_KEYS = ['geminiApiKey', 'openaiApiKey', 'anthropicApiKey'] as const;
+function stripSecretSettings(s: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...((s as Record<string, unknown>) || {}) };
+  for (const k of SECRET_SETTING_KEYS) delete out[k];
+  return out;
+}
+
 function loadStored<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key);
     return v ? (JSON.parse(v) as T) : fallback;
   } catch { return fallback; }
 }
+// 保存失敗のトーストは連発しがち（複数キーが同時にあふれる）なので間引く
+let lastSaveFailAt = 0;
 function saveStored<T>(key: string, value: T): void {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
     console.error('[SmartMemo] save failed for', key, e);
+    // 黙って握りつぶすと、画面上は保存できたように見えて再読み込みで消える。
+    // 原因のほとんどは容量超過なので、何をすれば直るかまで伝える。
+    const now = Date.now();
+    if (now - lastSaveFailAt > 10_000) {
+      lastSaveFailAt = now;
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: '保存できませんでした。端末の空き容量が足りません。メモ履歴の削除や添付ファイルの削減をお試しください',
+      }));
+    }
   }
 }
 
@@ -407,6 +428,9 @@ async function aiAudio(cfg: AiCfg, blob: Blob, mime: string): Promise<string> {
 
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES  = 3 * 1024 * 1024; // 3 MB for non-image files
+// 画像は compressImage で縮小するので上限は緩めでよいが、無制限だと
+// 縮小前の data URL 化（元サイズの約 1.33 倍の文字列）でタブが落ちる。
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function compressImage(dataUrl: string, maxW = 1400): Promise<string> {
   return new Promise(resolve => {
@@ -543,11 +567,13 @@ function AttachmentSection({ attachments, onChange, toast }: {
     if (remaining <= 0) { toast?.('添付ファイルは最大5件です'); return; }
     const toAdd: Attachment[] = [];
     for (const file of files.slice(0, remaining)) {
-      if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) {
-        toast?.(`${file.name} はサイズが大きすぎます（最大3MB）`); continue;
+      const isImage = file.type.startsWith('image/');
+      const limit   = isImage ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+      if (file.size > limit) {
+        toast?.(`${file.name} はサイズが大きすぎます（最大${isImage ? '20' : '3'}MB）`); continue;
       }
       const raw = await readFileAsDataUrl(file);
-      const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
+      const data = isImage ? await compressImage(raw) : raw;
       toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
     }
     if (toAdd.length) onChange([...attachments, ...toAdd]);
@@ -811,17 +837,15 @@ function playSound(type: string) {
   } catch {}
 }
 
-// Synchronous persisted state — writes inside the setter.
-function usePersistedState<T>(key: string, defaultValue: T): [T, (u: T | ((prev: T) => T)) => void] {
+// 永続化は useEffect で行う。setState の updater は純粋である必要があり、
+// React 18 の並行レンダリングでは複数回呼ばれうるため、その中で
+// localStorage へ書くと余計な書き込みが走る。
+// 書き込みが 1 フレーム遅れるぶんは、pagehide / visibilitychange の
+// flush（SmartMemoApp 内）が受け持つ。
+function usePersistedState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(() => loadStored(key, defaultValue));
-  const set = (updater: T | ((prev: T) => T)) => {
-    setState(prev => {
-      const next = typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater;
-      saveStored(key, next);
-      return next;
-    });
-  };
-  return [state, set];
+  useEffect(() => { saveStored(key, state); }, [key, state]);
+  return [state, setState];
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -1655,9 +1679,9 @@ const TAG_KEYWORDS: Record<string, string[]> = {
 };
 
 const ACTION_VERB_RE = /(買う|購入|やる|行く|来る|帰る|完了|終わ(る|らせる)|確認|チェック|送る|送付|提出|連絡|電話|メール|会う|参加|準備|予約|予定|出発|到着|出張|締切|片付け|掃除|洗濯)/;
-const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
+const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
 const RECURRING_RE   = /(毎日|毎週|毎月|隔週|週\d?回|月\d?回|定期|ルーティン|習慣)/;
-const DEADLINE_RE    = /(\d{1,2}[月\/]\d{1,2}日?まで|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}まで|来週まで|今月中|月末まで|までに|まで[にの])/;
+const DEADLINE_RE    = /(\d{1,2}[月/]\d{1,2}日?まで|\d{4}[-/]\d{1,2}[-/]\d{1,2}まで|来週まで|今月中|月末まで|までに|まで[にの])/;
 const TIME_TOKEN_RE  = /\d{1,2}[:時]\d{0,2}分?(に|から|まで)?/;
 const IDEA_HINT_RE   = /(アイデア|構想|企画|思いつき|について|案$|コンセプト)/;
 
@@ -1740,13 +1764,13 @@ function parseRelative(rawText: string): { startDate: string; endDate: string } 
   const dowMap: Record<string, number> = { '日':0,'月':1,'火':2,'水':3,'木':4,'金':5,'土':6 };
   const yy = today.getFullYear();
 
-  const xmr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/);
+  const xmr = text.match(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})[/月](\d{1,2})日?\s*まで?/);
   if (xmr) return {
     startDate: `${yy}-${pad(+xmr[1])}-${pad(+xmr[2])}`,
     endDate:   `${yy}-${pad(+xmr[3])}-${pad(+xmr[4])}`,
   };
 
-  const smr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/);
+  const smr = text.match(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})日?\s*まで?/);
   if (smr) return {
     startDate: `${yy}-${pad(+smr[1])}-${pad(+smr[2])}`,
     endDate:   `${yy}-${pad(+smr[1])}-${pad(+smr[3])}`,
@@ -1785,7 +1809,7 @@ function parseRelative(rawText: string): { startDate: string; endDate: string } 
   const ymd = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (ymd) return { startDate: `${ymd[1]}-${pad(+ymd[2])}-${pad(+ymd[3])}`, endDate: '' };
 
-  const md = text.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+  const md = text.match(/(\d{1,2})[/月](\d{1,2})日?/);
   if (md) return { startDate: `${yy}-${pad(+md[1])}-${pad(+md[2])}`, endDate: '' };
 
   return { startDate: '', endDate: '' };
@@ -1814,13 +1838,13 @@ function parseTime(rawText: string): string {
 
 function stripDateTimeWords(rawText: string): string {
   let t = normalizeDateChars(rawText);
-  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/g, '');
-  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/g, '');
+  t = t.replace(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})[/月](\d{1,2})日?\s*まで?/g, '');
+  t = t.replace(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})日?\s*まで?/g, '');
   t = t.replace(/(\d{1,2}|今|来)月中/g, '');
   t = t.replace(/(今日|明日|明後日|来週.曜?|今週.曜?)\s*から\s*(今日|明日|明後日|来週.曜?|今週.曜?)\s*まで/g, '');
   t = t.replace(/(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月)/g, '');
   t = t.replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, '');
-  t = t.replace(/\d{1,2}[\/月]\d{1,2}日?/g, '');
+  t = t.replace(/\d{1,2}[/月]\d{1,2}日?/g, '');
   t = t.replace(TIME_TOKEN_RE, '');
   t = t.replace(/^(に|から|まで|は|の|へ)\s*/, '');
   t = t.replace(/^[、,・\s]+|[、,・\s]+$/g, '').trim();
@@ -1919,11 +1943,11 @@ function extractIdeaFromLine(line: string, existingProjects: string[]): IdeaDraf
 
   const colonM = line.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
   if (colonM) {
-    projectName = colonM[1].replace(/^[■◆●▼※【\[]+|[】\]]+$/g, '').trim();
+    projectName = colonM[1].replace(/^[■◆●▼※【[]+|[】\]]+$/g, '').trim();
     projectName = projectName.replace(/(について|のアイデア|の話|のメモ|の構想|の企画|案|構想|企画)$/, '').trim();
     summary = colonM[2].trim();
   } else {
-    const bracketM = line.match(/^[■◆●▼※【\[]+(.+?)[】\]]+\s*(.*)$/);
+    const bracketM = line.match(/^[■◆●▼※【[]+(.+?)[】\]]+\s*(.*)$/);
     if (bracketM) {
       projectName = bracketM[1].trim();
       summary = bracketM[2].trim() || projectName;
@@ -7328,6 +7352,8 @@ function SmartMemoApp() {
   // 最後に見たサーバの updated_at（楽観的排他制御の基準）
   const cloudBaseRef = useRef<string | null>(null);
   const pushingRef = useRef(false);
+  // 送信中に来た変更を取りこぼさないための「未送信あり」フラグ
+  const pushDirtyRef = useRef(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -7648,7 +7674,9 @@ function SmartMemoApp() {
   };
   const trashRestore = (id: number | string) => {
     const item = trash.find(x => x.id === id);
-    if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, t as Todo]); }
+    // mtime を更新しないと、他端末がまだ持っている「ゴミ箱に入れた」記録
+    // （trashedAt）の方が新しく見えて、マージで復元が取り消されてしまう。
+    if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, { ...(t as Todo), mtime: Date.now() }]); }
     setTrash(p => p.filter(x => x.id !== id));
     untombstone(id);
   };
@@ -7797,7 +7825,9 @@ function SmartMemoApp() {
   const uniq = <T,>(a?: T[], b?: T[]): T[] => Array.from(new Set([...(a || []), ...(b || [])]));
 
   function mergeSettings(remote: any, local: any): Settings {
-    const merged: any = { ...(remote || {}), ...(local || {}) };
+    // 古いバージョンが送ってしまった API キーがサーバに残っていても、
+    // ここで落として端末側の設定を上書きさせない。
+    const merged: any = { ...stripSecretSettings(remote), ...(local || {}) };
     // 数え上げ系・解放済み系は「失われない」方向へ寄せる
     merged.coins = Math.max(Number(remote?.coins ?? 0), Number(local?.coins ?? 0));
     merged.customTags     = uniq(remote?.customTags, local?.customTags);
@@ -7813,16 +7843,43 @@ function SmartMemoApp() {
     return merged as Settings;
   }
 
+  // ゴミ箱行きは墓標(deleted_ids)で表せない。墓標は trash 配列にも効くので、
+  // 立てた瞬間ゴミ箱からも消えてしまうため。代わりに「同じ id が todos と
+  // trash の両方に出てきたら、新しい操作の方を採用する」で決着させる。
+  // ゴミ箱に入れた時刻は trashedAt、そこから戻した時刻は復元側の mtime。
+  function reconcileTrashed(todos: Todo[], trash: TrashedTodo[]): { todos: Todo[]; trash: TrashedTodo[] } {
+    const trashedAt = new Map<string, number>();
+    for (const t of trash) trashedAt.set(String(t.id), Number(t.trashedAt ?? 0));
+    if (!trashedAt.size) return { todos, trash };
+
+    const restored = new Set<string>();
+    const keptTodos = todos.filter(t => {
+      const k = String(t.id);
+      const at = trashedAt.get(k);
+      if (at === undefined) return true;          // ゴミ箱に無い＝そのまま残す
+      if (Number(t.mtime ?? 0) > at) { restored.add(k); return true; } // 復元の方が新しい
+      return false;                                // ゴミ箱行きの方が新しい
+    });
+    return {
+      todos: keptTodos,
+      trash: restored.size ? trash.filter(t => !restored.has(String(t.id))) : trash,
+    };
+  }
+
   function mergeSnapshots(remote: CloudSnapshot, local: CloudSnapshot): CloudSnapshot {
     const tomb: Record<string, number> = {
       ...((remote.deleted_ids as Record<string, number>) || {}),
       ...((local.deleted_ids as Record<string, number>) || {}),
     };
+    const reconciled = reconcileTrashed(
+      mergeById(remote.todos as any[], local.todos as any[], 'id', tomb) as Todo[],
+      mergeById(remote.trash as any[], local.trash as any[], 'id', tomb) as TrashedTodo[],
+    );
     return {
-      todos:     mergeById(remote.todos as any[],     local.todos as any[],     'id',  tomb),
+      todos:     reconciled.todos,
       ideas:     mergeById(remote.ideas as any[],     local.ideas as any[],     'id',  tomb),
       todo_sets: mergeById(remote.todo_sets as any[], local.todo_sets as any[], 'id',  tomb),
-      trash:     mergeById(remote.trash as any[],     local.trash as any[],     'id',  tomb),
+      trash:     reconciled.trash,
       memo_mons: mergeById(remote.memo_mons as any[], local.memo_mons as any[], 'uid', tomb),
       settings:  mergeSettings(remote.settings, local.settings) as unknown as Record<string, unknown>,
       deleted_ids: tomb,
@@ -7837,7 +7894,7 @@ function SmartMemoApp() {
       todo_sets: s.todoSets,
       trash: s.trash,
       memo_mons: s.memoMons,
-      settings: s.settings as unknown as Record<string, unknown>,
+      settings: stripSecretSettings(s.settings),
       deleted_ids: s.deletions,
     };
   }
@@ -7850,7 +7907,9 @@ function SmartMemoApp() {
     if (Array.isArray(snap.trash))     setTrash(snap.trash as TrashedTodo[]);
     if (Array.isArray(snap.memo_mons)) setMemoMons(snap.memo_mons as MemoMonInstance[]);
     if (snap.settings && typeof snap.settings === 'object') {
-      // クラウド側に欠けている必須フィールドを消さないよう既存へマージする
+      // クラウド側に欠けている必須フィールドを消さないよう既存へマージする。
+      // スナップショットには API キーが含まれない（stripSecretSettings）ので、
+      // この prev 展開が端末ローカルのキーを保つ役割も担っている。
       setSettings(prev => ({ ...prev, ...(snap.settings as unknown as Settings) }));
     }
     if (snap.deleted_ids && typeof snap.deleted_ids === 'object') {
@@ -7862,8 +7921,10 @@ function SmartMemoApp() {
   // 反映されないため、マージ直後の送信では必ず明示的に渡すこと。
   async function pushSnapshot(explicit?: CloudSnapshot) {
     if (!authUser) return;
-    // 送信が重なると片方が競合し続けるので直列化する
-    if (pushingRef.current) return;
+    // 送信が重なると片方が競合し続けるので直列化する。ただし捨ててはいけない。
+    // 捨てると「送信中に加えた変更」が次の編集まで届かないままになる。
+    // 印だけ残しておき、いま走っている送信が終わったら送り直す。
+    if (pushingRef.current) { pushDirtyRef.current = true; return; }
     pushingRef.current = true;
     setSyncStatus('syncing');
     setSyncError(null);
@@ -7893,6 +7954,12 @@ function SmartMemoApp() {
       setSyncStatus('error');
     } finally {
       pushingRef.current = false;
+      // 送信中に変更があったぶんを送り直す。ここで拾わないと、ユーザーが
+      // 編集をやめた直後の変更ほどクラウドに届かないままになる。
+      if (pushDirtyRef.current) {
+        pushDirtyRef.current = false;
+        void pushSnapshot();
+      }
     }
   }
 
