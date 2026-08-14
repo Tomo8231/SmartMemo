@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.35.1';
+const APP_VERSION = '1.36.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -2284,6 +2284,17 @@ const IcoGearNav = ({ active }: { active: boolean }) => (
   </svg>
 );
 
+const IcoList = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M8.5 6.5h11M8.5 12h11M8.5 17.5h11M4.2 6.5h.1M4.2 12h.1M4.2 17.5h.1"/>
+  </svg>
+);
+const IcoWarn = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <path d="M12 3 1.8 20.5h20.4L12 3Z" strokeLinejoin="round"/>
+    <path d="M12 10v4.2M12 17.6v.1"/>
+  </svg>
+);
 const IcoCopy = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -4144,6 +4155,14 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         }}
       >
         <div className="gw-grab" />
+        {/* 引き上げるとタスク一覧が全画面になる、という手がかり。
+            つまみ 1 本だけでは操作できることが伝わらず、実装済みの機能が
+            使われないままになっていた。 */}
+        <span className="gw-grab-hint">
+          {sheetLift > 0
+            ? <><IcoChevronDown />にわを見る</>
+            : <><IcoChevronUp />タスク一覧</>}
+        </span>
       </div>
       <div className="gw-sheet-head">
         <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
@@ -4203,11 +4222,13 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           <button className="todo-add-row" onClick={() => setAdding(true)}>
             ＋ タスクを追加
           </button>
+          {/* 絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
+              揃わない。既存の Ico* に寄せる。 */}
           <button className="todo-set-open-btn" onClick={() => setShowSets(true)}>
-            📋 TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
+            <IcoList /> TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
           </button>
           <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
-            🗑 ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
+            <IcoTrash /> ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
           </button>
         </div>
       </div>
@@ -7698,10 +7719,16 @@ function SmartMemoApp() {
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
-  const navItems: { key: Tab; label: string; Icon: React.FC<{ active: boolean }> }[] = [
-    { key: 'todo',     label: 'にわ', Icon: IcoHomeNav },
-    { key: 'idea',     label: '書庫', Icon: IcoBookNav },
-    { key: 'settings', label: '設定', Icon: IcoGearNav },
+  // ボトムナビ。「にわ」「書庫」「ずかん」は愛称なので、それだけでは何の画面か
+  // 推測できない。機能名を小さく添えて初見でも辿れるようにする（設定は自明なので不要）。
+  // 中央のメモボタンぶんの隙間も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
+  type NavItem = { key: Tab; label: string; sub?: string; Icon: React.FC<{ active: boolean }> };
+  const navItems: (NavItem | 'memo-slot')[] = [
+    { key: 'todo',     label: 'にわ',   sub: 'タスク',   Icon: IcoHomeNav },
+    { key: 'idea',     label: '書庫',   sub: 'ナレッジ', Icon: IcoBookNav },
+    'memo-slot',
+    { key: 'zukan',    label: 'ずかん', sub: 'メモモン', Icon: IcoEggNav },
+    { key: 'settings', label: '設定',                    Icon: IcoGearNav },
   ];
 
   const now = new Date();
@@ -8037,7 +8064,22 @@ function SmartMemoApp() {
           <div className="gw-date-chip">{headerDate}<span className="gw-dow">({headerDow})</span></div>
           <span className="tagline">SmartMemo</span>
         </div>
-        <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
+        <div className="header-right">
+          {/* 同期の失敗は設定を開かないと分からなかった。書き続けたのに他の端末へ
+              反映されていない、という事故を防ぐため、異常時だけここに出す。
+              正常時と同期中は出さない（5 秒ごとに点滅させても邪魔なだけ）。 */}
+          {authUser && syncStatus === 'error' && (
+            <button
+              type="button"
+              className="sync-chip"
+              onClick={() => setTab('settings')}
+              title={syncError || '同期に失敗しました'}
+            >
+              <IcoWarn />同期エラー
+            </button>
+          )}
+          <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
+        </div>
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
@@ -8051,24 +8093,26 @@ function SmartMemoApp() {
           <IcoPencilFab />
           <span>メモ</span>
         </button>
-        <div className="bottom-nav">
-          {navItems.slice(0, 2).map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-              <span className="nav-icon"><Icon active={tab === key} /></span>
-              <span className="nav-label">{label}</span>
-            </div>
-          ))}
-          <div className="nav-mic-slot" />
-          <div className={`nav-tab${tab === 'zukan' ? ' active' : ''}`} onClick={() => setTab('zukan')}>
-            <span className="nav-icon"><IcoEggNav active={tab === 'zukan'} /></span>
-            <span className="nav-label">ずかん</span>
-          </div>
-          {navItems.slice(2).map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-              <span className="nav-icon"><Icon active={tab === key} /></span>
-              <span className="nav-label">{label}</span>
-            </div>
-          ))}
+        <div className="bottom-nav" role="tablist" aria-label="画面の切り替え">
+          {navItems.map(item => item === 'memo-slot'
+            ? <div key="memo-slot" className="nav-mic-slot" />
+            : (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.key}
+                className={`nav-tab${tab === item.key ? ' active' : ''}${pulseTabs.has(item.key) ? ' pulse' : ''}`}
+                onClick={() => setTab(item.key)}
+              >
+                <span className="nav-icon"><item.Icon active={tab === item.key} /></span>
+                <span className="nav-label">{item.label}</span>
+                {/* 補助ラベルが無いタブ（設定）でも枠は置く。無いと下端揃えの
+                    せいでそのタブだけラベルが 12px 下がって見える。 */}
+                <span className="nav-sub" aria-hidden={!item.sub}>{item.sub ?? ''}</span>
+              </button>
+            )
+          )}
         </div>
       </div>
       {appToast && <div className="toast">{appToast}</div>}

@@ -22,15 +22,68 @@
     }
     button { -webkit-appearance:none; appearance:none; }
 
-    /* CSS Variables (theme) — applied to root .app which fills the viewport */
+    /* ============================================================
+       DESIGN TOKENS
+       色・角丸・影・余白はここでだけ決める。
+       ダークは .app.dark で「同じ名前を差し替える」だけにすること。
+       個々のルールで #hex を直に書くと、ダーク用の上書きを別途手で
+       書く必要が出て、そこから見た目がばらけていく。
+       （既存コードには直書きが多く残っている。新しく書く／触る箇所から
+         このトークンへ寄せる。移行状況は docs/design-tokens.md を参照）
+    ============================================================ */
     .app {
+      /* ブランド */
       --accent:       #D4622A;
       --accent-light: rgba(212,98,42,0.10);
       --accent-text:  #fff;
+
+      /* 面 — 奥から手前へ */
+      --bg:           #fafaf9;  /* アプリの地 */
+      --surface:      #ffffff;  /* カード・シート */
+      --surface-sunk: #f0f0ee;  /* 入力欄・くぼみ */
+
+      /* 文字 — 強いものから弱いものへ */
+      --ink:          #1a1a18;
+      --ink-soft:     #4a4a48;
+      --ink-mute:     #a0a09c;
+
+      /* 罫線 */
+      --rule:         #ebebea;
+      --rule-strong:  #e0e0de;
+
+      /* 状態（アクセントとは別系統。警告色をブランド色と兼ねない） */
+      --danger:       #c0492f;
+      --danger-bg:    #fbecea;
+      --success:      #37704f;
+      --success-bg:   #e7f1ea;
+
+      /* 文字サイズ — 設定の文字サイズ変更で App.tsx から上書きされる */
       --fs-base:      14px;
       --fs-sm:        12px;
       --fs-xs:        11px;
       --fs-lg:        16px;
+
+      /* 角丸 — 4 段階。用途で選ぶ（チップ/ボタン/カード/シート） */
+      --r-sm:   6px;
+      --r-md:   10px;
+      --r-lg:   14px;
+      --r-xl:   18px;
+      --r-full: 999px;
+
+      /* 影 — 3 段階。浮き上がりの高さを表す */
+      --sh-1: 0 1px 4px rgba(0,0,0,.08);
+      --sh-2: 0 2px 10px rgba(0,0,0,.10);
+      --sh-3: 0 6px 24px rgba(0,0,0,.16);
+
+      /* 余白 — 4px グリッド */
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --sp-5: 24px;
+
+      /* タップ目標の最小サイズ。見た目が小さいボタンも判定はこれを確保する */
+      --tap-min: 44px;
 
       width:100%; height:100%;
       display:flex; flex-direction:column;
@@ -57,6 +110,38 @@
       flex-shrink:0; transition:opacity .15s;
     }
     .coin-badge:active { opacity:.75; }
+    .header-right { display:flex; align-items:center; gap:var(--sp-2); flex-shrink:0; }
+    /* 同期の異常を知らせるチップ。押すと設定（原因と対処が書いてある）へ。
+       警告はブランド色ではなく --danger を使う。アクセントと兼ねると
+       「目立つ＝異常」の対応が崩れる。 */
+    .sync-chip {
+      display:flex; align-items:center; gap:var(--sp-1);
+      background:var(--danger-bg); color:var(--danger);
+      border:1px solid transparent; border-radius:var(--r-full);
+      padding:5px 10px; font:inherit; font-size:var(--fs-xs); font-weight:700;
+      cursor:pointer; flex-shrink:0; box-shadow:var(--sh-1);
+      position:relative;
+    }
+    .sync-chip:active { opacity:.75; }
+    .sync-chip:focus-visible { outline:2px solid var(--danger); outline-offset:2px; }
+
+    /* 見た目を変えずにタップ判定だけ広げる。要素自体を大きくすると
+       レイアウトが崩れるので、擬似要素で判定だけを外へ出す。
+       祖先に overflow:hidden があるとはみ出したぶんが切られる点に注意。 */
+    .sync-chip::after {
+      content:""; position:absolute; left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      width:100%; min-width:var(--tap-min); height:var(--tap-min);
+    }
+    /* タスク行のコピー / 削除は 24px 角が 10px 間隔で隣り合っている。
+       横に 44px まで広げると隣の判定を食うので、縦は 44px まで、
+       横は隙間の半分ぶん（片側 4px）だけに留める。 */
+    .item-copy-btn::after,
+    .todo-del::after {
+      content:""; position:absolute; left:50%; top:50%;
+      transform:translate(-50%,-50%);
+      width:calc(100% + 8px); height:var(--tap-min);
+    }
     .coin-badge-count { font-size:13px; font-weight:700; color:var(--accent); letter-spacing:-.2px; }
     .coin-badge-gacha { font-size:10px; font-weight:700; color:var(--accent); background:var(--accent); color:#fff; border-radius:8px; padding:1px 5px; letter-spacing:.2px; }
 
@@ -1270,7 +1355,13 @@
     .nav-tab {
       flex:1; display:flex; flex-direction:column;
       align-items:center; justify-content:flex-end;
-      gap:3px; cursor:pointer; padding-bottom:5px; min-height:54px;
+      gap:2px; cursor:pointer; padding:0 0 5px; min-height:58px;
+      /* button 要素なので既定の見た目を消す（div から置き換え済み。
+         キーボード操作と読み上げのために button であることが必要） */
+      background:none; border:none; font:inherit; color:inherit;
+    }
+    .nav-tab:focus-visible {
+      outline:2px solid var(--accent); outline-offset:-3px; border-radius:var(--r-sm);
     }
     .nav-mic-slot {
       width:72px; flex-shrink:0; /* empty placeholder aligned with mic button */
@@ -1290,15 +1381,24 @@
     .nav-center-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     /* Copy button for TODO/Idea items */
     .item-copy-btn {
-      width:24px; height:24px; border:1px solid #ebebea; background:#fff;
-      border-radius:6px; cursor:pointer;
+      width:24px; height:24px; border:1px solid var(--rule); background:var(--surface);
+      border-radius:var(--r-sm); cursor:pointer;
       display:flex; align-items:center; justify-content:center; color:#b0b0ba;
       flex-shrink:0; transition:background .12s, color .12s;
+      /* 見た目は 24px のまま、タップ判定だけ広げる（下の ::after） */
+      position:relative;
     }
     .item-copy-btn:hover { background:#f0f5ff; color:#2e7bef; border-color:#cce0ff; }
     .nav-tab .nav-icon svg { transition:all 0.2s; width:24px; height:24px; }
     .nav-tab .nav-label { font-size:11px; font-weight:500; color:#c0c0ba; letter-spacing:0.2px; transition:color 0.2s; }
     .nav-tab.active .nav-label { color:var(--accent); }
+    /* 愛称の下に添える機能名。慣れた人が読み飛ばせるよう十分に弱く。 */
+    .nav-tab .nav-sub {
+      font-size:8.5px; font-weight:600; letter-spacing:.1px; line-height:1.2;
+      color:var(--ink-mute); opacity:.7; transition:color .2s, opacity .2s;
+      min-height:10px; /* 空でも高さを保ち、タブ間でラベルの下端を揃える */
+    }
+    .nav-tab.active .nav-sub { color:var(--accent); opacity:.85; }
     .nav-tab.pulse { animation: nav-pulse .9s ease-out 1; }
     @keyframes nav-pulse {
       0%   { transform:scale(1); }
@@ -1717,10 +1817,11 @@
     .todo-coin-reward { font-size:10px; font-weight:700; color:#b07000; background:#fff8e1; border-radius:6px; padding:1px 5px; letter-spacing:.1px; }
     .todo-item.done .todo-coin-reward { opacity:.45; }
     .todo-del {
-      width:24px; height:24px; border:1px solid #ebebea; background:#fff;
-      border-radius:6px; cursor:pointer; font-size:11px;
+      width:24px; height:24px; border:1px solid var(--rule); background:var(--surface);
+      border-radius:var(--r-sm); cursor:pointer; font-size:11px;
       display:flex; align-items:center; justify-content:center; color:#c0c0ba;
       flex-shrink:0; transition:background .12s, color .12s;
+      position:relative;
     }
     .todo-del:hover { background:#fdf0f0; color:#c0392b; border-color:#f0d0d0; }
 
@@ -1890,6 +1991,10 @@
       cursor:pointer; text-align:left; font-family:inherit;
     }
     .trash-open-btn:active { background:#f5f5f3; }
+    /* 絵文字から Ico* に差し替えたぶんのサイズ揃え。
+       Ico* は 13〜24px と定義がまちまちなので、置き場所ごとに指定が要る。
+       本来はアイコン側を 16/20/24 の 3 段階に統一すべき（docs/design-tokens.md）。 */
+    .todo-set-open-btn > svg, .trash-open-btn > svg { width:16px; height:16px; flex:none; }
     .trash-count {
       background:#c8c8c4; color:#fff; font-size:10px; font-weight:700;
       border-radius:10px; padding:1px 6px;
@@ -2769,7 +2874,28 @@
     }
 
     /* ── Dark mode ───────────────────────────────── */
-    .app.dark { color:#f0f0ee; }
+    /* トークンの差し替えはここ 1 箇所で完結させる。
+       トークンを使っている箇所は、以下の個別上書きを書かなくても追従する。
+       下に続く .app.dark ルール群は、色を直書きしている旧コードのぶん。
+       トークン化が進むたびに、対応する行を消していける。 */
+    .app.dark {
+      --bg:           #141416;
+      --surface:      #1e1e21;
+      --surface-sunk: #28282c;
+      --ink:          #f0f0ee;
+      --ink-soft:     #c8c8c4;
+      --ink-mute:     #6a6a68;
+      --rule:         #2e2e32;
+      --rule-strong:  #3a3a40;
+      --danger:       #e08b74;
+      --danger-bg:    #33201c;
+      --success:      #7fb99a;
+      --success-bg:   #1b2a22;
+      --sh-1: 0 1px 4px rgba(0,0,0,.30);
+      --sh-2: 0 2px 10px rgba(0,0,0,.38);
+      --sh-3: 0 6px 24px rgba(0,0,0,.50);
+    }
+    .app.dark { color:var(--ink); }
     .app.dark .app-header { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .app-header h1 { color:#f0f0ee; }
     .app.dark .tagline { color:#6a6a68; }
@@ -3304,6 +3430,8 @@
     /* ── ナビ：中央のメモボタン ── */
     .bottom-nav { background:#FBFBF9; box-shadow:0 -1px 0 rgba(0,0,0,.06); border-radius:0; }
     .nav-tab .nav-label { font-weight:700; color:#B7BEC7; font-size:10.5px; }
+    .nav-tab .nav-sub { font-weight:700; color:#C3C9D1; }
+    .nav-tab.active .nav-sub { color:var(--accent); }
     .nav-tab { color:#B7BEC7; }
     .nav-tab.active { color:var(--accent); }
     .nav-tab .nav-icon svg { width:22px; height:22px; }
@@ -3453,9 +3581,19 @@
     /* つまみ部分。指で掴みやすいよう当たり判定を広めに取り、
        ドラッグ中にブラウザのスクロールが割り込まないよう touch-action を切る */
     .gw-grab-zone {
-      flex:none; padding:10px 0 6px; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
-      display:flex; justify-content:center; align-items:center;
+      flex:none; padding:8px 0 5px; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+      display:flex; flex-direction:column; justify-content:center; align-items:center; gap:2px;
     }
+    .gw-grab-zone:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+    /* つまみの下に添える操作の手がかり。読み飛ばせる強さに留める。 */
+    .gw-grab-hint {
+      display:flex; align-items:center; gap:2px;
+      font-size:9.5px; font-weight:700; letter-spacing:.2px;
+      color:#A9B6C4; transition:color .15s;
+    }
+    .gw-grab-hint svg { width:11px; height:11px; }
+    .gw-grab-zone:hover .gw-grab-hint, .gw-sheet.dragging .gw-grab-hint { color:#7C8B9C; }
+    .app.dark .gw-grab-hint { color:#5a5a60; }
     .gw-grab-zone:active { cursor:grabbing; }
     .gw-sheet.dragging .gw-grab-zone { cursor:grabbing; }
     .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:2px auto; flex:none; transition:background .15s, width .15s; }
