@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.36.0';
+const APP_VERSION = '1.37.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -478,17 +478,12 @@ function getLinkLabel(url: string): string {
 // Unified Attachment Lightbox (image / PDF / text)
 // ─────────────────────────────────────────────────────────────
 function AttachmentLightbox({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
+  useDismissable(onClose);
   const [blobUrl,     setBlobUrl]     = useState('');
   const [textContent, setTextContent] = useState('');
   const isImage = attachment.mime.startsWith('image/');
   const isPdf   = attachment.mime === 'application/pdf';
   const isText  = (attachment.mime === 'text/plain' || attachment.mime === 'text/csv');
-
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', fn);
-    return () => document.removeEventListener('keydown', fn);
-  }, []);
 
   useEffect(() => {
     if (isPdf) {
@@ -634,7 +629,12 @@ function AttachmentSection({ attachments, onChange, toast }: {
         <div className="attachment-link-input-row">
           <input ref={linkInputRef} type="url" className="attachment-link-url" placeholder="https://..."
             value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') addLink(); if (e.key === 'Escape') { setShowLinkInput(false); setLinkUrl(''); } }} />
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') addLink();
+              // 伝播を止めないと、この入力欄を閉じるつもりの Escape で
+              // 外側のモーダルまで閉じてしまう（useDismissable が window で拾うため）
+              if (e.key === 'Escape') { e.stopPropagation(); setShowLinkInput(false); setLinkUrl(''); }
+            }} />
           <button className="attachment-link-confirm" onClick={addLink}>追加</button>
           <button className="attachment-link-cancel" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>✕</button>
         </div>
@@ -835,6 +835,74 @@ function playSound(type: string) {
       });
     }
   } catch {}
+}
+
+// ─────────────────────────────────────────────────────────────
+// モーダル・シートを「閉じられるもの」にする
+//
+// これが無いと、モーダルを開いた状態で Android の戻るボタンを押したときに
+// モーダルではなく PWA 自体が終了し、書きかけの内容が失われる。
+// 開いている間だけ履歴エントリを 1 つ積み、閉じるときに取り除く。
+// Escape キーでの閉じる操作もここでまとめて面倒を見る。
+//
+// 使い方: モーダルのコンポーネント先頭で useDismissable(onClose) を呼ぶ。
+// 「マウントされている＝開いている」前提なので、開閉フラグは渡さない。
+// ─────────────────────────────────────────────────────────────
+type DismissEntry = { close: () => void };
+// 開いているモーダルのスタック。閉じるのは常に最前面だけ。
+const dismissStack: DismissEntry[] = [];
+// UI から閉じるときは自分で history.back() を呼んで積んだエントリを取り除くが、
+// その戻りで発生する popstate は「ユーザーが戻るを押した」わけではないので握りつぶす。
+let suppressPop = 0;
+let dismissGlobalsInstalled = false;
+
+// popstate と Escape のリスナーは、アプリの生存期間を通じて 1 本だけ張る。
+// モーダルごとに付け外しすると、最後のモーダルを閉じた直後に飛んでくる
+// popstate を受け取る者が誰もいなくなり、suppressPop が減らないまま残って
+// 次の「戻る」を食ってしまう。
+function installDismissGlobals() {
+  if (dismissGlobalsInstalled) return;
+  dismissGlobalsInstalled = true;
+  window.addEventListener('popstate', () => {
+    if (suppressPop > 0) { suppressPop--; return; }
+    dismissStack[dismissStack.length - 1]?.close();
+  });
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    // 入力欄など内側の Escape 処理が stopPropagation していれば ここには来ない
+    if (e.key !== 'Escape') return;
+    dismissStack[dismissStack.length - 1]?.close();
+  });
+}
+
+function useDismissable(onClose: () => void) {
+  const entryRef = useRef<DismissEntry>({ close: onClose });
+  entryRef.current.close = onClose;
+
+  useEffect(() => {
+    installDismissGlobals();
+    const entry = entryRef.current;
+    dismissStack.push(entry);
+    const depth = dismissStack.length;
+    window.history.pushState({ smModal: depth }, '');
+
+    return () => {
+      const i = dismissStack.indexOf(entry);
+      if (i >= 0) dismissStack.splice(i, 1);
+      // 戻るボタンで閉じたなら、自分のエントリは既に消費されている。
+      // 現在の履歴の深さを見て、まだ残っているときだけ取り除く。
+      // （入れ子のとき、内側を戻るで閉じた直後は state が外側のものになる）
+      const cur = (window.history.state as { smModal?: number } | null)?.smModal ?? 0;
+      if (cur >= depth) { suppressPop++; window.history.back(); }
+    };
+  }, []);
+}
+
+// コンポーネントに切り出されていない、その場書きのモーダル用。
+// フックは条件付きで呼べないので、開いている間だけマウントされる
+// ラッパーとして包む。
+function Dismissable({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useDismissable(onClose);
+  return <>{children}</>;
 }
 
 // 永続化は useEffect で行う。setState の updater は純粋である必要があり、
@@ -1381,6 +1449,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   onClose: () => void;
   onResult: (results: { prize: GachaPrize; dup: boolean }[], totalCost: number) => void;
 }) {
+  useDismissable(onClose);
   const [mode, setMode] = useState<GachaMode>('single');
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'flashing' | 'result'>('idle');
   const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
@@ -2621,6 +2690,7 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
   onClose: () => void;
   customTags?: string[];
 }) {
+  useDismissable(onClose);
   type RecurringVal = 'daily' | 'weekly' | 'biweekly' | 'monthly';
   const RECURRING_OPTS: { value: RecurringVal | ''; label: string }[] = [
     { value: '', label: 'なし' },
@@ -2752,6 +2822,7 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
   customTags?: string[];
   ideaTabs?: string[];
 }) {
+  useDismissable(onClose);
   const tagOptions = getIdeaTagOptions(customTags);
   const [projectName, setProjectName] = useState(idea.projectName || '');
   const [summary,     setSummary]     = useState(idea.summary || '');
@@ -2915,6 +2986,7 @@ function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useDismissable(onCancel);
   const [editingTodo, setEditingTodo] = useState<any>(null);
   const [editingIdea, setEditingIdea] = useState<any>(null);
   const total = pending.todos.length + pending.ideas.length;
@@ -3420,7 +3492,8 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
                   setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
                   setMemoLinkUrl(''); setMemoShowLink(false);
                 }
-                if (e.key === 'Escape') { setMemoShowLink(false); setMemoLinkUrl(''); }
+                // 外側のモーダルまで閉じないよう伝播を止める
+                if (e.key === 'Escape') { e.stopPropagation(); setMemoShowLink(false); setMemoLinkUrl(''); }
               }}
               autoFocus
             />
@@ -3500,6 +3573,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             )}
       </div>
       {showHistory && (
+        <Dismissable onClose={() => setShowHistory(false)}>
         <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
           <div className="memo-history-sheet" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
             <div className="modal-handle" />
@@ -3526,6 +3600,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             )}
           </div>
         </div>
+        </Dismissable>
       )}
     </div>
   );
@@ -3541,6 +3616,7 @@ function TrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
   onEmpty: () => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   function formatTrashedDate(ts: number) {
     const d = new Date(ts);
     return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -3609,6 +3685,7 @@ function TodoSetPickerModal({ todos, selectedIds, onToggle, onClose }: {
   onToggle: (id: string, title: string, tags: string[]) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
@@ -3643,6 +3720,7 @@ function TodoSetEditModal({ set, allTodos, onSave, onClose, customTags }: {
   onClose: () => void;
   customTags: string[];
 }) {
+  useDismissable(onClose);
   const [name, setName] = useState(set?.name ?? '');
   const [items, setItems] = useState<TodoSetItem[]>(set?.items ?? []);
   const [showPicker, setShowPicker] = useState(false);
@@ -3729,6 +3807,7 @@ function TodoSetListModal({ sets, allTodos, onApply, onSave, onDelete, onClose, 
   onClose: () => void;
   customTags: string[];
 }) {
+  useDismissable(onClose);
   const [editing, setEditing] = useState<TodoSet | undefined>(undefined);
   const [creating, setCreating] = useState(false);
 
@@ -4079,6 +4158,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   return (
     <div className="todo-tab garden" ref={gardenRootRef}>
       {editPicking && (
+        <Dismissable onClose={() => setEditPicking(null)}>
         <div className="modal-backdrop" onClick={() => setEditPicking(null)}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <div className="modal-handle"/>
@@ -4097,6 +4177,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             </div>
           </div>
         </div>
+        </Dismissable>
       )}
       {editing && <EditModal todo={editing.todo} onSave={t => {
         if (editing.scope === 'all') {
@@ -4454,7 +4535,11 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
         autoFocus
         value={newTabName}
         onChange={e => setNewTabName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') addTab(); if (e.key === 'Escape') { setAddingTab(false); setNewTabName(''); } }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') addTab();
+          // 外側のモーダルまで閉じないよう伝播を止める
+          if (e.key === 'Escape') { e.stopPropagation(); setAddingTab(false); setNewTabName(''); }
+        }}
         placeholder="タブ名を入力"
         maxLength={16}
       />
@@ -4680,6 +4765,7 @@ type ChatMessage = { role: 'user' | 'assistant'; text: string };
 // Account / Auth modal (Supabase)
 // ─────────────────────────────────────────────────────────────
 function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: () => void }) {
+  useDismissable(onClose);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -4798,6 +4884,7 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
 }
 
 function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg; onClose: () => void }) {
+  useDismissable(onClose);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -5008,6 +5095,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
         })}
       </div>
       {detail && (
+        <Dismissable onClose={() => setDetail(null)}>
         <div className="modal-backdrop zukan-detail-backdrop" onClick={() => setDetail(null)}>
           <div className="zukan-detail" onClick={e => e.stopPropagation()}>
             <button className="gw-pop-close" onClick={() => setDetail(null)}>✕</button>
@@ -5028,6 +5116,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
             )}
           </div>
         </div>
+        </Dismissable>
       )}
     </div>
   );
@@ -5782,6 +5871,7 @@ function InsightsModal({ todos, ideas, trash, aiCfg, onClose }: {
   aiCfg: AiCfg;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
   const [result, setResult] = useState('');
 
@@ -6036,6 +6126,7 @@ function FoodPickerSheet({ foodInventory, coins, infinite, title = '餌をえら
   onPick: (f: Food) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   return (
     <div className={`playground-food-overlay${standalone ? ' standalone' : ''}`} onClick={onClose}>
       <div className="playground-food-sheet" onClick={e => e.stopPropagation()}>
@@ -6090,6 +6181,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   onUnlockSound: (soundType: string) => void;
   onUnlockBg: (bgIdx: number) => void;
 }) {
+  useDismissable(onClose);
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(
     (initialUid && visibleMons.some(m => m.uid === initialUid) ? initialUid : visibleMons[0]?.uid) ?? null
@@ -7121,6 +7213,7 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
   onAddInterrupt: (t: Todo) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   const [sess, setSess] = usePersistedState<FocusSession>('smartmemo:focus:v1', {
     date: todayStr, curId: null, startedAt: null, suspendedId: null, acc: {},
   });
