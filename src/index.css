@@ -85,6 +85,10 @@
       /* タップ目標の最小サイズ。見た目が小さいボタンも判定はこれを確保する */
       --tap-min: 44px;
 
+      /* ブラウザが描く部分（日付・時刻ピッカー、スクロールバー、選択範囲）に
+         どちらのテーマかを伝える。宣言しないとダークでもピッカーが白いまま出る。 */
+      color-scheme: light;
+
       width:100%; height:100%;
       display:flex; flex-direction:column;
       background:#fafaf9; color:#1a1a18;
@@ -2657,7 +2661,11 @@
     .settings-row-sub   { font-size:var(--fs-xs); color:#a0a09c; margin-top:1px; }
 
     /* Color swatches */
-    .color-swatches { display:flex; gap:10px; }
+    /* 背景テーマは 7 色あり、10px 固定の gap だと横幅を使い切ってラベルに
+       密着してしまう（重なって見える）。詰まるぶんは gap を縮めて吸収し、
+       ラベルとの間には必ず余白を残す。 */
+    .color-swatches { display:flex; gap:10px; flex-wrap:nowrap; margin-left:var(--sp-3); }
+    .color-swatches:has(> :nth-child(6)) { gap:6px; }
     .color-swatch {
       width:28px; height:28px; border-radius:50%; cursor:pointer;
       border:2px solid transparent; transition:all .15s; position:relative;
@@ -2894,6 +2902,7 @@
       --sh-1: 0 1px 4px rgba(0,0,0,.30);
       --sh-2: 0 2px 10px rgba(0,0,0,.38);
       --sh-3: 0 6px 24px rgba(0,0,0,.50);
+      color-scheme: dark;
     }
     .app.dark { color:var(--ink); }
     .app.dark .app-header { background:#1e1e21; border-color:#2e2e32; }
