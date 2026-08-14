@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.37.0';
+const APP_VERSION = '1.37.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5384,11 +5384,14 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
         <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
           <div className="settings-row-label">追加の休日</div>
           <div style={{ display: 'flex', gap: 8 }}>
+            {/* 以前は background に var(--card-bg,#fff) を指定していたが --card-bg は
+                存在しないトークンで、#fff にフォールバックしていた。そこへ color:inherit で
+                ダークの文字色が乗り、「白地に白文字」で日付が読めなくなっていた。 */}
             <input
               type="date"
               value={newHolidayDate}
               onChange={e => setNewHolidayDate(e.target.value)}
-              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid #e0e0de', fontSize: 14, fontFamily: 'inherit', background: 'var(--card-bg,#fff)', color: 'inherit' }}
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-strong)', fontSize: 14, fontFamily: 'inherit', background: 'var(--surface)', color: 'var(--ink)' }}
             />
             <button
               onClick={() => {
