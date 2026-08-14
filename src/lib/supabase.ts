@@ -22,7 +22,9 @@ export type CloudSnapshot = {
   trash?: unknown[];
   memo_mons?: unknown[];
   settings?: Record<string, unknown>;
-  memo_history?: unknown[];
+  // メモ履歴は同期しない。添付を base64 で抱えるので転送量が跳ね上がるうえ、
+  // 端末ごとの下書き置き場という性質上そろえる必要が薄いため。
+  // サーバ側の memo_history 列は過去バージョンの名残（db/schema.sql 参照）。
   // 削除済み ID の墓標（id -> 削除時刻ms）。
   // これが無いと、複数端末のマージで削除した項目が復活してしまう。
   deleted_ids?: Record<string, number>;
@@ -50,7 +52,6 @@ export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; update
       trash:        data.trash        ?? [],
       memo_mons:    data.memo_mons    ?? [],
       settings:     data.settings     ?? {},
-      memo_history: data.memo_history ?? [],
       deleted_ids:  data.deleted_ids  ?? {},
     },
     updatedAt: data.updated_at ?? null,

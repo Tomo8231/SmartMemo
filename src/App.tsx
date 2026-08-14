@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.35.0';
+const APP_VERSION = '1.37.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -147,15 +147,36 @@ function pruneTombstones(t: Record<string, number>): Record<string, number> {
 }
 const LS_TODO_SETS = 'smartmemo:todosets';
 
+// AI プロバイダの API キーは端末ローカルにだけ置く。クラウドへ送ると
+// user_data.settings の jsonb 列に平文で残り、DB のバックアップやダッシュボード
+// にも露出してしまう。送信前・受信後の両方でこのキーを落とす。
+const SECRET_SETTING_KEYS = ['geminiApiKey', 'openaiApiKey', 'anthropicApiKey'] as const;
+function stripSecretSettings(s: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...((s as Record<string, unknown>) || {}) };
+  for (const k of SECRET_SETTING_KEYS) delete out[k];
+  return out;
+}
+
 function loadStored<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(key);
     return v ? (JSON.parse(v) as T) : fallback;
   } catch { return fallback; }
 }
+// 保存失敗のトーストは連発しがち（複数キーが同時にあふれる）なので間引く
+let lastSaveFailAt = 0;
 function saveStored<T>(key: string, value: T): void {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
     console.error('[SmartMemo] save failed for', key, e);
+    // 黙って握りつぶすと、画面上は保存できたように見えて再読み込みで消える。
+    // 原因のほとんどは容量超過なので、何をすれば直るかまで伝える。
+    const now = Date.now();
+    if (now - lastSaveFailAt > 10_000) {
+      lastSaveFailAt = now;
+      window.dispatchEvent(new CustomEvent('app-toast', {
+        detail: '保存できませんでした。端末の空き容量が足りません。メモ履歴の削除や添付ファイルの削減をお試しください',
+      }));
+    }
   }
 }
 
@@ -407,6 +428,9 @@ async function aiAudio(cfg: AiCfg, blob: Blob, mime: string): Promise<string> {
 
 const MAX_ATTACHMENTS = 5;
 const MAX_FILE_BYTES  = 3 * 1024 * 1024; // 3 MB for non-image files
+// 画像は compressImage で縮小するので上限は緩めでよいが、無制限だと
+// 縮小前の data URL 化（元サイズの約 1.33 倍の文字列）でタブが落ちる。
+const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
 function compressImage(dataUrl: string, maxW = 1400): Promise<string> {
   return new Promise(resolve => {
@@ -454,17 +478,12 @@ function getLinkLabel(url: string): string {
 // Unified Attachment Lightbox (image / PDF / text)
 // ─────────────────────────────────────────────────────────────
 function AttachmentLightbox({ attachment, onClose }: { attachment: Attachment; onClose: () => void }) {
+  useDismissable(onClose);
   const [blobUrl,     setBlobUrl]     = useState('');
   const [textContent, setTextContent] = useState('');
   const isImage = attachment.mime.startsWith('image/');
   const isPdf   = attachment.mime === 'application/pdf';
   const isText  = (attachment.mime === 'text/plain' || attachment.mime === 'text/csv');
-
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', fn);
-    return () => document.removeEventListener('keydown', fn);
-  }, []);
 
   useEffect(() => {
     if (isPdf) {
@@ -543,11 +562,13 @@ function AttachmentSection({ attachments, onChange, toast }: {
     if (remaining <= 0) { toast?.('添付ファイルは最大5件です'); return; }
     const toAdd: Attachment[] = [];
     for (const file of files.slice(0, remaining)) {
-      if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) {
-        toast?.(`${file.name} はサイズが大きすぎます（最大3MB）`); continue;
+      const isImage = file.type.startsWith('image/');
+      const limit   = isImage ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
+      if (file.size > limit) {
+        toast?.(`${file.name} はサイズが大きすぎます（最大${isImage ? '20' : '3'}MB）`); continue;
       }
       const raw = await readFileAsDataUrl(file);
-      const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
+      const data = isImage ? await compressImage(raw) : raw;
       toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
     }
     if (toAdd.length) onChange([...attachments, ...toAdd]);
@@ -608,7 +629,12 @@ function AttachmentSection({ attachments, onChange, toast }: {
         <div className="attachment-link-input-row">
           <input ref={linkInputRef} type="url" className="attachment-link-url" placeholder="https://..."
             value={linkUrl} onChange={e => setLinkUrl(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') addLink(); if (e.key === 'Escape') { setShowLinkInput(false); setLinkUrl(''); } }} />
+            onKeyDown={(e: React.KeyboardEvent) => {
+              if (e.key === 'Enter') addLink();
+              // 伝播を止めないと、この入力欄を閉じるつもりの Escape で
+              // 外側のモーダルまで閉じてしまう（useDismissable が window で拾うため）
+              if (e.key === 'Escape') { e.stopPropagation(); setShowLinkInput(false); setLinkUrl(''); }
+            }} />
           <button className="attachment-link-confirm" onClick={addLink}>追加</button>
           <button className="attachment-link-cancel" onClick={() => { setShowLinkInput(false); setLinkUrl(''); }}>✕</button>
         </div>
@@ -811,17 +837,83 @@ function playSound(type: string) {
   } catch {}
 }
 
-// Synchronous persisted state — writes inside the setter.
-function usePersistedState<T>(key: string, defaultValue: T): [T, (u: T | ((prev: T) => T)) => void] {
+// ─────────────────────────────────────────────────────────────
+// モーダル・シートを「閉じられるもの」にする
+//
+// これが無いと、モーダルを開いた状態で Android の戻るボタンを押したときに
+// モーダルではなく PWA 自体が終了し、書きかけの内容が失われる。
+// 開いている間だけ履歴エントリを 1 つ積み、閉じるときに取り除く。
+// Escape キーでの閉じる操作もここでまとめて面倒を見る。
+//
+// 使い方: モーダルのコンポーネント先頭で useDismissable(onClose) を呼ぶ。
+// 「マウントされている＝開いている」前提なので、開閉フラグは渡さない。
+// ─────────────────────────────────────────────────────────────
+type DismissEntry = { close: () => void };
+// 開いているモーダルのスタック。閉じるのは常に最前面だけ。
+const dismissStack: DismissEntry[] = [];
+// UI から閉じるときは自分で history.back() を呼んで積んだエントリを取り除くが、
+// その戻りで発生する popstate は「ユーザーが戻るを押した」わけではないので握りつぶす。
+let suppressPop = 0;
+let dismissGlobalsInstalled = false;
+
+// popstate と Escape のリスナーは、アプリの生存期間を通じて 1 本だけ張る。
+// モーダルごとに付け外しすると、最後のモーダルを閉じた直後に飛んでくる
+// popstate を受け取る者が誰もいなくなり、suppressPop が減らないまま残って
+// 次の「戻る」を食ってしまう。
+function installDismissGlobals() {
+  if (dismissGlobalsInstalled) return;
+  dismissGlobalsInstalled = true;
+  window.addEventListener('popstate', () => {
+    if (suppressPop > 0) { suppressPop--; return; }
+    dismissStack[dismissStack.length - 1]?.close();
+  });
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    // 入力欄など内側の Escape 処理が stopPropagation していれば ここには来ない
+    if (e.key !== 'Escape') return;
+    dismissStack[dismissStack.length - 1]?.close();
+  });
+}
+
+function useDismissable(onClose: () => void) {
+  const entryRef = useRef<DismissEntry>({ close: onClose });
+  entryRef.current.close = onClose;
+
+  useEffect(() => {
+    installDismissGlobals();
+    const entry = entryRef.current;
+    dismissStack.push(entry);
+    const depth = dismissStack.length;
+    window.history.pushState({ smModal: depth }, '');
+
+    return () => {
+      const i = dismissStack.indexOf(entry);
+      if (i >= 0) dismissStack.splice(i, 1);
+      // 戻るボタンで閉じたなら、自分のエントリは既に消費されている。
+      // 現在の履歴の深さを見て、まだ残っているときだけ取り除く。
+      // （入れ子のとき、内側を戻るで閉じた直後は state が外側のものになる）
+      const cur = (window.history.state as { smModal?: number } | null)?.smModal ?? 0;
+      if (cur >= depth) { suppressPop++; window.history.back(); }
+    };
+  }, []);
+}
+
+// コンポーネントに切り出されていない、その場書きのモーダル用。
+// フックは条件付きで呼べないので、開いている間だけマウントされる
+// ラッパーとして包む。
+function Dismissable({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  useDismissable(onClose);
+  return <>{children}</>;
+}
+
+// 永続化は useEffect で行う。setState の updater は純粋である必要があり、
+// React 18 の並行レンダリングでは複数回呼ばれうるため、その中で
+// localStorage へ書くと余計な書き込みが走る。
+// 書き込みが 1 フレーム遅れるぶんは、pagehide / visibilitychange の
+// flush（SmartMemoApp 内）が受け持つ。
+function usePersistedState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
   const [state, setState] = useState<T>(() => loadStored(key, defaultValue));
-  const set = (updater: T | ((prev: T) => T)) => {
-    setState(prev => {
-      const next = typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater;
-      saveStored(key, next);
-      return next;
-    });
-  };
-  return [state, set];
+  useEffect(() => { saveStored(key, state); }, [key, state]);
+  return [state, setState];
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -1357,6 +1449,7 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   onClose: () => void;
   onResult: (results: { prize: GachaPrize; dup: boolean }[], totalCost: number) => void;
 }) {
+  useDismissable(onClose);
   const [mode, setMode] = useState<GachaMode>('single');
   const [phase, setPhase] = useState<'idle' | 'spinning' | 'flashing' | 'result'>('idle');
   const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
@@ -1655,9 +1748,9 @@ const TAG_KEYWORDS: Record<string, string[]> = {
 };
 
 const ACTION_VERB_RE = /(買う|購入|やる|行く|来る|帰る|完了|終わ(る|らせる)|確認|チェック|送る|送付|提出|連絡|電話|メール|会う|参加|準備|予約|予定|出発|到着|出張|締切|片付け|掃除|洗濯)/;
-const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[\/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
+const DATE_TOKEN_RE  = /(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月|\d{1,2}[/月]\d{1,2}日?|\d{1,2}月中|\d{4}[-/]\d{1,2}[-/]\d{1,2})/;
 const RECURRING_RE   = /(毎日|毎週|毎月|隔週|週\d?回|月\d?回|定期|ルーティン|習慣)/;
-const DEADLINE_RE    = /(\d{1,2}[月\/]\d{1,2}日?まで|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}まで|来週まで|今月中|月末まで|までに|まで[にの])/;
+const DEADLINE_RE    = /(\d{1,2}[月/]\d{1,2}日?まで|\d{4}[-/]\d{1,2}[-/]\d{1,2}まで|来週まで|今月中|月末まで|までに|まで[にの])/;
 const TIME_TOKEN_RE  = /\d{1,2}[:時]\d{0,2}分?(に|から|まで)?/;
 const IDEA_HINT_RE   = /(アイデア|構想|企画|思いつき|について|案$|コンセプト)/;
 
@@ -1740,13 +1833,13 @@ function parseRelative(rawText: string): { startDate: string; endDate: string } 
   const dowMap: Record<string, number> = { '日':0,'月':1,'火':2,'水':3,'木':4,'金':5,'土':6 };
   const yy = today.getFullYear();
 
-  const xmr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/);
+  const xmr = text.match(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})[/月](\d{1,2})日?\s*まで?/);
   if (xmr) return {
     startDate: `${yy}-${pad(+xmr[1])}-${pad(+xmr[2])}`,
     endDate:   `${yy}-${pad(+xmr[3])}-${pad(+xmr[4])}`,
   };
 
-  const smr = text.match(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/);
+  const smr = text.match(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})日?\s*まで?/);
   if (smr) return {
     startDate: `${yy}-${pad(+smr[1])}-${pad(+smr[2])}`,
     endDate:   `${yy}-${pad(+smr[1])}-${pad(+smr[3])}`,
@@ -1785,7 +1878,7 @@ function parseRelative(rawText: string): { startDate: string; endDate: string } 
   const ymd = text.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (ymd) return { startDate: `${ymd[1]}-${pad(+ymd[2])}-${pad(+ymd[3])}`, endDate: '' };
 
-  const md = text.match(/(\d{1,2})[\/月](\d{1,2})日?/);
+  const md = text.match(/(\d{1,2})[/月](\d{1,2})日?/);
   if (md) return { startDate: `${yy}-${pad(+md[1])}-${pad(+md[2])}`, endDate: '' };
 
   return { startDate: '', endDate: '' };
@@ -1814,13 +1907,13 @@ function parseTime(rawText: string): string {
 
 function stripDateTimeWords(rawText: string): string {
   let t = normalizeDateChars(rawText);
-  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})[\/月](\d{1,2})日?\s*まで?/g, '');
-  t = t.replace(/(\d{1,2})[\/月](\d{1,2})日?\s*(?:[~\-]|から)\s*(\d{1,2})日?\s*まで?/g, '');
+  t = t.replace(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})[/月](\d{1,2})日?\s*まで?/g, '');
+  t = t.replace(/(\d{1,2})[/月](\d{1,2})日?\s*(?:[~-]|から)\s*(\d{1,2})日?\s*まで?/g, '');
   t = t.replace(/(\d{1,2}|今|来)月中/g, '');
   t = t.replace(/(今日|明日|明後日|来週.曜?|今週.曜?)\s*から\s*(今日|明日|明後日|来週.曜?|今週.曜?)\s*まで/g, '');
   t = t.replace(/(今日|明日|明後日|昨日|来週.曜?|今週.曜?|来月|今月)/g, '');
   t = t.replace(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/g, '');
-  t = t.replace(/\d{1,2}[\/月]\d{1,2}日?/g, '');
+  t = t.replace(/\d{1,2}[/月]\d{1,2}日?/g, '');
   t = t.replace(TIME_TOKEN_RE, '');
   t = t.replace(/^(に|から|まで|は|の|へ)\s*/, '');
   t = t.replace(/^[、,・\s]+|[、,・\s]+$/g, '').trim();
@@ -1919,11 +2012,11 @@ function extractIdeaFromLine(line: string, existingProjects: string[]): IdeaDraf
 
   const colonM = line.match(/^([^:：]{1,40})[:：]\s*(.+)$/);
   if (colonM) {
-    projectName = colonM[1].replace(/^[■◆●▼※【\[]+|[】\]]+$/g, '').trim();
+    projectName = colonM[1].replace(/^[■◆●▼※【[]+|[】\]]+$/g, '').trim();
     projectName = projectName.replace(/(について|のアイデア|の話|のメモ|の構想|の企画|案|構想|企画)$/, '').trim();
     summary = colonM[2].trim();
   } else {
-    const bracketM = line.match(/^[■◆●▼※【\[]+(.+?)[】\]]+\s*(.*)$/);
+    const bracketM = line.match(/^[■◆●▼※【[]+(.+?)[】\]]+\s*(.*)$/);
     if (bracketM) {
       projectName = bracketM[1].trim();
       summary = bracketM[2].trim() || projectName;
@@ -2260,6 +2353,17 @@ const IcoGearNav = ({ active }: { active: boolean }) => (
   </svg>
 );
 
+const IcoList = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+    <path d="M8.5 6.5h11M8.5 12h11M8.5 17.5h11M4.2 6.5h.1M4.2 12h.1M4.2 17.5h.1"/>
+  </svg>
+);
+const IcoWarn = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <path d="M12 3 1.8 20.5h20.4L12 3Z" strokeLinejoin="round"/>
+    <path d="M12 10v4.2M12 17.6v.1"/>
+  </svg>
+);
 const IcoCopy = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="9" y="9" width="13" height="13" rx="2"/>
@@ -2586,6 +2690,7 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
   onClose: () => void;
   customTags?: string[];
 }) {
+  useDismissable(onClose);
   type RecurringVal = 'daily' | 'weekly' | 'biweekly' | 'monthly';
   const RECURRING_OPTS: { value: RecurringVal | ''; label: string }[] = [
     { value: '', label: 'なし' },
@@ -2717,6 +2822,7 @@ function IdeaEditModal({ idea, mode = 'edit', projects, onSave, onClose, customT
   customTags?: string[];
   ideaTabs?: string[];
 }) {
+  useDismissable(onClose);
   const tagOptions = getIdeaTagOptions(customTags);
   const [projectName, setProjectName] = useState(idea.projectName || '');
   const [summary,     setSummary]     = useState(idea.summary || '');
@@ -2880,6 +2986,7 @@ function ConfirmSheet({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  useDismissable(onCancel);
   const [editingTodo, setEditingTodo] = useState<any>(null);
   const [editingIdea, setEditingIdea] = useState<any>(null);
   const total = pending.todos.length + pending.ideas.length;
@@ -3385,7 +3492,8 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
                   setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
                   setMemoLinkUrl(''); setMemoShowLink(false);
                 }
-                if (e.key === 'Escape') { setMemoShowLink(false); setMemoLinkUrl(''); }
+                // 外側のモーダルまで閉じないよう伝播を止める
+                if (e.key === 'Escape') { e.stopPropagation(); setMemoShowLink(false); setMemoLinkUrl(''); }
               }}
               autoFocus
             />
@@ -3465,6 +3573,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             )}
       </div>
       {showHistory && (
+        <Dismissable onClose={() => setShowHistory(false)}>
         <div className="modal-backdrop" onClick={() => setShowHistory(false)}>
           <div className="memo-history-sheet" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
             <div className="modal-handle" />
@@ -3491,6 +3600,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             )}
           </div>
         </div>
+        </Dismissable>
       )}
     </div>
   );
@@ -3506,6 +3616,7 @@ function TrashModal({ trash, onRestore, onDelete, onEmpty, onClose }: {
   onEmpty: () => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   function formatTrashedDate(ts: number) {
     const d = new Date(ts);
     return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -3574,6 +3685,7 @@ function TodoSetPickerModal({ todos, selectedIds, onToggle, onClose }: {
   onToggle: (id: string, title: string, tags: string[]) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="modal-sheet">
@@ -3608,6 +3720,7 @@ function TodoSetEditModal({ set, allTodos, onSave, onClose, customTags }: {
   onClose: () => void;
   customTags: string[];
 }) {
+  useDismissable(onClose);
   const [name, setName] = useState(set?.name ?? '');
   const [items, setItems] = useState<TodoSetItem[]>(set?.items ?? []);
   const [showPicker, setShowPicker] = useState(false);
@@ -3694,6 +3807,7 @@ function TodoSetListModal({ sets, allTodos, onApply, onSave, onDelete, onClose, 
   onClose: () => void;
   customTags: string[];
 }) {
+  useDismissable(onClose);
   const [editing, setEditing] = useState<TodoSet | undefined>(undefined);
   const [creating, setCreating] = useState(false);
 
@@ -4044,6 +4158,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   return (
     <div className="todo-tab garden" ref={gardenRootRef}>
       {editPicking && (
+        <Dismissable onClose={() => setEditPicking(null)}>
         <div className="modal-backdrop" onClick={() => setEditPicking(null)}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
             <div className="modal-handle"/>
@@ -4062,6 +4177,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             </div>
           </div>
         </div>
+        </Dismissable>
       )}
       {editing && <EditModal todo={editing.todo} onSave={t => {
         if (editing.scope === 'all') {
@@ -4120,6 +4236,14 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
         }}
       >
         <div className="gw-grab" />
+        {/* 引き上げるとタスク一覧が全画面になる、という手がかり。
+            つまみ 1 本だけでは操作できることが伝わらず、実装済みの機能が
+            使われないままになっていた。 */}
+        <span className="gw-grab-hint">
+          {sheetLift > 0
+            ? <><IcoChevronDown />にわを見る</>
+            : <><IcoChevronUp />タスク一覧</>}
+        </span>
       </div>
       <div className="gw-sheet-head">
         <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
@@ -4179,11 +4303,13 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           <button className="todo-add-row" onClick={() => setAdding(true)}>
             ＋ タスクを追加
           </button>
+          {/* 絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
+              揃わない。既存の Ico* に寄せる。 */}
           <button className="todo-set-open-btn" onClick={() => setShowSets(true)}>
-            📋 TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
+            <IcoList /> TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
           </button>
           <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
-            🗑 ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
+            <IcoTrash /> ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
           </button>
         </div>
       </div>
@@ -4409,7 +4535,11 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
         autoFocus
         value={newTabName}
         onChange={e => setNewTabName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') addTab(); if (e.key === 'Escape') { setAddingTab(false); setNewTabName(''); } }}
+        onKeyDown={e => {
+          if (e.key === 'Enter') addTab();
+          // 外側のモーダルまで閉じないよう伝播を止める
+          if (e.key === 'Escape') { e.stopPropagation(); setAddingTab(false); setNewTabName(''); }
+        }}
         placeholder="タブ名を入力"
         maxLength={16}
       />
@@ -4635,6 +4765,7 @@ type ChatMessage = { role: 'user' | 'assistant'; text: string };
 // Account / Auth modal (Supabase)
 // ─────────────────────────────────────────────────────────────
 function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: () => void }) {
+  useDismissable(onClose);
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -4753,6 +4884,7 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
 }
 
 function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg; onClose: () => void }) {
+  useDismissable(onClose);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -4963,6 +5095,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
         })}
       </div>
       {detail && (
+        <Dismissable onClose={() => setDetail(null)}>
         <div className="modal-backdrop zukan-detail-backdrop" onClick={() => setDetail(null)}>
           <div className="zukan-detail" onClick={e => e.stopPropagation()}>
             <button className="gw-pop-close" onClick={() => setDetail(null)}>✕</button>
@@ -4983,6 +5116,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
             )}
           </div>
         </div>
+        </Dismissable>
       )}
     </div>
   );
@@ -5737,6 +5871,7 @@ function InsightsModal({ todos, ideas, trash, aiCfg, onClose }: {
   aiCfg: AiCfg;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   const [status, setStatus] = useState<'loading' | 'done' | 'error'>('loading');
   const [result, setResult] = useState('');
 
@@ -5991,6 +6126,7 @@ function FoodPickerSheet({ foodInventory, coins, infinite, title = '餌をえら
   onPick: (f: Food) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   return (
     <div className={`playground-food-overlay${standalone ? ' standalone' : ''}`} onClick={onClose}>
       <div className="playground-food-sheet" onClick={e => e.stopPropagation()}>
@@ -6045,6 +6181,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   onUnlockSound: (soundType: string) => void;
   onUnlockBg: (bgIdx: number) => void;
 }) {
+  useDismissable(onClose);
   const visibleMons = memoMons.filter(m => MEMOMON_DEFS.find(d => d.id === m.defId));
   const [selectedUid, setSelectedUid] = useState<string | null>(
     (initialUid && visibleMons.some(m => m.uid === initialUid) ? initialUid : visibleMons[0]?.uid) ?? null
@@ -7076,6 +7213,7 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
   onAddInterrupt: (t: Todo) => void;
   onClose: () => void;
 }) {
+  useDismissable(onClose);
   const [sess, setSess] = usePersistedState<FocusSession>('smartmemo:focus:v1', {
     date: todayStr, curId: null, startedAt: null, suspendedId: null, acc: {},
   });
@@ -7328,6 +7466,8 @@ function SmartMemoApp() {
   // 最後に見たサーバの updated_at（楽観的排他制御の基準）
   const cloudBaseRef = useRef<string | null>(null);
   const pushingRef = useRef(false);
+  // 送信中に来た変更を取りこぼさないための「未送信あり」フラグ
+  const pushDirtyRef = useRef(false);
   const [monInitSleep] = useState(() => {
     const last = parseInt(localStorage.getItem('smartmemo:lastOpen') || '0');
     const sleep = Date.now() - last > 12 * 3600 * 1000;
@@ -7648,7 +7788,9 @@ function SmartMemoApp() {
   };
   const trashRestore = (id: number | string) => {
     const item = trash.find(x => x.id === id);
-    if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, t as Todo]); }
+    // mtime を更新しないと、他端末がまだ持っている「ゴミ箱に入れた」記録
+    // （trashedAt）の方が新しく見えて、マージで復元が取り消されてしまう。
+    if (item) { const { trashedAt, ...t } = item; setTodos(p => [...p, { ...(t as Todo), mtime: Date.now() }]); }
     setTrash(p => p.filter(x => x.id !== id));
     untombstone(id);
   };
@@ -7670,10 +7812,16 @@ function SmartMemoApp() {
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
-  const navItems: { key: Tab; label: string; Icon: React.FC<{ active: boolean }> }[] = [
-    { key: 'todo',     label: 'にわ', Icon: IcoHomeNav },
-    { key: 'idea',     label: '書庫', Icon: IcoBookNav },
-    { key: 'settings', label: '設定', Icon: IcoGearNav },
+  // ボトムナビ。「にわ」「書庫」「ずかん」は愛称なので、それだけでは何の画面か
+  // 推測できない。機能名を小さく添えて初見でも辿れるようにする（設定は自明なので不要）。
+  // 中央のメモボタンぶんの隙間も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
+  type NavItem = { key: Tab; label: string; sub?: string; Icon: React.FC<{ active: boolean }> };
+  const navItems: (NavItem | 'memo-slot')[] = [
+    { key: 'todo',     label: 'にわ',   sub: 'タスク',   Icon: IcoHomeNav },
+    { key: 'idea',     label: '書庫',   sub: 'ナレッジ', Icon: IcoBookNav },
+    'memo-slot',
+    { key: 'zukan',    label: 'ずかん', sub: 'メモモン', Icon: IcoEggNav },
+    { key: 'settings', label: '設定',                    Icon: IcoGearNav },
   ];
 
   const now = new Date();
@@ -7797,7 +7945,9 @@ function SmartMemoApp() {
   const uniq = <T,>(a?: T[], b?: T[]): T[] => Array.from(new Set([...(a || []), ...(b || [])]));
 
   function mergeSettings(remote: any, local: any): Settings {
-    const merged: any = { ...(remote || {}), ...(local || {}) };
+    // 古いバージョンが送ってしまった API キーがサーバに残っていても、
+    // ここで落として端末側の設定を上書きさせない。
+    const merged: any = { ...stripSecretSettings(remote), ...(local || {}) };
     // 数え上げ系・解放済み系は「失われない」方向へ寄せる
     merged.coins = Math.max(Number(remote?.coins ?? 0), Number(local?.coins ?? 0));
     merged.customTags     = uniq(remote?.customTags, local?.customTags);
@@ -7813,16 +7963,43 @@ function SmartMemoApp() {
     return merged as Settings;
   }
 
+  // ゴミ箱行きは墓標(deleted_ids)で表せない。墓標は trash 配列にも効くので、
+  // 立てた瞬間ゴミ箱からも消えてしまうため。代わりに「同じ id が todos と
+  // trash の両方に出てきたら、新しい操作の方を採用する」で決着させる。
+  // ゴミ箱に入れた時刻は trashedAt、そこから戻した時刻は復元側の mtime。
+  function reconcileTrashed(todos: Todo[], trash: TrashedTodo[]): { todos: Todo[]; trash: TrashedTodo[] } {
+    const trashedAt = new Map<string, number>();
+    for (const t of trash) trashedAt.set(String(t.id), Number(t.trashedAt ?? 0));
+    if (!trashedAt.size) return { todos, trash };
+
+    const restored = new Set<string>();
+    const keptTodos = todos.filter(t => {
+      const k = String(t.id);
+      const at = trashedAt.get(k);
+      if (at === undefined) return true;          // ゴミ箱に無い＝そのまま残す
+      if (Number(t.mtime ?? 0) > at) { restored.add(k); return true; } // 復元の方が新しい
+      return false;                                // ゴミ箱行きの方が新しい
+    });
+    return {
+      todos: keptTodos,
+      trash: restored.size ? trash.filter(t => !restored.has(String(t.id))) : trash,
+    };
+  }
+
   function mergeSnapshots(remote: CloudSnapshot, local: CloudSnapshot): CloudSnapshot {
     const tomb: Record<string, number> = {
       ...((remote.deleted_ids as Record<string, number>) || {}),
       ...((local.deleted_ids as Record<string, number>) || {}),
     };
+    const reconciled = reconcileTrashed(
+      mergeById(remote.todos as any[], local.todos as any[], 'id', tomb) as Todo[],
+      mergeById(remote.trash as any[], local.trash as any[], 'id', tomb) as TrashedTodo[],
+    );
     return {
-      todos:     mergeById(remote.todos as any[],     local.todos as any[],     'id',  tomb),
+      todos:     reconciled.todos,
       ideas:     mergeById(remote.ideas as any[],     local.ideas as any[],     'id',  tomb),
       todo_sets: mergeById(remote.todo_sets as any[], local.todo_sets as any[], 'id',  tomb),
-      trash:     mergeById(remote.trash as any[],     local.trash as any[],     'id',  tomb),
+      trash:     reconciled.trash,
       memo_mons: mergeById(remote.memo_mons as any[], local.memo_mons as any[], 'uid', tomb),
       settings:  mergeSettings(remote.settings, local.settings) as unknown as Record<string, unknown>,
       deleted_ids: tomb,
@@ -7837,7 +8014,7 @@ function SmartMemoApp() {
       todo_sets: s.todoSets,
       trash: s.trash,
       memo_mons: s.memoMons,
-      settings: s.settings as unknown as Record<string, unknown>,
+      settings: stripSecretSettings(s.settings),
       deleted_ids: s.deletions,
     };
   }
@@ -7850,7 +8027,9 @@ function SmartMemoApp() {
     if (Array.isArray(snap.trash))     setTrash(snap.trash as TrashedTodo[]);
     if (Array.isArray(snap.memo_mons)) setMemoMons(snap.memo_mons as MemoMonInstance[]);
     if (snap.settings && typeof snap.settings === 'object') {
-      // クラウド側に欠けている必須フィールドを消さないよう既存へマージする
+      // クラウド側に欠けている必須フィールドを消さないよう既存へマージする。
+      // スナップショットには API キーが含まれない（stripSecretSettings）ので、
+      // この prev 展開が端末ローカルのキーを保つ役割も担っている。
       setSettings(prev => ({ ...prev, ...(snap.settings as unknown as Settings) }));
     }
     if (snap.deleted_ids && typeof snap.deleted_ids === 'object') {
@@ -7862,8 +8041,10 @@ function SmartMemoApp() {
   // 反映されないため、マージ直後の送信では必ず明示的に渡すこと。
   async function pushSnapshot(explicit?: CloudSnapshot) {
     if (!authUser) return;
-    // 送信が重なると片方が競合し続けるので直列化する
-    if (pushingRef.current) return;
+    // 送信が重なると片方が競合し続けるので直列化する。ただし捨ててはいけない。
+    // 捨てると「送信中に加えた変更」が次の編集まで届かないままになる。
+    // 印だけ残しておき、いま走っている送信が終わったら送り直す。
+    if (pushingRef.current) { pushDirtyRef.current = true; return; }
     pushingRef.current = true;
     setSyncStatus('syncing');
     setSyncError(null);
@@ -7893,6 +8074,12 @@ function SmartMemoApp() {
       setSyncStatus('error');
     } finally {
       pushingRef.current = false;
+      // 送信中に変更があったぶんを送り直す。ここで拾わないと、ユーザーが
+      // 編集をやめた直後の変更ほどクラウドに届かないままになる。
+      if (pushDirtyRef.current) {
+        pushDirtyRef.current = false;
+        void pushSnapshot();
+      }
     }
   }
 
@@ -7970,7 +8157,22 @@ function SmartMemoApp() {
           <div className="gw-date-chip">{headerDate}<span className="gw-dow">({headerDow})</span></div>
           <span className="tagline">SmartMemo</span>
         </div>
-        <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
+        <div className="header-right">
+          {/* 同期の失敗は設定を開かないと分からなかった。書き続けたのに他の端末へ
+              反映されていない、という事故を防ぐため、異常時だけここに出す。
+              正常時と同期中は出さない（5 秒ごとに点滅させても邪魔なだけ）。 */}
+          {authUser && syncStatus === 'error' && (
+            <button
+              type="button"
+              className="sync-chip"
+              onClick={() => setTab('settings')}
+              title={syncError || '同期に失敗しました'}
+            >
+              <IcoWarn />同期エラー
+            </button>
+          )}
+          <CoinBadge coins={settings.coins || 0} infinite={settings.infiniteCoins} onGacha={() => setShowGacha(true)} />
+        </div>
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
@@ -7984,24 +8186,26 @@ function SmartMemoApp() {
           <IcoPencilFab />
           <span>メモ</span>
         </button>
-        <div className="bottom-nav">
-          {navItems.slice(0, 2).map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-              <span className="nav-icon"><Icon active={tab === key} /></span>
-              <span className="nav-label">{label}</span>
-            </div>
-          ))}
-          <div className="nav-mic-slot" />
-          <div className={`nav-tab${tab === 'zukan' ? ' active' : ''}`} onClick={() => setTab('zukan')}>
-            <span className="nav-icon"><IcoEggNav active={tab === 'zukan'} /></span>
-            <span className="nav-label">ずかん</span>
-          </div>
-          {navItems.slice(2).map(({ key, label, Icon }) => (
-            <div key={key} className={`nav-tab${tab === key ? ' active' : ''}${pulseTabs.has(key) ? ' pulse' : ''}`} onClick={() => setTab(key)}>
-              <span className="nav-icon"><Icon active={tab === key} /></span>
-              <span className="nav-label">{label}</span>
-            </div>
-          ))}
+        <div className="bottom-nav" role="tablist" aria-label="画面の切り替え">
+          {navItems.map(item => item === 'memo-slot'
+            ? <div key="memo-slot" className="nav-mic-slot" />
+            : (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.key}
+                className={`nav-tab${tab === item.key ? ' active' : ''}${pulseTabs.has(item.key) ? ' pulse' : ''}`}
+                onClick={() => setTab(item.key)}
+              >
+                <span className="nav-icon"><item.Icon active={tab === item.key} /></span>
+                <span className="nav-label">{item.label}</span>
+                {/* 補助ラベルが無いタブ（設定）でも枠は置く。無いと下端揃えの
+                    せいでそのタブだけラベルが 12px 下がって見える。 */}
+                <span className="nav-sub" aria-hidden={!item.sub}>{item.sub ?? ''}</span>
+              </button>
+            )
+          )}
         </div>
       </div>
       {appToast && <div className="toast">{appToast}</div>}

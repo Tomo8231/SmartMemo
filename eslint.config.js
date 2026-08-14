@@ -39,9 +39,21 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // 素の no-unused-vars は TS の型・enum を誤検知するので、
+      // TypeScript 版に置き換える（_ 始まりの引数は意図的な未使用として許可）。
       'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': ['warn', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrors: 'none',
+        // `const { trashedAt, ...rest } = item` のような「取り除く」分割代入を許可
+        ignoreRestSiblings: true,
+      }],
       'no-undef': 'off',
       'no-empty': 'off',
+      // 日本語の全角スペース(U+3000)を正規表現の文字クラスで使っているため、
+      // 正規表現内だけは許可する。コード中の誤挿入は引き続き検出する。
+      'no-irregular-whitespace': ['error', { skipRegExps: true }],
     },
   },
 ];

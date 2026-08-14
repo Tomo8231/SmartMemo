@@ -25,6 +25,10 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # build にも tsc は含まれるが、検査だけ先に走らせると
+      # 失敗したときにどの段階で落ちたかがログで一目でわかる。
+      - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
