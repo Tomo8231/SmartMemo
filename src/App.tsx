@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   supabase, isSupabaseConfigured,
-  fetchCloud, pushCloud,
+  fetchCloud, pushCloud, isDeletedIdsUnsupported,
   signUpWithEmail, signInWithEmail, signInWithGoogle, signOut,
   type CloudSnapshot,
 } from './lib/supabase';
@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.37.2';
+const APP_VERSION = '1.37.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5122,7 +5122,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
   );
 }
 
-function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, syncNotice, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
@@ -5130,6 +5130,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
   authUser: User | null;
   syncStatus: 'idle' | 'syncing' | 'error';
   syncError: string | null;
+  syncNotice?: string | null;
   lastSyncAt: string | null;
   onOpenAccount: () => void;
   onPushNow: () => void;
@@ -5289,6 +5290,16 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
                       style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
                     >
                       {syncError}
+                    </div>
+                  </div>
+                )}
+                {syncStatus !== 'error' && syncNotice && (
+                  <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                    <div
+                      className="account-msg"
+                      style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                    >
+                      ⚠️ {syncNotice}
                     </div>
                   </div>
                 )}
@@ -7462,6 +7473,8 @@ function SmartMemoApp() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
+  // エラーではないが伝えたい状態（機能が一部縮退しているなど）
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const initialSyncDoneRef = useRef(false);
   // 初回同期が「完了」したか。自動送信はこれが立つまで始めない。
@@ -7860,7 +7873,17 @@ function SmartMemoApp() {
   cloudStateRef.current = { todos, todoSets, ideas, trash, memoMons, settings, deletions };
 
   function describeSyncError(e: unknown): string {
-    const raw = e instanceof Error ? e.message : String(e);
+    // Supabase(PostgREST) のエラーは Error ではなく素のオブジェクトで返ってくる。
+    // String(e) だと "[object Object]" になってしまうので message を取り出す。
+    const raw = (() => {
+      if (e instanceof Error) return e.message;
+      if (e && typeof e === 'object') {
+        const m = (e as { message?: unknown }).message;
+        if (typeof m === 'string' && m) return m;
+        try { return JSON.stringify(e); } catch { return '不明なエラー'; }
+      }
+      return String(e ?? '');
+    })();
     const code = (e as { code?: string })?.code;
     const details = (e as { details?: string })?.details || '';
     const hint = (e as { hint?: string })?.hint || '';
@@ -7874,6 +7897,18 @@ function SmartMemoApp() {
     const tech = techParts.length ? `\n\n［技術詳細］\n${techParts.join('\n')}` : '';
     const blob = `${raw} ${details} ${hint}`;
 
+    // PostgREST: 列がテーブルに無い（スキーマ未更新）
+    if (code === 'PGRST204' || /could not find the .* column/i.test(blob)) {
+      const col = blob.match(/'([\w-]+)' column/i)?.[1] || '';
+      return (
+        `テーブルに${col ? `「${col}」` : '必要な'}列がありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。\n\n` +
+        '手早く直すには次を実行:\n' +
+        "   alter table public.user_data add column if not exists deleted_ids jsonb not null default '{}'::jsonb;\n" +
+        '   notify pgrst, \'reload schema\';\n\n' +
+        '※ 列を追加済みでも出る場合は、ダッシュボードの Database → Reload schema cache を実行してください。'
+        + tech
+      );
+    }
     // PostgREST: table not found
     if (code === '42P01' || /relation .* does not exist|table .* not found/i.test(blob)) {
       return 'サーバーに user_data テーブルがありません。Supabase の SQL Editor で最新の db/schema.sql を実行してください。' + tech;
@@ -8059,6 +8094,11 @@ function SmartMemoApp() {
           cloudBaseRef.current = res.updatedAt;
           setLastSyncAt(res.updatedAt || new Date().toISOString());
           setSyncStatus('idle');
+          // 同期自体は成功しているのでエラー扱いにはしないが、
+          // 削除の同期だけが効かない状態であることは知らせる。
+          setSyncNotice(isDeletedIdsUnsupported()
+            ? 'deleted_ids 列がないため、削除の同期だけ無効になっています。Supabase の SQL Editor で最新の db/schema.sql を実行してください。'
+            : null);
           return;
         }
         // 競合＝この端末が知らない更新がサーバにある。
@@ -8182,7 +8222,7 @@ function SmartMemoApp() {
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">

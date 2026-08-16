@@ -58,6 +58,19 @@ export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; update
   };
 }
 
+// deleted_ids 列がまだ無いサーバ（schema.sql 未適用）かどうか。
+// 一度そう判定したら以降は送信対象から外し、同期自体は動かし続ける。
+let deletedIdsUnsupported = false;
+export const isDeletedIdsUnsupported = () => deletedIdsUnsupported;
+
+// PostgREST は未知の列を PGRST204 で返す
+function isMissingColumnError(err: unknown, column: string): boolean {
+  const e = err as { code?: string; message?: string } | null;
+  if (!e) return false;
+  const msg = typeof e.message === 'string' ? e.message : '';
+  return e.code === 'PGRST204' && msg.includes(column);
+}
+
 // 楽観的排他制御つきの書き込み。
 // baseUpdatedAt（＝自分が最後に見たサーバの更新時刻）を条件に更新するので、
 // その間に他の端末が書き込んでいた場合は 0 件更新となり conflict を返す。
@@ -72,25 +85,42 @@ export async function pushCloud(
   if (!userId) return { conflict: false, updatedAt: null };
   const nowIso = new Date().toISOString();
 
-  if (baseUpdatedAt) {
-    const { data, error } = await supabase
+  const payload = () => {
+    const p: Record<string, unknown> = { ...snapshot, updated_at: nowIso };
+    if (deletedIdsUnsupported) delete p.deleted_ids;
+    return p;
+  };
+
+  const attempt = async () => {
+    if (baseUpdatedAt) {
+      return supabase!
+        .from(TABLE)
+        .update(payload())
+        .eq('user_id', userId)
+        .eq('updated_at', baseUpdatedAt)
+        .select('updated_at');
+    }
+    // 初回（サーバに行が無い / 基準が不明）だけ upsert する
+    return supabase!
       .from(TABLE)
-      .update({ ...snapshot, updated_at: nowIso })
-      .eq('user_id', userId)
-      .eq('updated_at', baseUpdatedAt)
+      .upsert({ user_id: userId, ...payload() }, { onConflict: 'user_id' })
       .select('updated_at');
-    if (error) throw error;
+  };
+
+  let { data, error } = await attempt();
+  // deleted_ids 列が無いサーバでも同期が止まらないよう、その列を外して一度だけ再送する
+  if (error && !deletedIdsUnsupported && isMissingColumnError(error, 'deleted_ids')) {
+    console.warn('[cloud] deleted_ids 列がないため、削除の同期を無効にして続行します。db/schema.sql を実行してください。');
+    deletedIdsUnsupported = true;
+    ({ data, error } = await attempt());
+  }
+  if (error) throw error;
+
+  if (baseUpdatedAt) {
     // 0 件 = 自分が知らない更新がサーバ側にある（＝競合）
     if (!data || data.length === 0) return { conflict: true, updatedAt: null };
     return { conflict: false, updatedAt: data[0].updated_at ?? nowIso };
   }
-
-  // 初回（サーバに行が無い / 基準が不明）だけ upsert する
-  const { data, error } = await supabase
-    .from(TABLE)
-    .upsert({ user_id: userId, ...snapshot, updated_at: nowIso }, { onConflict: 'user_id' })
-    .select('updated_at');
-  if (error) throw error;
   return { conflict: false, updatedAt: data?.[0]?.updated_at ?? nowIso };
 }
 
