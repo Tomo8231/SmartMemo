@@ -2888,7 +2888,10 @@
     .app.dark .img-preview { border-color:#2e2e32; }
     .app.dark .todo-controls { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .search-input { background:#28282c;  border-color:#2e2e32; }
-    .app.dark .filter-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .filter-tag.active が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .filter-tag:not(.active) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-wrapper { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .todo-list-header { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .cal-month-label { color:#f0f0ee; }
@@ -2905,7 +2908,10 @@
     .app.dark .cal-dow-cell.sun { color:#ef5350; }
     .app.dark .cal-dow-cell.sat { color:#42a5f5; }
     .app.dark .cal-span-bar.single { background:rgba(255,255,255,.08); color:#b0b0ac; }
-    .app.dark .mode-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .mode-btn.active が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .mode-btn:not(.active) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-toggle { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .todo-item { border-color:#2e2e32; }
     .app.dark .todo-del { background:#1e1e21; border-color:#2e2e32; color:#4a4a48; }
@@ -2921,7 +2927,10 @@
     .app.dark .ts-del-btn { background:#1e1e21; }
     .app.dark .ts-create-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-item-row { background:#28282c; border-color:#3e3e42; }
-    .app.dark .ts-tag-btn { background:#2a2a2e; border-color:#3e3e42; color:#9a9a98; }
+    /* ダークの基本色。選択状態は .ts-tag-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .ts-tag-btn:not(.sel) { background:#2a2a2e; border-color:#3e3e42; color:#9a9a98; }
     .app.dark .ts-add-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-picker-row { border-color:#2e2e32; }
     .app.dark .ts-picker-row.sel { background:rgba(var(--accent-rgb,212,98,42),.18); }
@@ -2946,7 +2955,10 @@
     .app.dark .memo-att-file-chip { background:#1a2030; border-color:#2a3a50; }
     .app.dark .memo-att-file-name { color:#7ab0ff; }
     .app.dark .modal-att-toast { background:#2d1515; border-color:#4a2020; color:#ff8080; }
-    .app.dark .modal-day-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .modal-day-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .modal-day-btn:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-today-btn { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .section-head-label { color:#5a5a58; }
     .app.dark .undated-arrow { color:#5a5a58; }
@@ -2967,7 +2979,10 @@
     .app.dark .settings-card { border-color:#2e2e32; }
     .app.dark .settings-row { border-color:#2e2e32; }
     .app.dark .settings-section-title { color:#6a6a68; }
-    .app.dark .sound-type-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .sound-type-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .sound-type-btn:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .api-input-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
     .app.dark .notif-perm-row { border-color:#2e2e32; }
     .app.dark .notif-perm-label { color:#8a8a88; }
@@ -2984,7 +2999,10 @@
     .app.dark .modal-field input, .app.dark .modal-field select, .app.dark .modal-field textarea {
       background:#28282c; color:#f0f0ee; border-color:#2e2e32;
     }
-    .app.dark .modal-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .modal-tag.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .modal-tag:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .modal-cancel {  border-color:#2e2e32; color:#f0f0ee; }
     .app.dark .modal-delete { background:#c0392b; }
     .app.dark .modal-title-delete { color:#6a6a68; }
@@ -2997,7 +3015,10 @@
     .app.dark .todo-item.overdue { border-color:#5a1a14; background:#1e1210; }
     .app.dark .todo-item.overdue .todo-title { color:#e57373; }
     .app.dark .todo-item.overdue .todo-date-str { color:#e57373; }
-    .app.dark .font-size-opt { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .font-size-opt.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .font-size-opt:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
 
     /* Boss TODO */
     .boss-item {
