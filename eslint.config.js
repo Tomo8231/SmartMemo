@@ -6,6 +6,23 @@ import reactHooks from 'eslint-plugin-react-hooks';
 export default [
   { ignores: ['dist', 'dev-dist', 'node_modules'] },
   js.configs.recommended,
+  // Node で動かす開発用スクリプト（ブラウザではなく Node のグローバルを使う）
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        document: 'readonly',
+        getComputedStyle: 'readonly',
+        Math: 'readonly',
+        Date: 'readonly',
+      },
+    },
+  },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {

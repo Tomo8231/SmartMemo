@@ -1,7 +1,7 @@
 {
   "name": "smartmemo",
   "private": true,
-  "version": "1.37.2",
+  "version": "1.38.0",
   "type": "module",
   "description": "AI でタスクを自動整理するメモ・TODO 管理 PWA",
   "scripts": {
@@ -9,7 +9,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "visual:snap": "node scripts/visual-snapshot.mjs .visual",
+    "visual:diff": "node scripts/visual-diff.mjs .visual"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
@@ -24,6 +26,9 @@
     "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
+    "pixelmatch": "^7.2.0",
+    "playwright": "^1.62.1",
+    "pngjs": "^7.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vite-plugin-pwa": "^0.21.1"
