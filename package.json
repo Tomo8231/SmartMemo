@@ -1,7 +1,7 @@
 {
   "name": "smartmemo",
   "private": true,
-  "version": "1.37.2",
+  "version": "1.37.3",
   "type": "module",
   "description": "AI でタスクを自動整理するメモ・TODO 管理 PWA",
   "scripts": {
