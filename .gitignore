@@ -9,3 +9,6 @@ dev-dist/
 .env
 .env.*
 !.env.example
+
+# 見た目の回帰チェック用スナップショット
+.visual/

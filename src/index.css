@@ -41,6 +41,7 @@
       --bg:           #fafaf9;  /* アプリの地 */
       --surface:      #ffffff;  /* カード・シート */
       --surface-sunk: #f0f0ee;  /* 入力欄・くぼみ */
+      --surface-2:    #ffffff;  /* カードの上に重なる面。ダークでは sunk と同じ濃さ */
 
       /* 文字 — 強いものから弱いものへ */
       --ink:          #1a1a18;
@@ -50,6 +51,9 @@
       /* 罫線 */
       --rule:         #ebebea;
       --rule-strong:  #e0e0de;
+      /* メモモン画面（木目調）と にわ の見出しで使う暖色系の文字色 */
+      --warm-ink:     #5a3818;
+      --gw-ink:       #3a3532;
 
       /* 状態（アクセントとは別系統。警告色をブランド色と兼ねない） */
       --danger:       #c0492f;
@@ -103,7 +107,7 @@
       min-height:50px;
     }
     .header-left { display:flex; gap:8px; }
-    .app-header h1 { font-size:18px; font-weight:700; letter-spacing:-0.6px; color:#1a1a18; }
+    .app-header h1 { font-size:18px; font-weight:700; letter-spacing:-0.6px; color:var(--ink); }
     .coin-badge {
       display:flex; align-items:center; gap:5px; border:none; cursor:pointer;
       flex-shrink:0; transition:opacity .15s;
@@ -430,7 +434,7 @@
       padding: 10px 12px;
     }
     .playground-items-title {
-      font-size: 12px; font-weight: 800; color: #5a3818;
+      font-size: 12px; font-weight: 800; color:var(--warm-ink);
       letter-spacing: .3px; margin-bottom: 6px;
     }
     .playground-items-strip {
@@ -466,7 +470,6 @@
       box-shadow: 0 2px 4px rgba(0,0,0,.18);
     }
     .app.dark .playground-items { background: rgba(255,255,255,.05); }
-    .app.dark .playground-items-title { color: #f0e2c8; }
     .app.dark .playground-item-card {
       background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.10);
     }
@@ -484,7 +487,7 @@
       position: relative;
       width: 100%; max-width: 280px;
       padding: 22px 18px 18px;
-      background: #fff;
+      background:var(--surface-2);
       border: 2px solid #ff8a3d;
       border-radius: 18px;
       box-shadow: 0 0 28px rgba(255,138,61,.55), 0 16px 40px rgba(0,0,0,.30);
@@ -514,7 +517,6 @@
       transition: transform .08s;
     }
     .bonus-reveal-close:active { transform: scale(.95); }
-    .app.dark .bonus-reveal-card { background: #28282c; }
     .app.dark .bonus-reveal-label { color: #f0e2c8; }
     .app.dark .bonus-reveal-sub { color: rgba(240,226,200,.5); }
 
@@ -786,7 +788,7 @@
       border-radius: 50%;
       border: none;
       background: rgba(0,0,0,.10);
-      color: #5a3818;
+      color:var(--warm-ink);
       font-size: 15px; line-height: 1;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
@@ -795,7 +797,7 @@
     }
     .playground-close-btn:hover { background: rgba(0,0,0,.18); }
     .playground-close-btn:active { transform: scale(.94); }
-    .app.dark .playground-close-btn { background: rgba(255,255,255,.12); color: #f0e2c8; }
+    .app.dark .playground-close-btn { background: rgba(255,255,255,.12);  }
     .app.dark .playground-close-btn:hover { background: rgba(255,255,255,.20); }
 
     .playground-nav-arrow {
@@ -805,7 +807,7 @@
       border-radius: 50%;
       border: none;
       background: rgba(255,255,255,.75);
-      color: #5a3818;
+      color:var(--warm-ink);
       font-size: 22px; font-weight: 700; line-height: 1;
       cursor: pointer; font-family: inherit;
       box-shadow: 0 4px 12px rgba(0,0,0,.15);
@@ -815,13 +817,12 @@
     }
     .playground-nav-arrow.left { left: 4px; }
     .playground-nav-arrow.right { right: 4px; }
-    .playground-nav-arrow:hover { background: #fff; }
+    .playground-nav-arrow:hover { background:var(--surface-2); }
     .playground-nav-arrow:active { transform: scale(.92); }
     .app.dark .playground-nav-arrow {
-      background: rgba(40,40,46,.85); color: #f0e2c8;
+      background: rgba(40,40,46,.85); 
       box-shadow: 0 4px 12px rgba(0,0,0,.4);
     }
-    .app.dark .playground-nav-arrow:hover { background: #28282c; }
 
     .playground-dots {
       display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
@@ -970,7 +971,7 @@
       bottom: calc(100% - 4px);
       left: 50%;
       transform: translateX(-50%);
-      background: #fff; color: #1a1a18;
+      background:var(--surface-2); color:var(--ink);
       border: 1.5px solid #1a1a18;
       border-radius: 14px;
       padding: 7px 12px;
@@ -996,14 +997,13 @@
       top: calc(100% - 2px); left: 50%;
       transform: translateX(-50%);
       border: 6px solid transparent;
-      border-top-color: #fff;
+      border-top-color:var(--surface-2);
       z-index: 1;
     }
     .app.dark .playground-stage-bubble {
-      background: #28282c; color: #f0f0ee; border-color: #5a5a58;
+        border-color: #5a5a58;
     }
     .app.dark .playground-stage-bubble::after { border-top-color: #5a5a58; }
-    .app.dark .playground-stage-bubble::before { border-top-color: #28282c; }
     .playground-stage-img {
       max-width: 100%; max-height: 100%;
       object-fit: contain;
@@ -1083,7 +1083,7 @@
       display: flex; flex-direction: column; gap: 6px;
     }
     .playground-gifts-label {
-      font-size: 11px; font-weight: 800; color: #5a3818;
+      font-size: 11px; font-weight: 800; color:var(--warm-ink);
       letter-spacing: .3px;
     }
     .playground-gifts-slots {
@@ -1130,7 +1130,6 @@
       text-align: center;
     }
     .app.dark .playground-gifts { border-top-color: rgba(255,255,255,.10); }
-    .app.dark .playground-gifts-label { color: #f0e2c8; }
     .app.dark .playground-gift-slot.empty {
       background: rgba(255,255,255,.04);
       border-color: rgba(255,255,255,.10);
@@ -1204,7 +1203,7 @@
       position: fixed; z-index: 1000; border-radius: 0;
     }
     .playground-food-sheet {
-      background: #fff;
+      background:var(--surface-2);
       border-radius: 16px;
       padding: 16px 14px 14px;
       width: 100%;
@@ -1270,7 +1269,7 @@
     .playground-food-cancel {
       width: 100%; margin-top: 10px;
       padding: 10px; border: 1px solid #e0e0de; border-radius: 10px;
-      background: #fff; color: #4a4a48;
+      background:var(--surface); color: #4a4a48;
       font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
     }
 
@@ -1319,7 +1318,6 @@
     .app.dark .playground-open-btn-title,
     .app.dark .playground-open-btn-arrow { color: #f0e2c8; }
     .app.dark .playground-open-btn-sub { color: rgba(240,226,200,.6); }
-    .app.dark .playground-food-sheet { background: #28282c; }
     .app.dark .playground-food-title,
     .app.dark .playground-food-name,
     .app.dark .playground-food-cost { color: #f0e2c8; }
@@ -1331,7 +1329,7 @@
     .app.dark .playground-food-card.grade-3 { background: #18222e; }
     .app.dark .playground-food-card.grade-4 { background: linear-gradient(135deg, #2a2418, #2a1f12); }
     .app.dark .playground-food-cancel {
-      background: #1e1e21; border-color: #3a3a3e; color: #b0b0ac;
+       border-color: #3a3a3e; color: #b0b0ac;
     }
 
     /* Bottom nav */
@@ -1441,7 +1439,7 @@
     .memo-card-top {
       display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
     }
-    .memo-card-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; letter-spacing:0.6px; text-transform:uppercase; }
+    .memo-card-label { font-size:var(--fs-xs); font-weight:600; color:var(--ink-mute); letter-spacing:0.6px; text-transform:uppercase; }
     .memo-char-count { font-size:var(--fs-xs); color:#c0c0ba; }
     .memo-textarea-wrap {
       flex:1; min-height:0; position:relative; display:flex; flex-direction:column;
@@ -1587,7 +1585,7 @@
     .search-input {
       width:100%; padding:9px 12px; border:1px solid #e0e0de;
       border-radius:8px; font-size:var(--fs-base); font-family:inherit;
-      outline:none; color:#1a1a18; background:#fafaf9;
+      outline:none; color:var(--ink); background:#fafaf9;
     }
     .search-input:focus { border-color:var(--accent); background:#fff; }
     .filter-tags {
@@ -1745,7 +1743,7 @@
     .section-head-label { font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; }
     .section-count { font-size:10px; font-weight:700; background:var(--accent); color:#fff; border-radius:10px; padding:1px 7px; }
     .todo-empty { text-align:center; padding:28px 0 10px; color:#c0c0ba; font-size:var(--fs-sm); }
-    .divider { height:1px; background:#ebebea; margin:14px 0; }
+    .divider { height:1px; background:var(--rule); margin:14px 0; }
     .overdue-head { display:flex; align-items:center; gap:7px; margin-bottom:8px; }
     .overdue-head .section-head-label { color:#c0392b !important; }
     .overdue-head .section-count { background:#c0392b !important; }
@@ -1863,7 +1861,7 @@
     }
     .modal-cancel {
       flex:1; padding:12px; border:1px solid #e0e0de; border-radius:10px;
-      background:#fff; font-size:var(--fs-base); font-weight:500; cursor:pointer; font-family:inherit;
+      background:var(--surface); font-size:var(--fs-base); font-weight:500; cursor:pointer; font-family:inherit;
     }
     .modal-save {
       flex:2; padding:12px; border:none; border-radius:10px;
@@ -1884,7 +1882,7 @@
     }
     .confirm-header { margin-bottom:12px; }
     .confirm-title { font-size:15px; font-weight:700; letter-spacing:-.3px; margin-bottom:4px; }
-    .confirm-sub   { font-size:var(--fs-xs); color:#a0a09c; line-height:1.55; }
+    .confirm-sub   { font-size:var(--fs-xs); color:var(--ink-mute); line-height:1.55; }
     .confirm-list  { flex:1; overflow-y:auto; min-height:60px; padding:2px 0 6px; }
     .confirm-list::-webkit-scrollbar { display:none; }
     .confirm-actions {
@@ -1893,7 +1891,7 @@
     }
     .modal-save:disabled { opacity:.4; cursor:not-allowed; }
     .confirm-section-head {
-      font-size:var(--fs-xs); font-weight:600; color:#a0a09c;
+      font-size:var(--fs-xs); font-weight:600; color:var(--ink-mute);
       text-transform:uppercase; letter-spacing:.5px;
       margin:8px 2px 6px;
     }
@@ -1919,7 +1917,7 @@
     }
     .idea-card-body { flex:1; min-width:0; }
     .idea-project {
-      font-size:var(--fs-base); font-weight:600; color:#1a1a18;
+      font-size:var(--fs-base); font-weight:600; color:var(--ink);
       letter-spacing:-.2px; line-height:1.35;
     }
     .idea-summary { font-size:var(--fs-sm); color:#4a4a48; line-height:1.55; margin-top:4px; }
@@ -1984,10 +1982,10 @@
     .ts-set-list { flex:1; overflow-y:auto; padding:0 0 8px; }
     .ts-set-card {
       margin:0 16px 10px; border:1px solid #ebebea; border-radius:12px;
-      padding:12px 14px; background:#fff;
+      padding:12px 14px; background:var(--surface);
     }
     .ts-set-info { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
-    .ts-set-name { font-size:var(--fs-base); font-weight:600; color:#1a1a18; }
+    .ts-set-name { font-size:var(--fs-base); font-weight:600; color:var(--ink); }
     .ts-set-count { font-size:var(--fs-xs); color:#a0a09c; background:#f0f0ee; border-radius:8px; padding:2px 7px; }
     .ts-set-preview { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px; min-height:20px; }
     .ts-set-preview-item {
@@ -2025,7 +2023,7 @@
     }
     .ts-item-input {
       border:none; background:transparent; font-size:var(--fs-base);
-      font-family:inherit; color:#1a1a18; width:100%; outline:none;
+      font-family:inherit; color:var(--ink); width:100%; outline:none;
       padding-right:24px;
     }
     .ts-item-tags { display:flex; flex-wrap:wrap; gap:4px; }
@@ -2055,7 +2053,7 @@
     }
     .ts-picker-row.sel { background:var(--accent-light); }
     .ts-picker-check { width:18px; font-size:14px; font-weight:700; color:var(--accent); flex-shrink:0; }
-    .ts-picker-title { flex:1; font-size:var(--fs-base); color:#1a1a18; }
+    .ts-picker-title { flex:1; font-size:var(--fs-base); color:var(--ink); }
     .ts-picker-tags { display:flex; flex-wrap:wrap; gap:3px; flex-shrink:0; }
     .trash-item {
       display:flex; align-items:center; gap:8px; padding:10px 16px;
@@ -2063,10 +2061,10 @@
     }
     .trash-item:hover { background:#f5f5f3; }
     .trash-item-info { flex:1; min-width:0; }
-    .trash-item-title { font-size:13px; color:#1a1a18; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .trash-item-title { font-size:13px; color:var(--ink); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .trash-restore-btn {
       flex-shrink:0; padding:4px 10px; border-radius:6px;
-      border:1px solid #e0e0de; background:#fff;
+      border:1px solid #e0e0de; background:var(--surface);
       color:var(--accent); font-size:11px; font-weight:600;
       cursor:pointer; font-family:inherit;
     }
@@ -2138,7 +2136,7 @@
     .attachment-link-url {
       flex:1; height:34px; border-radius:8px; border:1px solid #e0e0de;
       padding:0 10px; font-size:13px; font-family:inherit; outline:none;
-      background:#fff;
+      background:var(--surface);
     }
     .attachment-link-url:focus { border-color:var(--accent); }
     .attachment-link-confirm {
@@ -2149,7 +2147,7 @@
     }
     .attachment-link-cancel {
       width:34px; height:34px; border-radius:8px; border:1px solid #e0e0de;
-      background:#fff; color:#888; font-size:14px; cursor:pointer;
+      background:var(--surface); color:#888; font-size:14px; cursor:pointer;
       display:flex; align-items:center; justify-content:center; flex-shrink:0;
     }
     /* Link chip in todo/idea row */
@@ -2295,7 +2293,7 @@
     }
     .account-modal {
       position:relative;
-      background:#fff;
+      background:var(--surface);
       border-radius:18px;
       width:100%; max-width:420px;
       padding:22px 20px 18px;
@@ -2304,11 +2302,11 @@
       display:flex; flex-direction:column; gap:10px;
     }
     .account-title {
-      font-size:16px; font-weight:800; color:#1a1a18; text-align:center;
+      font-size:16px; font-weight:800; color:var(--ink); text-align:center;
       margin-bottom:6px;
     }
     .account-mode-tabs {
-      display:flex; background:#f0f0ee; border-radius:10px; padding:3px;
+      display:flex; background:var(--surface-sunk); border-radius:10px; padding:3px;
     }
     .account-mode-tab {
       flex:1; padding:7px; border:none; background:transparent;
@@ -2316,7 +2314,7 @@
       font-size:13px; font-weight:600; color:#6a6a68;
       transition:background .12s, color .12s;
     }
-    .account-mode-tab.active { background:#fff; color:#1a1a18; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+    .account-mode-tab.active { background:var(--surface); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08); }
     .account-field {
       display:flex; flex-direction:column; gap:4px;
       font-size:12px; color:#6a6a68; font-weight:600;
@@ -2344,7 +2342,7 @@
     .account-google {
       display:flex; align-items:center; justify-content:center; gap:8px;
       padding:10px; border:1px solid #d8d8d4; border-radius:10px;
-      background:#fff; color:#1a1a18; font-weight:600; font-family:inherit;
+      background:#fff; color:var(--ink); font-weight:600; font-family:inherit;
       cursor:pointer; font-size:13px;
       transition:background .12s;
     }
@@ -2362,7 +2360,7 @@
       display:flex; flex-direction:column; gap:10px;
     }
     .account-email {
-      font-size:14px; font-weight:700; color:#1a1a18;
+      font-size:14px; font-weight:700; color:var(--ink);
     }
     .account-signout {
       margin-top:6px;
@@ -2373,17 +2371,12 @@
     .account-signout:hover { background:#fdf0f0; }
     .account-signout:disabled { opacity:.5; cursor:not-allowed; }
 
-    .app.dark .account-modal { background:#1e1e21; }
-    .app.dark .account-title { color:#f0f0ee; }
-    .app.dark .account-mode-tabs { background:#28282c; }
-    .app.dark .account-mode-tab.active { background:#1e1e21; color:#f0f0ee; }
     .app.dark .account-field input { background:#28282c; color:#f0f0ee; border-color:#3a3a3e; }
     .app.dark .account-divider { color:#6a6a68; }
     .app.dark .account-divider::before, .app.dark .account-divider::after { background:#2e2e32; }
-    .app.dark .account-google { background:#28282c; color:#f0f0ee; border-color:#3a3a3e; }
+    .app.dark .account-google { background:#28282c;  border-color:#3a3a3e; }
     .app.dark .account-google:hover { background:rgba(255,255,255,.06); }
     .app.dark .account-help { color:#9a9a98; }
-    .app.dark .account-email { color:#f0f0ee; }
     .app.dark .account-signout { background:#28282c; border-color:#3a3a3e; }
 
     .knowchat-modal {
@@ -2400,7 +2393,7 @@
       padding:14px 16px;
       border-bottom:1px solid #ebebea;
     }
-    .knowchat-title { font-size:15px; font-weight:800; color:#1a1a18; }
+    .knowchat-title { font-size:15px; font-weight:800; color:var(--ink); }
     .knowchat-close {
       background:rgba(0,0,0,.06); border:none; border-radius:50%;
       width:28px; height:28px; cursor:pointer; font-family:inherit;
@@ -2415,7 +2408,7 @@
       background:#fafaf9; border-bottom:1px solid #ebebea;
       flex-wrap:wrap;
     }
-    .knowchat-scope-label { font-weight:700; color:#1a1a18; }
+    .knowchat-scope-label { font-weight:700; color:var(--ink); }
     .knowchat-scope-count { color:var(--accent); font-weight:700; }
     .knowchat-pick-btn,
     .knowchat-clear-btn {
@@ -2446,7 +2439,7 @@
     .knowchat-picker-row:hover { background:#f5f5f3; }
     .knowchat-picker-row.selected { background:rgba(124,106,245,.08); }
     .knowchat-picker-row input { accent-color:#7c6af5; }
-    .knowchat-picker-name { font-weight:700; color:#1a1a18; flex-shrink:0; }
+    .knowchat-picker-name { font-weight:700; color:var(--ink); flex-shrink:0; }
     .knowchat-picker-sub {
       color:#6a6a68; flex:1; min-width:0;
       overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -2483,7 +2476,7 @@
     }
     .knowchat-msg-assistant .knowchat-msg-bubble {
       background:#fff;
-      color:#1a1a18;
+      color:var(--ink);
       border:1px solid #ebebea;
       border-bottom-left-radius:4px;
     }
@@ -2505,7 +2498,7 @@
       display:flex; gap:8px; align-items:flex-end;
       padding:10px 12px;
       border-top:1px solid #ebebea;
-      background:#fff;
+      background:var(--surface);
     }
     .knowchat-input {
       flex:1; min-height:42px; max-height:120px;
@@ -2513,7 +2506,7 @@
       border:1px solid #d8d8d4; border-radius:10px;
       font-size:13px; font-family:inherit; line-height:1.5;
       resize:none; outline:none;
-      background:#fff; color:#1a1a18;
+      background:var(--surface-2); color:var(--ink);
     }
     .knowchat-input:focus { border-color:#7c6af5; }
     .knowchat-send {
@@ -2529,24 +2522,21 @@
 
     .app.dark .knowchat-modal { background:#1e1e21; }
     .app.dark .knowchat-header { border-bottom-color:#2e2e32; }
-    .app.dark .knowchat-title { color:#f0f0ee; }
     .app.dark .knowchat-close { background:rgba(255,255,255,.08); color:#b0b0ac; }
     .app.dark .knowchat-scope { background:#28282c; color:#b0b0ac; border-bottom-color:#2e2e32; }
-    .app.dark .knowchat-scope-label { color:#f0f0ee; }
     .app.dark .knowchat-pick-btn { border-color:#3a3a3e; color:#b0b0ac; }
     .app.dark .knowchat-pick-btn:hover { background:rgba(255,255,255,.06); }
     .app.dark .knowchat-picker { background:#1e1e21; border-bottom-color:#2e2e32; }
     .app.dark .knowchat-picker-row:hover { background:rgba(255,255,255,.05); }
     .app.dark .knowchat-picker-row.selected { background:rgba(124,106,245,.18); }
-    .app.dark .knowchat-picker-name { color:#f0f0ee; }
     .app.dark .knowchat-picker-sub { color:#9a9a98; }
     .app.dark .knowchat-messages { background:#16161a; }
     .app.dark .knowchat-empty { color:#9a9a98; }
     .app.dark .knowchat-msg-assistant .knowchat-msg-bubble {
-      background:#28282c; color:#f0f0ee; border-color:#3a3a3e;
+      background:#28282c;  border-color:#3a3a3e;
     }
-    .app.dark .knowchat-input-row { background:#1e1e21; border-top-color:#2e2e32; }
-    .app.dark .knowchat-input { background:#28282c; border-color:#3a3a3e; color:#f0f0ee; }
+    .app.dark .knowchat-input-row {  border-top-color:#2e2e32; }
+    .app.dark .knowchat-input {  border-color:#3a3a3e;  }
 
     .app.glass .knowchat-modal {
       background:rgba(255,255,255,.42);
@@ -2631,8 +2621,8 @@
       border-bottom:1px solid #f0f0ee;
     }
     .settings-row:last-child { border-bottom:none; }
-    .settings-row-label { font-size:var(--fs-base); color:#1a1a18; }
-    .settings-row-sub   { font-size:var(--fs-xs); color:#a0a09c; margin-top:1px; }
+    .settings-row-label { font-size:var(--fs-base); color:var(--ink); }
+    .settings-row-sub   { font-size:var(--fs-xs); color:var(--ink-mute); margin-top:1px; }
 
     /* Color swatches */
     /* 背景テーマは 7 色あり、10px 固定の gap だと横幅を使い切ってラベルに
@@ -2731,12 +2721,12 @@
     .notif-perm-btn:active { opacity:.8; }
     .notif-select {
       padding:5px 8px; border-radius:8px; border:1px solid #d4d4d0;
-      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-size:var(--fs-sm); color:var(--ink); background:var(--surface-2);
       font-family:inherit; cursor:pointer; flex-shrink:0;
     }
     .notif-time-input {
       padding:5px 8px; border-radius:8px; border:1px solid #d4d4d0;
-      font-size:var(--fs-sm); color:#1a1a18; background:#fff;
+      font-size:var(--fs-sm); color:var(--ink); background:var(--surface-2);
       font-family:inherit; flex-shrink:0; width:90px;
     }
     .notif-test-btn {
@@ -2758,13 +2748,13 @@
     .backup-btn-row { display:flex; gap:8px; margin-top:8px; }
     .backup-btn {
       flex:1; padding:10px 14px; border:1px solid #e0e0de; border-radius:8px;
-      background:#fff; color:#1a1a18;
+      background:#fff; color:var(--ink);
       font-size:var(--fs-sm); font-weight:600; cursor:pointer;
       font-family:inherit; transition:background .15s;
     }
     .backup-btn:hover  { background:#f5f5f3; }
     .backup-btn:active { background:#ebebea; }
-    .app.dark .backup-btn { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
+    .app.dark .backup-btn { background:#28282c;  border-color:#2e2e32; }
     .app.dark .backup-btn:hover  { background:#303034; }
     .app.dark .backup-btn:active { background:#1e1e21; }
     .insights-sheet { max-height:92vh; display:flex; flex-direction:column; }
@@ -2836,10 +2826,10 @@
 
     /* About */
     .about-card {
-      background:#fff; border:1px solid #ebebea; border-radius:12px;
+      background:var(--surface); border:1px solid #ebebea; border-radius:12px;
       padding:16px; text-align:center;
     }
-    .about-app-name { font-size:17px; font-weight:700; letter-spacing:-.5px; color:#1a1a18; margin-bottom:3px; }
+    .about-app-name { font-size:17px; font-weight:700; letter-spacing:-.5px; color:var(--ink); margin-bottom:3px; }
     .about-version  { font-size:var(--fs-xs); color:#a0a09c; }
 
     /* TODO check sparkle */
@@ -2869,6 +2859,9 @@
       --ink-mute:     #6a6a68;
       --rule:         #2e2e32;
       --rule-strong:  #3a3a40;
+      --surface-2:    #28282c;
+      --warm-ink:     #f0e2c8;
+      --gw-ink:       #e8e8e4;
       --danger:       #e08b74;
       --danger-bg:    #33201c;
       --success:      #7fb99a;
@@ -2880,14 +2873,12 @@
     }
     .app.dark { color:var(--ink); }
     .app.dark .app-header { border-color:#2e2e32; }
-    .app.dark .app-header h1 { color:#f0f0ee; }
     .app.dark .tagline { color:#6a6a68; }
     .app.dark .bottom-nav-wrapper { /* inherits from .bottom-nav */ }
     .app.dark .nav-tab .nav-label { color:#5a5a58; }
     .app.dark .nav-tab.active .nav-label { color:var(--accent); }
     .app.dark .tab-content { background:#141416; }
     .app.dark .memo-card { border-color:#2e2e32; }
-    .app.dark .memo-card-label { color:#6a6a68; }
     .app.dark .memo-textarea { color:#f0f0ee; background:transparent; }
     .app.dark .memo-textarea::placeholder { color:#4a4a48; }
     .app.dark .memo-clear-btn { background:rgba(255,255,255,0.09); color:#6a6a68; }
@@ -2896,8 +2887,11 @@
     .app.dark .memo-actions { border-color:#2e2e32; }
     .app.dark .img-preview { border-color:#2e2e32; }
     .app.dark .todo-controls { background:#1e1e21; border-color:#2e2e32; }
-    .app.dark .search-input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
-    .app.dark .filter-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .search-input { background:#28282c;  border-color:#2e2e32; }
+    /* ダークの基本色。選択状態は .filter-tag.active が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .filter-tag:not(.active) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-wrapper { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .todo-list-header { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .cal-month-label { color:#f0f0ee; }
@@ -2914,7 +2908,10 @@
     .app.dark .cal-dow-cell.sun { color:#ef5350; }
     .app.dark .cal-dow-cell.sat { color:#42a5f5; }
     .app.dark .cal-span-bar.single { background:rgba(255,255,255,.08); color:#b0b0ac; }
-    .app.dark .mode-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .mode-btn.active が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .mode-btn:not(.active) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-toggle { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .todo-item { border-color:#2e2e32; }
     .app.dark .todo-del { background:#1e1e21; border-color:#2e2e32; color:#4a4a48; }
@@ -2923,24 +2920,23 @@
     .app.dark .todo-add-row { border-color:#2e2e32; background:transparent; }
     .app.dark .todo-set-open-btn { border-color:#2e2e32; }
     .app.dark .trash-open-btn { border-color:#2e2e32; color:#5a5a58; }
-    .app.dark .ts-set-card { background:#1e1e21; border-color:#2e2e32; }
-    .app.dark .ts-set-name { color:#f0f0ee; }
+    .app.dark .ts-set-card {  border-color:#2e2e32; }
     .app.dark .ts-set-count { background:#2e2e32; color:#8a8a88; }
     .app.dark .ts-set-preview-item { background:#2e2e32; color:#9a9a98; }
     .app.dark .ts-edit-btn { background:#1e1e21; border-color:#3e3e42; color:#9a9a98; }
     .app.dark .ts-del-btn { background:#1e1e21; }
     .app.dark .ts-create-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-item-row { background:#28282c; border-color:#3e3e42; }
-    .app.dark .ts-item-input { color:#f0f0ee; }
-    .app.dark .ts-tag-btn { background:#2a2a2e; border-color:#3e3e42; color:#9a9a98; }
+    /* ダークの基本色。選択状態は .ts-tag-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .ts-tag-btn:not(.sel) { background:#2a2a2e; border-color:#3e3e42; color:#9a9a98; }
     .app.dark .ts-add-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-picker-row { border-color:#2e2e32; }
     .app.dark .ts-picker-row.sel { background:rgba(var(--accent-rgb,212,98,42),.18); }
-    .app.dark .ts-picker-title { color:#f0f0ee; }
     .app.dark .trash-item { border-color:#2e2e32; }
     .app.dark .trash-item:hover { background:#28282c; }
-    .app.dark .trash-item-title { color:#f0f0ee; }
-    .app.dark .trash-restore-btn { background:#1e1e21; border-color:#2e2e32; }
+    .app.dark .trash-restore-btn {  border-color:#2e2e32; }
     .app.dark .attachment-thumb { border-color:#2e2e32; }
     .app.dark .attachment-file-chip { background:#1a2030; border-color:#2a3a50; }
     .app.dark .attachment-file-label { color:#7ab0ff; }
@@ -2948,8 +2944,8 @@
     .app.dark .attachment-add-label { color:#5a5a58; }
     .app.dark .attachment-link-chip { background:#1a2e1a; border-color:#2a4a2a; }
     .app.dark .attachment-row-link { background:#1a2e1a; border-color:#2a4a2a; color:#66bb6a; }
-    .app.dark .attachment-link-url { background:#1e1e21; border-color:#2e2e32; color:#e0e0de; }
-    .app.dark .attachment-link-cancel { background:#1e1e21; border-color:#2e2e32; color:#5a5a58; }
+    .app.dark .attachment-link-url {  border-color:#2e2e32; color:#e0e0de; }
+    .app.dark .attachment-link-cancel {  border-color:#2e2e32; color:#5a5a58; }
     .app.dark .attachment-preview-badge { background:rgba(var(--accent-rgb),.15); }
     .app.dark .attachment-row-thumb { border-color:#2e2e32; }
     .app.dark .attachment-row-more { background:#2e2e32; color:#8a8a88; }
@@ -2959,15 +2955,16 @@
     .app.dark .memo-att-file-chip { background:#1a2030; border-color:#2a3a50; }
     .app.dark .memo-att-file-name { color:#7ab0ff; }
     .app.dark .modal-att-toast { background:#2d1515; border-color:#4a2020; color:#ff8080; }
-    .app.dark .modal-day-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .modal-day-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .modal-day-btn:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-today-btn { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .section-head-label { color:#5a5a58; }
-    .app.dark .divider { background:#2e2e32; }
     .app.dark .undated-arrow { color:#5a5a58; }
     .app.dark .todo-empty { color:#4a4a48; }
     .app.dark .ideas-tab { background:#141416; }
     .app.dark .idea-card { border-color:#2e2e32; }
-    .app.dark .idea-project { color:#f0f0ee; }
     .app.dark .idea-summary { color:#b0b0ac; }
     .app.dark .idea-detail { color:#b0b0ac; }
     .app.dark .ideas-subtabs { background:#1e1e21; border-color:#2e2e32; }
@@ -2981,19 +2978,19 @@
     .app.dark .settings-tab { background:#141416; }
     .app.dark .settings-card { border-color:#2e2e32; }
     .app.dark .settings-row { border-color:#2e2e32; }
-    .app.dark .settings-row-label { color:#f0f0ee; }
-    .app.dark .settings-row-sub { color:#6a6a68; }
     .app.dark .settings-section-title { color:#6a6a68; }
-    .app.dark .sound-type-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .sound-type-btn.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .sound-type-btn:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .api-input-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
     .app.dark .notif-perm-row { border-color:#2e2e32; }
     .app.dark .notif-perm-label { color:#8a8a88; }
-    .app.dark .notif-select { background:#28282c; border-color:#3e3e42; color:#f0f0ee; }
-    .app.dark .notif-time-input { background:#28282c; border-color:#3e3e42; color:#f0f0ee; }
+    .app.dark .notif-select {  border-color:#3e3e42;  }
+    .app.dark .notif-time-input {  border-color:#3e3e42;  }
     .app.dark .tag-chip-builtin { background:#2e2e32; color:#8a8a88; }
     .app.dark .tag-add-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
-    .app.dark .about-card { background:#1e1e21; border-color:#2e2e32; }
-    .app.dark .about-app-name { color:#f0f0ee; }
+    .app.dark .about-card {  border-color:#2e2e32; }
     .app.dark .modal-backdrop { background:rgba(0,0,0,.6); }
     .app.dark .modal-sheet { background:#1e1e21; }
     .app.dark .modal-handle { background:#3a3a3e; }
@@ -3002,22 +2999,26 @@
     .app.dark .modal-field input, .app.dark .modal-field select, .app.dark .modal-field textarea {
       background:#28282c; color:#f0f0ee; border-color:#2e2e32;
     }
-    .app.dark .modal-tag { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
-    .app.dark .modal-cancel { background:#1e1e21; border-color:#2e2e32; color:#f0f0ee; }
+    /* ダークの基本色。選択状態は .modal-tag.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .modal-tag:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    .app.dark .modal-cancel {  border-color:#2e2e32; color:#f0f0ee; }
     .app.dark .modal-delete { background:#c0392b; }
     .app.dark .modal-title-delete { color:#6a6a68; }
     .app.dark .modal-title-delete:hover { background:rgba(255,77,79,.18); color:#ff6b6d; }
     .app.dark .modal-title-delete:active { background:rgba(255,77,79,.28); }
     .app.dark .confirm-sheet { background:#1e1e21; }
     .app.dark .confirm-title { color:#f0f0ee; }
-    .app.dark .confirm-sub { color:#6a6a68; }
     .app.dark .confirm-actions { border-color:#2e2e32; }
-    .app.dark .confirm-section-head { color:#6a6a68; }
     .app.dark .gacha-modal { background:linear-gradient(160deg,#0e0e1c 0%,#0b1428 55%,#071a38 100%); }
     .app.dark .todo-item.overdue { border-color:#5a1a14; background:#1e1210; }
     .app.dark .todo-item.overdue .todo-title { color:#e57373; }
     .app.dark .todo-item.overdue .todo-date-str { color:#e57373; }
-    .app.dark .font-size-opt { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
+    /* ダークの基本色。選択状態は .font-size-opt.sel が決めるので、ここでは除外する。
+       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
+       ダークだけ選択状態が表示されなくなる。 */
+    .app.dark .font-size-opt:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
 
     /* Boss TODO */
     .boss-item {
@@ -3076,8 +3077,8 @@
     .memomon-bubble {
       position: absolute;
       pointer-events: none;
-      background: #fff;
-      color: #1a1a18;
+      background:var(--surface-2);
+      color:var(--ink);
       font-size: 12px;
       line-height: 1.4;
       font-weight: 500;
@@ -3109,7 +3110,7 @@
       left: 50%;
       transform: translateX(-50%);
       border: 6px solid transparent;
-      border-top-color: #fff;
+      border-top-color:var(--surface-2);
       z-index: 1;
     }
     @keyframes bubblePop {
@@ -3117,13 +3118,11 @@
       to   { transform: translate(-50%, -100%) scale(1); }
     }
     .app.dark .memomon-bubble {
-      background: #28282c;
-      color: #f0f0ee;
+
       border-color: #5a5a58;
       box-shadow: 0 2px 8px rgba(0, 0, 0, .4);
     }
     .app.dark .memomon-bubble::after { border-top-color: #5a5a58; }
-    .app.dark .memomon-bubble::before { border-top-color: #28282c; }
 
     /* にわのメモモンのおねだり（タップで応える） */
     .memomon-request {
@@ -3402,7 +3401,7 @@
     .header-left { align-items:center; }
     .gw-date-chip {
       background:#fff; border-radius:12px; padding:6px 11px;
-      font-size:13px; font-weight:800; color:#3A3532;
+      font-size:13px; font-weight:800; color:var(--gw-ink);
       box-shadow:0 1px 4px rgba(0,0,0,.08);
     }
     .gw-dow { color:#96A0AB; font-weight:700; margin-left:4px; font-size:11px; }
@@ -3411,11 +3410,10 @@
       background:#fff; border-radius:99px; padding:6px 12px;
       box-shadow:0 1px 4px rgba(0,0,0,.08);
     }
-    .coin-badge-count { color:#3A3532; font-weight:800; }
+    .coin-badge-count { color:var(--gw-ink); font-weight:800; }
     .app.dark .app-header { background:transparent; }
-    .app.dark .gw-date-chip { background:#242428; color:#e8e8e4; box-shadow:0 1px 4px rgba(0,0,0,.3); }
+    .app.dark .gw-date-chip { background:#242428;  box-shadow:0 1px 4px rgba(0,0,0,.3); }
     .app.dark .coin-badge { background:#242428; }
-    .app.dark .coin-badge-count { color:#e8e8e4; }
 
     /* ── ナビ：中央のメモボタン ── */
     .bottom-nav { background:#FBFBF9; box-shadow:0 -1px 0 rgba(0,0,0,.06); border-radius:0; }
@@ -3589,7 +3587,7 @@
     .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:2px auto; flex:none; transition:background .15s, width .15s; }
     .gw-grab-zone:hover .gw-grab, .gw-sheet.dragging .gw-grab { background:#A9B6C4; width:56px; }
     .gw-sheet-head { display:flex; align-items:baseline; gap:8px; padding:2px 20px 6px; flex:none; }
-    .gw-sheet-head h2 { font-size:15px; font-weight:800; color:#3A3532; }
+    .gw-sheet-head h2 { font-size:15px; font-weight:800; color:var(--gw-ink); }
     .gw-prog { font-size:12px; font-weight:800; color:var(--accent); }
     .gw-sheet-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
     @media (min-width:760px) {
@@ -3598,7 +3596,6 @@
       .gw { height:clamp(190px, 26vh, 280px); }
     }
     .app.dark .gw-sheet { background:#1a1a1e; }
-    .app.dark .gw-sheet-head h2 { color:#e8e8e4; }
     .app.dark .gw-grab { background:#3a3a40; }
 
     /* シート内の既存要素をなじませる */
@@ -3669,7 +3666,7 @@
     /* 書庫ヘッダー・検索 */
     .lib-head { display:flex; align-items:flex-start; gap:10px; padding:14px 18px 0; flex:none; }
     .lib-tt { flex:1; min-width:0; }
-    .lib-tt h1 { font-size:18px; font-weight:800; color:#3A3532; }
+    .lib-tt h1 { font-size:18px; font-weight:800; color:var(--gw-ink); }
     .lib-tt p { font-size:11.5px; color:#9A8468; font-weight:700; margin-top:2px; }
     .lib-ask-btn {
       border:none; border-radius:14px; flex:none;
@@ -3710,7 +3707,7 @@
     }
     .ideas-export-count { font-size:12px; font-weight:800; color:#2E8B52; margin-right:auto; }
     .ideas-export-all {
-      border:none; border-radius:10px; background:#fff; color:#3A7A54;
+      border:none; border-radius:10px; background:var(--surface); color:#3A7A54;
       font-family:inherit; font-weight:800; font-size:11.5px; padding:7px 10px;
       cursor:pointer; box-shadow:0 1px 3px rgba(46,139,82,.18);
     }
@@ -3726,7 +3723,7 @@
       cursor:pointer; flex:none;
     }
     .app.dark .ideas-export-bar { background:#17251c; border-color:#2c4a37; }
-    .app.dark .ideas-export-all { background:#1e1e21; color:#8fd7a6; }
+    .app.dark .ideas-export-all {  color:#8fd7a6; }
 
     /* 選択モードのカードとチェック */
     .idea-card.select-mode { cursor:pointer; }
@@ -3775,7 +3772,6 @@
       position:absolute; top:3px; left:50%; transform:translateX(-50%);
       width:6px; height:6px; border-radius:50%; background:#fff; opacity:.9;
     }
-    .app.dark .lib-tt h1 { color:#e8e8e4; }
     .app.dark .lib-search, .app.dark .lib-view-toggle { background:#1e1e21; color:#b0b0ac; box-shadow:none; }
     .app.dark .lib-search input { color:#e8e8e4; }
 
@@ -3802,7 +3798,7 @@
     @media (min-width:600px) { .zukan-grid { grid-template-columns:repeat(4, 1fr); } }
     @media (min-width:900px) { .zukan-grid { grid-template-columns:repeat(6, 1fr); } }
     .zukan-card {
-      background:#fff; border-radius:18px; padding:14px 8px 12px;
+      background:var(--surface); border-radius:18px; padding:14px 8px 12px;
       text-align:center; box-shadow:0 1px 4px rgba(60,80,110,.08); cursor:pointer;
       transition:transform .12s;
     }
@@ -3821,14 +3817,14 @@
     /* ずかん詳細ポップ */
     .zukan-detail-backdrop { align-items:center; justify-content:center; }
     .zukan-detail {
-      position:relative; background:#fff; border-radius:22px;
+      position:relative; background:var(--surface); border-radius:22px;
       width:calc(100% - 48px); max-width:340px; padding:22px 20px 18px;
       text-align:center; animation:sheetUp .25s ease;
     }
     .zukan-detail-sprite { display:flex; justify-content:center; align-items:flex-end; height:96px; }
     .zukan-detail-sprite img { max-height:92px; max-width:120px; image-rendering:pixelated; }
     .zukan-detail-sprite.locked img { filter:brightness(0) opacity(.35); }
-    .zukan-detail-name { font-size:17px; font-weight:800; margin-top:10px; color:#3A3532; }
+    .zukan-detail-name { font-size:17px; font-weight:800; margin-top:10px; color:var(--gw-ink); }
     .zukan-detail-rarity { font-size:12px; color:#E0A62E; letter-spacing:2px; margin-top:2px; }
     .zukan-detail-bond {
       display:inline-block; font-size:11.5px; font-weight:800; color:#C46A9A;
@@ -3846,10 +3842,8 @@
     }
     .zukan-detail-play:active { transform:translateY(2px); box-shadow:0 1px 0 #1F7A3C; }
     .app.dark .zukan-tab { background:#141416; }
-    .app.dark .zukan-card { background:#1e1e21; box-shadow:none; }
+    .app.dark .zukan-card {  box-shadow:none; }
     .app.dark .zukan-name, .app.dark .zukan-tt h1 { color:#e8e8e4; }
-    .app.dark .zukan-detail { background:#1e1e21; }
-    .app.dark .zukan-detail-name { color:#e8e8e4; }
     .app.dark .zukan-detail-desc { background:#242428; color:#b0b0ac; }
 
     /* ── 設定 ── */
