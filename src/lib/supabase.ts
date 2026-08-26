@@ -58,10 +58,14 @@ export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; update
   };
 }
 
-// deleted_ids 列がまだ無いサーバ（schema.sql 未適用）かどうか。
+// deleted_ids 列が使えないサーバかどうか。
 // 一度そう判定したら以降は送信対象から外し、同期自体は動かし続ける。
 let deletedIdsUnsupported = false;
 export const isDeletedIdsUnsupported = () => deletedIdsUnsupported;
+// サーバ側を直したあと、再読み込みせずにやり直せるようにする。
+// これが無いと、SQL を実行しても画面を開き直すまで警告が消えず、
+// 削除の同期も無効なままになる。手動の「送信」「取得」から呼ぶ。
+export function retryDeletedIds() { deletedIdsUnsupported = false; }
 
 // PostgREST は未知の列を PGRST204 で返す
 function isMissingColumnError(err: unknown, column: string): boolean {

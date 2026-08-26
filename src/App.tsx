@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   supabase, isSupabaseConfigured,
-  fetchCloud, pushCloud, isDeletedIdsUnsupported,
+  fetchCloud, pushCloud, isDeletedIdsUnsupported, retryDeletedIds,
   signUpWithEmail, signInWithEmail, signInWithGoogle, signOut,
   type CloudSnapshot,
 } from './lib/supabase';
@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.39.1';
+const APP_VERSION = '1.39.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -137,6 +137,20 @@ const LS_IDEAS    = 'smartmemo:ideas';
 const LS_SETTINGS = 'smartmemo:settings';
 const LS_TRASH    = 'smartmemo:trash';
 const LS_DELETIONS = 'smartmemo:deletions';
+// サーバに deleted_ids 列が無いときの案内。
+// 同期自体は動くが「削除したことを他の端末へ伝える」部分だけが効かない。
+// PGRST204 は PostgREST の「スキーマキャッシュに無い」エラーなので、
+// 列を作っていないケースと、作ったがキャッシュが古いケースの両方がある。
+const DELETED_IDS_NOTICE = `サーバに deleted_ids 列が無いため、削除の同期だけ無効になっています。
+メモやタスクの同期は動いていますが、この端末で削除した項目が別の端末で復活することがあります。
+
+直すには Supabase の SQL Editor で次を実行してください。
+  alter table public.user_data
+  add column if not exists deleted_ids jsonb not null default '{}'::jsonb;
+
+既に実行済みなら、Supabase の Database → Reload schema cache を試してください。
+そのあと下の「送信」を押すと、この端末で再確認します。`;
+
 // 墓標の保持期間。これを過ぎたら捨てる（無限に増えないように）。
 const TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000;
 function pruneTombstones(t: Record<string, number>): Record<string, number> {
@@ -8096,9 +8110,7 @@ function SmartMemoApp() {
           setSyncStatus('idle');
           // 同期自体は成功しているのでエラー扱いにはしないが、
           // 削除の同期だけが効かない状態であることは知らせる。
-          setSyncNotice(isDeletedIdsUnsupported()
-            ? 'deleted_ids 列がないため、削除の同期だけ無効になっています。Supabase の SQL Editor で最新の db/schema.sql を実行してください。'
-            : null);
+          setSyncNotice(isDeletedIdsUnsupported() ? DELETED_IDS_NOTICE : null);
           return;
         }
         // 競合＝この端末が知らない更新がサーバにある。
@@ -8222,7 +8234,7 @@ function SmartMemoApp() {
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => pushSnapshot()} onPullNow={() => pullSnapshot()} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
       <div className="bottom-nav-wrapper">
         <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">
