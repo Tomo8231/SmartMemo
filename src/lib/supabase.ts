@@ -30,6 +30,12 @@ export type CloudSnapshot = {
   deleted_ids?: Record<string, number>;
 };
 
+// deleted_ids 列を作れない環境（DDL が使えない等）向けの逃げ道。
+// settings 列は必ずあるので、削除の記録をその中へ間借りさせて同期を成立させる。
+// アプリ側から見た形（snapshot.deleted_ids）は変わらないので、
+// マージ処理はこの事情を知らなくてよい。
+const DELETED_IDS_FALLBACK_KEY = '__deletedIds';
+
 const TABLE = 'user_data';
 
 export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; updatedAt: string | null }> {
@@ -44,6 +50,10 @@ export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; update
     .maybeSingle();
   if (error) throw error;
   if (!data) return { data: null, updatedAt: null };
+  // settings に間借りさせた削除記録を取り出し、settings 自体からは隠す
+  const settings = { ...((data.settings ?? {}) as Record<string, unknown>) };
+  const stashedDeletedIds = (settings[DELETED_IDS_FALLBACK_KEY] ?? {}) as Record<string, number>;
+  delete settings[DELETED_IDS_FALLBACK_KEY];
   return {
     data: {
       ideas:        data.ideas        ?? [],
@@ -51,8 +61,10 @@ export async function fetchCloud(): Promise<{ data: CloudSnapshot | null; update
       todo_sets:    data.todo_sets    ?? [],
       trash:        data.trash        ?? [],
       memo_mons:    data.memo_mons    ?? [],
-      settings:     data.settings     ?? {},
-      deleted_ids:  data.deleted_ids  ?? {},
+      settings:     settings,
+      // 列がある場合と、settings に間借りしている場合の両方を取り込む。
+      // 列を後から追加したときに、それ以前の記録を失わないため。
+      deleted_ids:  { ...stashedDeletedIds, ...(data.deleted_ids ?? {}) },
     },
     updatedAt: data.updated_at ?? null,
   };
@@ -91,7 +103,11 @@ export async function pushCloud(
 
   const payload = () => {
     const p: Record<string, unknown> = { ...snapshot, updated_at: nowIso };
-    if (deletedIdsUnsupported) delete p.deleted_ids;
+    if (deletedIdsUnsupported) {
+      // 列が無いので settings の中へ入れて運ぶ。捨てると削除が他端末へ伝わらない。
+      p.settings = { ...(snapshot.settings ?? {}), [DELETED_IDS_FALLBACK_KEY]: snapshot.deleted_ids ?? {} };
+      delete p.deleted_ids;
+    }
     return p;
   };
 
@@ -114,7 +130,7 @@ export async function pushCloud(
   let { data, error } = await attempt();
   // deleted_ids 列が無いサーバでも同期が止まらないよう、その列を外して一度だけ再送する
   if (error && !deletedIdsUnsupported && isMissingColumnError(error, 'deleted_ids')) {
-    console.warn('[cloud] deleted_ids 列がないため、削除の同期を無効にして続行します。db/schema.sql を実行してください。');
+    console.warn('[cloud] deleted_ids 列がないため、削除の記録を settings 列に入れて同期します。');
     deletedIdsUnsupported = true;
     ({ data, error } = await attempt());
   }
