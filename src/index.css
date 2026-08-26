@@ -3185,6 +3185,9 @@
        ────────────────────────────────────────────────────── */
     .app.glass {
       background: linear-gradient(160deg, #fde9d4 0%, #fbd0c4 35%, #d6dcfa 70%, #c8e8f9 100%);
+      /* ::before の重ね順を .app の中だけで完結させる。これが無いと
+         z-index:-1 の装飾が .app の背景そのものより後ろへ回って見えなくなる。 */
+      isolation: isolate;
     }
     .app.glass::before {
       content: '';
@@ -3194,15 +3197,12 @@
         radial-gradient(60% 60% at 82% 30%, rgba(127,165,255,.40) 0%, transparent 70%),
         radial-gradient(45% 45% at 50% 90%, rgba(200,130,255,.30) 0%, transparent 70%);
       pointer-events: none;
-      z-index: 0;
-    }
-    /* Lift the static app shell above the ::before orb background,
-       but DON'T touch fixed-position overlays (modal-backdrop etc.) — those
-       must keep their position:fixed behavior. */
-    .app.glass > .app-header,
-    .app.glass > .tab-content {
-      position: relative;
-      z-index: 1;
+      /* 装飾なので通常のコンテンツより後ろに置く。
+         以前は z-index:0 にしたうえで .app-header と .tab-content を
+         z-index:1 に持ち上げていたが、それだと .tab-content が重ね合わせ
+         コンテキストになり、その中に描画されるモーダル（z-index:1000）が
+         外へ出られず、ボトムナビ（z-index:20）の下に潜ってしまっていた。 */
+      z-index: -1;
     }
     /* ボトムナビは中央メモFABがシートに被らないよう最前面のまま維持 */
     .app.glass > .bottom-nav-wrapper {
