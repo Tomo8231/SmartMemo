@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.39.2';
+const APP_VERSION = '1.40.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -138,18 +138,16 @@ const LS_SETTINGS = 'smartmemo:settings';
 const LS_TRASH    = 'smartmemo:trash';
 const LS_DELETIONS = 'smartmemo:deletions';
 // サーバに deleted_ids 列が無いときの案内。
-// 同期自体は動くが「削除したことを他の端末へ伝える」部分だけが効かない。
-// PGRST204 は PostgREST の「スキーマキャッシュに無い」エラーなので、
-// 列を作っていないケースと、作ったがキャッシュが古いケースの両方がある。
-const DELETED_IDS_NOTICE = `サーバに deleted_ids 列が無いため、削除の同期だけ無効になっています。
-メモやタスクの同期は動いていますが、この端末で削除した項目が別の端末で復活することがあります。
+// 列が無くても削除の記録は settings 列に間借りして同期されるので、
+// 動作に支障は無い。あくまで「本来の形ではない」ことの通知に留める。
+const DELETED_IDS_NOTICE = `サーバに deleted_ids 列が無いため、削除の記録を settings 列に入れて同期しています。
+同期は正常に動いており、そのままお使いいただけます。
 
-直すには Supabase の SQL Editor で次を実行してください。
-  alter table public.user_data
-  add column if not exists deleted_ids jsonb not null default '{}'::jsonb;
+本来の形にするには、Supabase で user_data テーブルに次の列を追加してください。
+  列名: deleted_ids / 型: jsonb / 既定値: {}
+Table Editor の「New column」からでも追加できます。
 
-既に実行済みなら、Supabase の Database → Reload schema cache を試してください。
-そのあと下の「送信」を押すと、この端末で再確認します。`;
+追加したあと下の「送信」を押すと、この端末で再確認します。`;
 
 // 墓標の保持期間。これを過ぎたら捨てる（無限に増えないように）。
 const TOMBSTONE_TTL_MS = 90 * 24 * 3600 * 1000;
