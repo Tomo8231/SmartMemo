@@ -1553,9 +1553,13 @@
     }
     .memo-clear-btn:hover { background:rgba(196,54,96,0.14); color:#c43660; }
     .memo-clear-btn:active { background:rgba(196,54,96,0.25); }
-    .memo-actions { display:flex; gap:6px; flex-shrink:0;
+    /* 5 等分。文字数で幅が変わらないよう grid にする。 */
+    .memo-actions {
+      display:grid; grid-template-columns:repeat(5, 1fr);
+      gap:6px; flex-shrink:0;
     }
-    .reflect-actions { padding:10px 16px 28px; flex-shrink:0; display:flex; gap:10px; }
+    .reflect-actions { padding:10px 16px calc(var(--h-fab) - 30px + var(--sp-3)); flex-shrink:0; display:flex; gap:10px; }
+    .reflect-actions .reflect-btn { flex:1; }
     .memo-history-sheet {
       background:#fafaf9;
       width:100%; max-height:75vh;
@@ -1594,10 +1598,13 @@
     .memo-history-empty {
       text-align:center; color:#a0a09c; font-size:14px; padding:48px 0;
     }
+    /* アイコンの上にラベルを置く 56px の ghost ボタン。 */
     .action-btn {
-      display:flex; align-items:center; gap:5px;
-      padding:6px 11px; cursor:pointer; font-size:var(--fs-xs); font-family:inherit; transition:background .12s;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+      height:56px; padding:0 4px; position:relative;
+      cursor:pointer; font-size:11px; font-family:inherit; transition:background .12s;
     }
+    .action-btn > svg { flex:none; }
     .action-btn.recording { background:#1a1a18; border-color:#1a1a18; color:#fff; }
     .pulse-dot {
       width:8px; height:8px; border-radius:50%;
@@ -3755,16 +3762,28 @@
     .app.dark .todo-title { color:#e8e8e4; }
 
     /* ── メモ入力（紙のシート風） ── */
-    .memo-tab { background:#FBF6EC; }
-    .memo-card { background:#FBF6EC; border-bottom:none; }
-    .memo-textarea-wrap { margin:0 12px; background:#fff; border:2px solid #E8DCC8; border-radius:16px; }
+    .memo-tab { background:var(--bg); }
+    .memo-card { background:var(--bg); border-bottom:none; }
+        .memo-textarea-wrap {
+      margin:0 var(--sp-4); background:var(--surface);
+      border:1px solid var(--rule); border-radius:var(--r-lg);
+      display:flex; flex-direction:column;
+    }
+    .memo-hint {
+      border-top:1px solid var(--surface-sunk);
+      padding:10px 14px; margin:0;
+      font-size:12px; line-height:1.6; color:var(--ink-mute); font-weight:500;
+    }
     .memo-textarea { padding:12px 36px 12px 13px; font-weight:600; }
     .memo-textarea:focus { border-color:var(--accent); }
     .memo-card-top { padding:10px 16px 6px; }
-    .memo-actions { border-top:none; padding:10px 12px; flex-wrap:wrap; }
-    .action-btn { border:2px solid #E8DCC8; border-radius:12px; color:#A08A68; font-weight:800; background:#fff; }
-    .action-btn:hover { background:#F5EDDD; }
-    .reflect-actions { background:#FBF6EC; }
+    .memo-actions { border-top:none; padding:10px 12px; }
+    .action-btn {
+      border:1px solid var(--rule-strong); border-radius:var(--r-lg);
+      color:var(--ink-soft); font-weight:600; background:var(--surface);
+    }
+    .action-btn:hover { background:var(--surface-sunk); }
+    .reflect-actions { background:var(--bg); }
     /* 反映ボタンは primary（塗り）と ghost（白＋枠）の 2 種類だけで表す。
        以前は TODO=緑・ナレッジ=黄 と行き先ごとに色を割り当てていたが、
        ベースカラーを変えてもここだけ緑と黄のままで浮くうえ、
@@ -3780,7 +3799,7 @@
       border:1px solid var(--rule-strong); box-shadow:none;
     }
     .reflect-btn.reflect-btn-idea:active { transform:translateY(1px); }
-    .app.dark .memo-tab, .app.dark .memo-card, .app.dark .reflect-actions { background:#141416; }
+    /* 地は --bg が差し替わるのでダーク用の上書きは不要 */
     .app.dark .memo-textarea-wrap { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .action-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
 

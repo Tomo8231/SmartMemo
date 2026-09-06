@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.3';
+const APP_VERSION = '1.40.4';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -2293,6 +2293,19 @@ const IcoMic = () => (
     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
   </svg>
 );
+/* 添付とリンクは絵文字（📎🔗）で出していた。絵文字は OS ごとに
+   絵柄も色も変わり、隣の線画アイコンと並ぶと太さも高さも揃わない。 */
+const IcoClip = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+  </svg>
+);
+const IcoLink = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+  </svg>
+);
 const IcoHistory = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -3491,7 +3504,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
 
       <div className="memo-card">
         <div className="memo-card-top">
-          <span className="memo-card-label">メモ</span>
+          <span className="memo-card-label">思いついたことを書く</span>
           <span className="memo-char-count">{text.length}</span>
         </div>
         {imgPrev && (
@@ -3509,6 +3522,11 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
               title="メモをクリア"
             >✕</button>
           )}
+          {/* 「混ぜたまま書いてよい」ことがこの画面の肝なので、
+              入力欄の中に添えて必ず目に入る位置に置く。 */}
+          <p className="memo-hint">
+            予定・買い物・アイデアが混ざっていても、AI が TODO とナレッジに分けます。
+          </p>
         </div>
         {memoAttLightbox && <AttachmentLightbox attachment={memoAttLightbox} onClose={() => setMemoAttLightbox(null)} />}
         {memoAttachments.length > 0 && (
@@ -3553,16 +3571,19 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             <button className="attachment-link-cancel" onClick={() => { setMemoShowLink(false); setMemoLinkUrl(''); }}>✕</button>
           </div>
         )}
+        {/* 5 つとも同じ形の 5 等分ボタンにする（4.2）。
+            以前は文字数ぶんだけ幅が違い、履歴だけが右端に浮いていたため、
+            同じ「メモに足す道具」に見えなかった。 */}
         <div className="memo-actions">
           <button className={`action-btn${recording ? ' recording' : ''}`} onClick={toggleRec}>
-            {recording ? <><span className="pulse-dot"/>録音停止</> : <><IcoMic />音声入力</>}
+            {recording ? <><span className="pulse-dot"/><span>停止</span></> : <><IcoMic /><span>音声</span></>}
           </button>
-          <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg />画像から入力</button>
+          <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg /><span>画像</span></button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImg} />
           <button className="action-btn" onClick={() => {
             if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
             memoAttRef.current?.click();
-          }}>📎 添付{memoAttachments.length > 0 && <span className="memo-att-badge">{memoAttachments.length}</span>}</button>
+          }}><IcoClip /><span>添付</span>{memoAttachments.length > 0 && <span className="memo-att-badge">{memoAttachments.length}</span>}</button>
           <input ref={memoAttRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={async e => {
             const files = Array.from(e.target.files || []);
             e.target.value = '';
@@ -3579,8 +3600,8 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
           <button className="action-btn" onClick={() => {
             if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
             setMemoShowLink(true);
-          }}>🔗 リンク</button>
-          <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory(true)}><IcoHistory />履歴</button>
+          }}><IcoLink /><span>リンク</span></button>
+          <button className="action-btn" onClick={() => setShowHistory(true)}><IcoHistory /><span>履歴</span></button>
         </div>
       </div>
 
