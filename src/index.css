@@ -3096,9 +3096,9 @@
     .app.dark .todo-del { background:#1e1e21; border-color:#2e2e32; color:#4a4a48; }
     .app.dark .todo-coin-reward { color:#ffd54f; background:rgba(255,213,79,.12); }
     .app.dark .item-copy-btn { background:#1e1e21; border-color:#2e2e32; color:#5a5a58; }
-    .app.dark .todo-add-row { border-color:#2e2e32; background:transparent; }
-    .app.dark .todo-set-open-btn { border-color:#2e2e32; }
-    .app.dark .trash-open-btn { border-color:#2e2e32; color:#5a5a58; }
+    /* 最下段の 3 つは .u-btn が primary / ghost / icon を決めるので、
+       ダーク用の上書きは置かない。ここで background:transparent を
+       当てていたせいで、ダークだけ「タスクを追加」の塗りが消えていた。 */
     .app.dark .ts-set-card {  border-color:#2e2e32; }
     .app.dark .ts-set-count { background:#2e2e32; color:#8a8a88; }
     .app.dark .ts-set-preview-item { background:#2e2e32; color:#9a9a98; }
