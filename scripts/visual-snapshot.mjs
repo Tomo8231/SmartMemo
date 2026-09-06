@@ -53,14 +53,20 @@ async function capture(dark) {
   await page.goto(URL, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1400);
 
-  await page.locator('.nav-tab:has-text("設定")').first().click();
-  await page.waitForTimeout(700);
-  await page.locator('.settings-row', { hasText: 'メモモンを表示する' }).first().locator('.toggle').click();
-  await page.waitForTimeout(500);
-  if (dark) {
-    await page.locator('.settings-row', { hasText: 'ダークモード' }).first().locator('.toggle').click();
-    await page.waitForTimeout(600);
-  }
+  // 設定はトップが一覧になり、各項目はサブページの中にある。
+  // 目的のトグルまでサブページを開いて、終わったら戻る。
+  const openSetting = async (menu, rowText) => {
+    await page.locator('.nav-tab:has-text("設定")').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('.settings-menu-row', { hasText: menu }).first().click();
+    await page.waitForTimeout(500);
+    await page.locator('.settings-row', { hasText: rowText }).first().locator('.toggle').click();
+    await page.waitForTimeout(500);
+    await page.locator('.sub-back').click();
+    await page.waitForTimeout(400);
+  };
+  await openSetting('メモモン', 'メモモンを表示する');
+  if (dark) await openSetting('表示', 'ダークモード');
   await page.addStyleTag({ content: FREEZE });
 
   const theme = dark ? 'dark' : 'light';
@@ -74,13 +80,15 @@ async function capture(dark) {
     await page.screenshot({ path: out + '/' + tag + '-' + theme + '-' + name + '.png' });
   };
 
-  for (const [label, name] of [['にわ', 'niwa'], ['書庫', 'shoko'], ['ずかん', 'zukan'], ['設定', 'settei']]) {
+  // ナビのラベルは機能名 1 行（タスク／ナレッジ／メモ／メモモン／設定）。
+  // 撮影ファイル名は画面の愛称のまま（before/after を突き合わせるため）。
+  for (const [label, name] of [['タスク', 'niwa'], ['ナレッジ', 'shoko'], ['メモモン', 'zukan'], ['設定', 'settei']]) {
     await page.locator('.nav-tab:has-text("' + label + '")').first().click();
     await page.waitForTimeout(900);
     await dump(name);
   }
   await page.locator('.nav-center-memo').click(); await page.waitForTimeout(800); await dump('memo');
-  await page.locator('.nav-tab:has-text("にわ")').first().click(); await page.waitForTimeout(900);
+  await page.locator('.nav-tab:has-text("タスク")').first().click(); await page.waitForTimeout(900);
   await page.locator('.todo-item').first().click(); await page.waitForTimeout(700); await dump('edit');
   await page.keyboard.press('Escape'); await page.waitForTimeout(500);
   await page.locator('.coin-badge').click(); await page.waitForTimeout(800); await dump('gacha');

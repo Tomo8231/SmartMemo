@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.0';
+const APP_VERSION = '1.40.7';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -950,6 +950,19 @@ function todoDisplayRange(t: Todo): { start: string; end: string } | null {
 }
 const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const DOW = ['日','月','火','水','木','金','土'];
+
+// タスク行の右端に出す時刻。ISO 形式（2026-08-14 10:00）をそのまま出すと
+// 幅を食ううえ、並んだときにどれも同じ文字列に見えて日付の差が読めない。
+//   今日        → 10:00 ／ 終日
+//   今日以外    → 8/15 10:00 ／ 8/15
+// 「終日」だけは弱い色で出す（呼び出し側で is-empty を見る）。
+function formatTodoTime(t: Todo, todayStr: string): { text: string; muted: boolean } {
+  const d = t.startDate;
+  if (!d) return t.time ? { text: t.time, muted: false } : { text: '終日', muted: true };
+  const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  if (d === todayStr) return t.time ? { text: t.time, muted: false } : { text: '終日', muted: true };
+  return { text: t.time ? `${md} ${t.time}` : md, muted: false };
+}
 const JP_HOLIDAYS = new Set([
   // 2024
   '2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23',
@@ -1400,8 +1413,20 @@ function pickGachaUltra(): GachaPrize {
 }
 
 const IcoCoin = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--coin)">
     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+  </svg>
+);
+
+/* ヘッダー左のアプリマーク。public/icon.svg（罫線 3 本 + チェック）と
+   同じ形。角丸の地は置かず、線だけをアクセント色で描く。 */
+const IcoAppMark = () => (
+  <svg className="app-mark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+    <g stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" fill="none">
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h11" />
+    </g>
   </svg>
 );
 
@@ -1409,7 +1434,9 @@ function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boo
   return (
     <button className="coin-badge" onClick={onGacha} title="ガチャを引く">
       <IcoCoin />
-      <span className="coin-badge-count">{infinite ? '∞' : coins}</span>
+      {/* 3 桁区切り + tabular-nums。桁が増えても数字の幅が動かないので、
+          コインが増減するたびに「ガチャ」ボタンが横へずれるのを防げる。 */}
+      <span className="coin-badge-count">{infinite ? '∞' : coins.toLocaleString('ja-JP')}</span>
       <span className="coin-badge-gacha">ガチャ</span>
     </button>
   );
@@ -2266,6 +2293,19 @@ const IcoMic = () => (
     <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
   </svg>
 );
+/* 添付とリンクは絵文字（📎🔗）で出していた。絵文字は OS ごとに
+   絵柄も色も変わり、隣の線画アイコンと並ぶと太さも高さも揃わない。 */
+const IcoClip = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+  </svg>
+);
+const IcoLink = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+  </svg>
+);
 const IcoHistory = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -2694,11 +2734,12 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange,
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags = [] }: {
+function EditModal({ todo, mode = 'edit', onSave, onDelete, onDuplicate, onClose, customTags = [] }: {
   todo: Todo | (TodoDraft & { id: string });
   mode?: 'add' | 'edit';
   onSave: (t: any) => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   onClose: () => void;
   customTags?: string[];
 }) {
@@ -2737,6 +2778,14 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
         <div className="modal-handle"/>
         <div className="modal-title-row">
           <div className="modal-title">{mode === 'add' ? 'タスクを追加' : 'タスクを編集'}</div>
+          {/* 複製は以前タスク行に常時出ていたが、24px のアイコンが
+              チェックの隣に 2 つ並ぶ形で誤タップの元だった。
+              行からは外し、開いたこの画面に置く（4.1）。 */}
+          {mode === 'edit' && onDuplicate && (
+            <button className="u-btn u-btn--icon" onClick={onDuplicate} aria-label="複製" title="複製">
+              <IcoCopy />
+            </button>
+          )}
           {onDelete && (
             <button className="modal-title-delete" onClick={onDelete} aria-label="削除" title="削除">
               <IcoTrash />
@@ -2922,18 +2971,19 @@ const SPARK_POS = [
   { dx: 21, dy: 21, bg: 'var(--accent)' },
 ];
 
-function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi', overdue }: {
+function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', overdue, todayStr }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
-  onDelete: (id: number | string) => void;
   onEdit: (t: Todo) => void;
   soundEnabled: boolean;
   soundType?: string;
   overdue?: boolean;
+  todayStr: string;
 }) {
   const [animating, setAnimating] = useState(false);
   const [sparkling, setSparkling] = useState(false);
   const justAdded = !!todo.addedAt && (Date.now() - todo.addedAt) < 800;
+  const time = formatTodoTime(todo, todayStr);
 
   function handleToggle() {
     if (!todo.done) {
@@ -2957,24 +3007,21 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
       <div className={`todo-check${todo.done ? ' checked' : ''}${animating ? ' animate-pop' : ''}`} onClick={handleToggle}>
         {todo.done && <IcoCheck />}
       </div>
+      {/* 1 行 1 目的（1 節）。主情報はタイトルで、タグと時刻は補助。
+          複製と削除は常時表示せず、行を開いた編集シートに置く。
+          24px のアイコンが 2 つ並んでいたころは、チェックを押したつもりで
+          削除に触れる事故が起きやすかった。 */}
       <div className="todo-body" onClick={() => onEdit(todo)}>
-        <div className="todo-title">{todo.title}</div>
-        <div className="todo-meta">
-          {todo.startDate && (
-            <span className="todo-date-str">
-              <IcoCalSm />
-              {todo.startDate}{todo.endDate ? ` — ${todo.endDate}` : ''}{todo.time ? `  ${todo.time}` : ''}
-            </span>
-          )}
+        <div className="todo-main">
+          <span className="todo-title">{todo.title}</span>
           {(todo.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
           {todo.coinReward != null && (
-            <span className="todo-coin-reward">🪙 +{todo.coinReward}</span>
+            <span className="tag-pill todo-coin-reward">+{todo.coinReward}</span>
           )}
+          <span className={`todo-time${time.muted ? ' is-empty' : ''}`}>{time.text}</span>
         </div>
         <AttachmentRow attachments={todo.attachments || []} />
       </div>
-      <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildTodoCopyText(todo)); }} title="コピー"><IcoCopy /></button>
-      <button className="todo-del" onClick={() => onDelete(todo.id)}>✕</button>
     </div>
   );
 }
@@ -3457,7 +3504,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
 
       <div className="memo-card">
         <div className="memo-card-top">
-          <span className="memo-card-label">メモ</span>
+          <span className="memo-card-label">思いついたことを書く</span>
           <span className="memo-char-count">{text.length}</span>
         </div>
         {imgPrev && (
@@ -3475,6 +3522,11 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
               title="メモをクリア"
             >✕</button>
           )}
+          {/* 「混ぜたまま書いてよい」ことがこの画面の肝なので、
+              入力欄の中に添えて必ず目に入る位置に置く。 */}
+          <p className="memo-hint">
+            予定・買い物・アイデアが混ざっていても、AI が TODO とナレッジに分けます。
+          </p>
         </div>
         {memoAttLightbox && <AttachmentLightbox attachment={memoAttLightbox} onClose={() => setMemoAttLightbox(null)} />}
         {memoAttachments.length > 0 && (
@@ -3519,16 +3571,19 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             <button className="attachment-link-cancel" onClick={() => { setMemoShowLink(false); setMemoLinkUrl(''); }}>✕</button>
           </div>
         )}
+        {/* 5 つとも同じ形の 5 等分ボタンにする（4.2）。
+            以前は文字数ぶんだけ幅が違い、履歴だけが右端に浮いていたため、
+            同じ「メモに足す道具」に見えなかった。 */}
         <div className="memo-actions">
           <button className={`action-btn${recording ? ' recording' : ''}`} onClick={toggleRec}>
-            {recording ? <><span className="pulse-dot"/>録音停止</> : <><IcoMic />音声入力</>}
+            {recording ? <><span className="pulse-dot"/><span>停止</span></> : <><IcoMic /><span>音声</span></>}
           </button>
-          <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg />画像から入力</button>
+          <button className="action-btn" onClick={() => fileRef.current?.click()}><IcoImg /><span>画像</span></button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImg} />
           <button className="action-btn" onClick={() => {
             if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
             memoAttRef.current?.click();
-          }}>📎 添付{memoAttachments.length > 0 && <span className="memo-att-badge">{memoAttachments.length}</span>}</button>
+          }}><IcoClip /><span>添付</span>{memoAttachments.length > 0 && <span className="memo-att-badge">{memoAttachments.length}</span>}</button>
           <input ref={memoAttRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={async e => {
             const files = Array.from(e.target.files || []);
             e.target.value = '';
@@ -3545,8 +3600,8 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
           <button className="action-btn" onClick={() => {
             if (memoAttachments.length >= MAX_ATTACHMENTS) { showToast('添付ファイルは最大5件です'); return; }
             setMemoShowLink(true);
-          }}>🔗 リンク</button>
-          <button className="action-btn" style={{ marginLeft: 'auto' }} onClick={() => setShowHistory(true)}><IcoHistory />履歴</button>
+          }}><IcoLink /><span>リンク</span></button>
+          <button className="action-btn" onClick={() => setShowHistory(true)}><IcoHistory /><span>履歴</span></button>
         </div>
       </div>
 
@@ -3971,7 +4026,10 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
         >
           <div className="gw-cointag">🪙{t.coinReward ?? 10}</div>
           {(t.attachments?.length ?? 0) > 0 && <div className="gw-clip">📎</div>}
-          <div className="gw-board gw-dot">{t.title}</div>
+          {/* 看板は小さいので全角 6 文字で切る。省略記号は付けない（4.1）。
+              「…」の 1 文字ぶんも札の中では大きく、正式名はシートの
+              タスク行で読めるため、ここでは付けずに詰める。 */}
+          <div className="gw-board gw-dot">{t.title.slice(0, 6)}</div>
           <div className="gw-pole" />
         </div>
       ))}
@@ -4077,6 +4135,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
       return Array.from(s);
     });
   };
+  const clearTags = () => setSelTagsArr([]);
 
   function handleEditStart(todo: Todo) {
     if (todo.recurringGroupId) {
@@ -4213,6 +4272,22 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           onDelete(editing.todo.id);
         }
         setEditing(null);
+      }} onDuplicate={() => {
+        // 繰り返しの設定は引き継がない。複製した側も一緒に増殖して
+        // 意図しない件数になるため、複製は単発の 1 件として作る。
+        const stamp = Date.now();
+        const src = editing.todo;
+        onAdd({
+          ...src,
+          id: stamp,
+          addedAt: stamp,
+          done: false,
+          completedAt: undefined,
+          recurring: undefined,
+          recurringDay: undefined,
+          recurringGroupId: undefined,
+        });
+        setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
         const tWithCoin = { ...t, coinReward: t.coinReward ?? estimateCoinReward(t.title, t.tags) };
@@ -4257,30 +4332,38 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             : <><IcoChevronUp />タスク一覧</>}
         </span>
       </div>
+      {/* 見出し行に日付とカレンダーを寄せる（4.1）。
+          以前は「きょうのタスク」の下にもう 1 本 “2026/08/14” の行があり、
+          同じ日付が 2 段に分かれて出ていた。 */}
       <div className="gw-sheet-head">
         <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
         <span className="gw-prog">{doneOfDay} / {dateTodos.length}</span>
+        <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
+          <span className="gw-sheet-date">
+            {Number(sel.slice(5, 7))}/{Number(sel.slice(8, 10))}（{DOW[new Date(sel + 'T00:00:00').getDay()]}）
+          </span>
+          <IcoCalendar />
+        </button>
       </div>
       <div className="gw-sheet-body">
       <div className="todo-pane-left">
         <div className="todo-controls">
           <div className="filter-tags">
+            {/* 先頭の「すべて」は、絞り込みが外れている状態を選択肢として
+                見せるためのもの。無いと「どれも選ばれていない」のか
+                「絞り込み中」なのかがチップの並びから読めない。 */}
+            <button
+              className={`filter-tag${selectedTags.size === 0 ? ' active' : ''}`}
+              onClick={() => clearTags()}
+            >
+              すべて
+            </button>
             {tagOptions.map(tag => (
               <button key={tag} className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`} onClick={() => toggleTag(tag)}>
                 {tag}
               </button>
             ))}
           </div>
-        </div>
-        <div className="todo-list-header">
-          <div style={{ display:'flex', alignItems:'center', gap:'7px', flex:1, minWidth:0 }}>
-            <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
-            {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
-          </div>
-          <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
-            <IcoCalendar />
-            {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
-          </button>
         </div>
         <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
           <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} holidayConfig={holidayConfig} />
@@ -4294,12 +4377,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="section-head-label">期限切れ</span>
               <span className="section-count">{overdueTodos.length}</span>
             </div>
-            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} overdue />)}
+            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} overdue />)}
             <div className="divider"/>
           </>}
           {sortedDateTodos.length === 0
             ? <div className="todo-empty">この日のタスクはありません</div>
-            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)
+            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)
           }
           {sortedUndated.length > 0 && <>
             <div className="divider"/>
@@ -4309,20 +4392,24 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
             </div>
             <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
-              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)}
+              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)}
             </div>
           </>}
-          <button className="todo-add-row" onClick={() => setAdding(true)}>
-            ＋ タスクを追加
-          </button>
-          {/* 絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
-              揃わない。既存の Ico* に寄せる。 */}
-          <button className="todo-set-open-btn" onClick={() => setShowSets(true)}>
-            <IcoList /> TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
-          </button>
-          <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
-            <IcoTrash /> ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
-          </button>
+          {/* 最下段は 1 行にまとめる（4.1）。以前は同じ見た目のテキストリンクが
+              3 つ縦に並んでいて、いちばん使う「タスクを追加」が他と区別できなかった。
+              絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
+              揃わないので、既存の Ico* に寄せる。 */}
+          <div className="todo-bottom-actions">
+            <button className="u-btn u-btn--primary todo-add-row" onClick={() => setAdding(true)}>
+              ＋ タスクを追加
+            </button>
+            <button className="u-btn u-btn--ghost todo-set-open-btn" onClick={() => setShowSets(true)}>
+              <IcoList /> セット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
+            </button>
+            <button className="u-btn u-btn--icon trash-open-btn" onClick={() => setShowTrash(true)} title="ゴミ箱" aria-label="ゴミ箱">
+              <IcoTrash />{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
+            </button>
+          </div>
         </div>
       </div>
       </div>
@@ -4357,7 +4444,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs, onGoMemo }: {
   ideas: Idea[];
   aiCfg: AiCfg;
   onUpdate: (i: Idea) => void;
@@ -4367,6 +4454,7 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
   customTags: string[];
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
+  onGoMemo: () => void;
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
@@ -4735,7 +4823,16 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
       {libView === 'shelf' && !selectMode ? (
         <div className="ideas-tab tab-pane lib-body">
           {searchedIdeas.length === 0
-            ? <div className="ideas-empty">{libQuery.trim() ? '見つかりませんでした' : 'まだ本がありません。メモから育てよう'}</div>
+            ? (libQuery.trim()
+                ? <div className="ideas-empty">見つかりませんでした</div>
+                : (
+                  // 空のときに「メモから育てよう」と書いてあっても、
+                  // どこへ行けばよいかは書いていなかった。行き先を置く（4.4）。
+                  <div className="ideas-empty">
+                    <p>まだ本がありません</p>
+                    <button className="u-btn u-btn--primary" onClick={onGoMemo}>メモを書く</button>
+                  </div>
+                ))
             : shelves
           }
           <div className="ideas-bottom-actions">
@@ -5134,6 +5231,25 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
   );
 }
 
+type SettingsPage = null | 'display' | 'calendar' | 'ai' | 'tags' | 'memomon' | 'gift' | 'data' | 'about';
+
+/* 設定一覧の座布団アイコン。既存の Ico* と同じ線画（stroke 1.7）に揃える。 */
+const IcoChevronRight = () => (
+  <svg className="settings-menu-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+);
+const IcoChevronLeft = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+);
+const SET_ICO = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+const IcoSetDisplay = () => (<svg {...SET_ICO}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>);
+const IcoSetBell = () => (<svg {...SET_ICO}><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>);
+const IcoSetSparkle = () => (<svg {...SET_ICO}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>);
+const IcoSetTag = () => (<svg {...SET_ICO}><path d="M20.6 13.4L12 22l-9-9V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>);
+const IcoSetEgg = () => (<svg {...SET_ICO}><path d="M12 2c3.5 0 6.5 6 6.5 10.5a6.5 6.5 0 01-13 0C5.5 8 8.5 2 12 2z"/></svg>);
+const IcoSetGift = () => (<svg {...SET_ICO}><path d="M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>);
+const IcoSetData = () => (<svg {...SET_ICO}><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>);
+const IcoSetInfo = () => (<svg {...SET_ICO}><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>);
+
 function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, syncNotice, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
@@ -5166,6 +5282,8 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
   );
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const [backupStatus, setBackupStatus] = useState<{ kind: 'ok' | 'ng' | null; msg: string }>({ kind: null, msg: '' });
+  // null のときは設定トップ（一覧）。それ以外はサブページ。
+  const [page, setPage] = useState<SettingsPage>(null);
 
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -5261,546 +5379,643 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
     setTimeout(() => setGiftMsg({ kind: 'idle', msg: '' }), 4000);
   }
 
-  return (
-    <div className="settings-tab tab-pane">
-      {isSupabaseConfigured && (
-        <>
-          <div className="settings-section-title">アカウント</div>
-          <div className="settings-card">
-            {authUser ? (
-              <>
-                <div className="settings-row">
-                  <div>
-                    <div className="settings-row-label">ログイン中</div>
-                    <div className="settings-row-sub">
-                      {authUser.email || '(メールなし)'}
-                      {lastSyncAt && (
-                        <> ／ 最終同期: {new Date(lastSyncAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
-                      )}
-                    </div>
-                  </div>
-                  <button className="font-size-opt" onClick={onOpenAccount}>管理</button>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <div className="settings-row-label">同期</div>
-                    <div className="settings-row-sub">
-                      {syncStatus === 'syncing' ? '同期中…'
-                       : syncStatus === 'error'   ? 'エラー（再試行できます）'
-                       : '最新の状態'}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="font-size-opt" onClick={onPullNow} disabled={syncStatus === 'syncing'}>取得</button>
-                    <button className="font-size-opt" onClick={onPushNow} disabled={syncStatus === 'syncing'}>送信</button>
-                  </div>
-                </div>
-                {syncStatus === 'error' && syncError && (
-                  <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                    <div
-                      className="account-msg account-msg-err"
-                      style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                    >
-                      {syncError}
-                    </div>
-                  </div>
-                )}
-                {syncStatus !== 'error' && syncNotice && (
-                  <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                    <div
-                      className="account-msg"
-                      style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                    >
-                      ⚠️ {syncNotice}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
+  // 設定は 13 セクションを 1 本のスクロールに平置きしていた。
+  // 目的の項目に着くまで延々スクロールする必要があり、どこまで見たかも
+  // 分からなくなるため、トップを一覧にして 8 つのサブページへ分ける（4.3）。
+  // 設定項目そのものは増減させず、置き場所だけを変えている。
+  const secAccount = (<>
+    {isSupabaseConfigured && (
+      <>
+        <div className="settings-section-title">アカウント</div>
+        <div className="settings-card">
+          {authUser ? (
+            <>
               <div className="settings-row">
                 <div>
-                  <div className="settings-row-label">未ログイン</div>
-                  <div className="settings-row-sub">アカウントを作成すると複数端末でデータを同期できます</div>
+                  <div className="settings-row-label">ログイン中</div>
+                  <div className="settings-row-sub">
+                    {authUser.email || '(メールなし)'}
+                    {lastSyncAt && (
+                      <> ／ 最終同期: {new Date(lastSyncAt).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</>
+                    )}
+                  </div>
                 </div>
-                <button className="font-size-opt" onClick={onOpenAccount}>ログイン</button>
+                <button className="font-size-opt" onClick={onOpenAccount}>管理</button>
               </div>
-            )}
-          </div>
-        </>
-      )}
-
-      <div className="settings-section-title">表示</div>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">ダークモード</div>
-            <div className="settings-row-sub">画面を暗くする</div>
-          </div>
-          <button className={`toggle${darkMode ? ' on' : ' off'}`} onClick={() => onChange('darkMode', !darkMode)} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">ガラス風デザイン</div>
-            <div className="settings-row-sub">背景がふわっと透ける半透明 UI に切り替え</div>
-          </div>
-          <button className={`toggle${settings.glassUI ? ' on' : ' off'}`} onClick={() => onChange('glassUI', !settings.glassUI)} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">ベースカラー</div>
-            <div className="settings-row-sub">{COLOR_PRESETS[colorIdx].name}</div>
-          </div>
-          <div className="color-swatches">
-            {COLOR_PRESETS.map((c, i) => (
-              <div key={i} className={`color-swatch${colorIdx === i ? ' sel' : ''}`}
-                style={{ background: c.value }}
-                onClick={() => onChange('colorIdx', i)} />
-            ))}
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">背景テーマ</div>
-            <div className="settings-row-sub">{BG_PRESETS[settings.bgIdx ?? 0]?.name}</div>
-          </div>
-          <div className="color-swatches">
-            {BG_PRESETS.map((b, i) => (
-              <div key={i} className={`color-swatch${(settings.bgIdx ?? 0) === i ? ' sel' : ''}`}
-                style={{ background: b.bg, border: '1px solid #d0d0cc' }}
-                onClick={() => onChange('bgIdx', i)} />
-            ))}
-          </div>
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">文字サイズ</div>
-            <div className="settings-row-sub">{FONT_SIZE_OPTS[fontIdx].label}</div>
-          </div>
-          <div className="font-size-opts">
-            {FONT_SIZE_OPTS.map((o, i) => (
-              <button key={i} className={`font-size-opt${fontIdx === i ? ' sel' : ''}`}
-                style={{ fontSize: i === 0 ? '11px' : i === 1 ? '13px' : '15px' }}
-                onClick={() => onChange('fontIdx', i)}>{o.label}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="settings-section-title">カレンダー・休日</div>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">土日を休日にする</div>
-            <div className="settings-row-sub">カレンダーで土曜・日曜を色付け</div>
-          </div>
-          <button className={`toggle${settings.holidayWeekends !== false ? ' on' : ' off'}`}
-            onClick={() => onChange('holidayWeekends', settings.holidayWeekends === false ? true : false)} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">日本の祝日を休日にする</div>
-            <div className="settings-row-sub">2024〜2027年の祝日に対応</div>
-          </div>
-          <button className={`toggle${settings.holidayJpHolidays !== false ? ' on' : ' off'}`}
-            onClick={() => onChange('holidayJpHolidays', settings.holidayJpHolidays === false ? true : false)} />
-        </div>
-        <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
-          <div className="settings-row-label">追加の休日</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {/* 以前は background に var(--card-bg,#fff) を指定していたが --card-bg は
-                存在しないトークンで、#fff にフォールバックしていた。そこへ color:inherit で
-                ダークの文字色が乗り、「白地に白文字」で日付が読めなくなっていた。 */}
-            <input
-              type="date"
-              value={newHolidayDate}
-              onChange={e => setNewHolidayDate(e.target.value)}
-              style={{ flex: 1, padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-strong)', fontSize: 14, fontFamily: 'inherit', background: 'var(--surface)', color: 'var(--ink)' }}
-            />
-            <button
-              onClick={() => {
-                if (!newHolidayDate) return;
-                const cur = settings.customHolidays || [];
-                if (!cur.includes(newHolidayDate)) onChange('customHolidays', [...cur, newHolidayDate].sort());
-                setNewHolidayDate('');
-              }}
-              style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
-            >追加</button>
-          </div>
-          {(settings.customHolidays || []).length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {(settings.customHolidays || []).map(d => (
-                <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fde8e8', color: '#c62828', fontSize: 13 }}>
-                  {d}
-                  <button onClick={() => onChange('customHolidays', (settings.customHolidays || []).filter(x => x !== d))}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
-                </span>
-              ))}
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row-label">同期</div>
+                  <div className="settings-row-sub">
+                    {syncStatus === 'syncing' ? '同期中…'
+                     : syncStatus === 'error'   ? 'エラー（再試行できます）'
+                     : '最新の状態'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button className="font-size-opt" onClick={onPullNow} disabled={syncStatus === 'syncing'}>取得</button>
+                  <button className="font-size-opt" onClick={onPushNow} disabled={syncStatus === 'syncing'}>送信</button>
+                </div>
+              </div>
+              {syncStatus === 'error' && syncError && (
+                <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  <div
+                    className="account-msg account-msg-err"
+                    style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {syncError}
+                  </div>
+                </div>
+              )}
+              {syncStatus !== 'error' && syncNotice && (
+                <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                  <div
+                    className="account-msg"
+                    style={{ width: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    ⚠️ {syncNotice}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-label">未ログイン</div>
+                <div className="settings-row-sub">アカウントを作成すると複数端末でデータを同期できます</div>
+              </div>
+              <button className="font-size-opt" onClick={onOpenAccount}>ログイン</button>
             </div>
           )}
         </div>
+      </>
+    )}
+  </>);
+
+  const secDisplay = (<>
+    <div className="settings-section-title">表示</div>
+    <div className="settings-card">
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">ダークモード</div>
+          <div className="settings-row-sub">画面を暗くする</div>
+        </div>
+        <button className={`toggle${darkMode ? ' on' : ' off'}`} onClick={() => onChange('darkMode', !darkMode)} />
       </div>
-
-      {settings.infiniteCoinsUnlocked && <>
-        <div className="settings-section-title">テスト</div>
-        <div className="settings-card">
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">コイン無限モード</div>
-              <div className="settings-row-sub">ガチャのコスト不要（テスト用）</div>
-            </div>
-            <button className={`toggle${settings.infiniteCoins ? ' on' : ' off'}`} onClick={() => onChange('infiniteCoins', !settings.infiniteCoins)} />
-          </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">ガラス風デザイン</div>
+          <div className="settings-row-sub">背景がふわっと透ける半透明 UI に切り替え</div>
         </div>
-      </>}
-
-      <div className="settings-section-title">通知・サウンド</div>
-      <div className="settings-card">
-        {/* Permission status */}
-        <div className="notif-perm-row">
-          <span className="notif-perm-label">通知の許可状態：</span>
-          {notifPerm === 'granted' && <span className="notif-perm-badge ok">許可済み ✓</span>}
-          {notifPerm === 'denied'  && <span className="notif-perm-badge ng">拒否（ブラウザ設定から変更）</span>}
-          {notifPerm === 'default' && (
-            <button className="notif-perm-btn" onClick={requestNotifPermission}>通知を許可する</button>
-          )}
+        <button className={`toggle${settings.glassUI ? ' on' : ' off'}`} onClick={() => onChange('glassUI', !settings.glassUI)} />
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">ベースカラー</div>
+          <div className="settings-row-sub">{COLOR_PRESETS[colorIdx].name}</div>
         </div>
+        <div className="color-swatches">
+          {COLOR_PRESETS.map((c, i) => (
+            <div key={i} className={`color-swatch${colorIdx === i ? ' sel' : ''}`}
+              style={{ background: c.value }}
+              onClick={() => onChange('colorIdx', i)} />
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">背景テーマ</div>
+          <div className="settings-row-sub">{BG_PRESETS[settings.bgIdx ?? 0]?.name}</div>
+        </div>
+        <div className="color-swatches">
+          {BG_PRESETS.map((b, i) => (
+            <div key={i} className={`color-swatch${(settings.bgIdx ?? 0) === i ? ' sel' : ''}`}
+              style={{ background: b.bg, border: '1px solid #d0d0cc' }}
+              onClick={() => onChange('bgIdx', i)} />
+          ))}
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">文字サイズ</div>
+          <div className="settings-row-sub">{FONT_SIZE_OPTS[fontIdx].label}</div>
+        </div>
+        <div className="font-size-opts">
+          {FONT_SIZE_OPTS.map((o, i) => (
+            <button key={i} className={`font-size-opt${fontIdx === i ? ' sel' : ''}`}
+              style={{ fontSize: i === 0 ? '11px' : i === 1 ? '13px' : '15px' }}
+              onClick={() => onChange('fontIdx', i)}>{o.label}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>);
 
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">タスク通知</div>
-            <div className="settings-row-sub">
-              {notifPerm === 'granted'
-                ? 'アプリ起動中に期限前リマインドを送信'
-                : '通知を許可すると有効になります'}
-            </div>
-          </div>
-          <button
-            className={`toggle${notifEnabled ? ' on' : ' off'}`}
-            onClick={() => {
-              if (!notifEnabled && notifPerm !== 'granted') { requestNotifPermission(); return; }
-              onChange('notifEnabled', !notifEnabled);
-            }}
+  const secCalendar = (<>
+    <div className="settings-section-title">カレンダー・休日</div>
+    <div className="settings-card">
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">土日を休日にする</div>
+          <div className="settings-row-sub">カレンダーで土曜・日曜を色付け</div>
+        </div>
+        <button className={`toggle${settings.holidayWeekends !== false ? ' on' : ' off'}`}
+          onClick={() => onChange('holidayWeekends', settings.holidayWeekends === false ? true : false)} />
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">日本の祝日を休日にする</div>
+          <div className="settings-row-sub">2024〜2027年の祝日に対応</div>
+        </div>
+        <button className={`toggle${settings.holidayJpHolidays !== false ? ' on' : ' off'}`}
+          onClick={() => onChange('holidayJpHolidays', settings.holidayJpHolidays === false ? true : false)} />
+      </div>
+      <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+        <div className="settings-row-label">追加の休日</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {/* 以前は background に var(--card-bg,#fff) を指定していたが --card-bg は
+              存在しないトークンで、#fff にフォールバックしていた。そこへ color:inherit で
+              ダークの文字色が乗り、「白地に白文字」で日付が読めなくなっていた。 */}
+          <input
+            type="date"
+            value={newHolidayDate}
+            onChange={e => setNewHolidayDate(e.target.value)}
+            style={{ flex: 1, padding: '8px 10px', borderRadius: 'var(--r-md)', border: '1px solid var(--rule-strong)', fontSize: 14, fontFamily: 'inherit', background: 'var(--surface)', color: 'var(--ink)' }}
           />
+          <button
+            onClick={() => {
+              if (!newHolidayDate) return;
+              const cur = settings.customHolidays || [];
+              if (!cur.includes(newHolidayDate)) onChange('customHolidays', [...cur, newHolidayDate].sort());
+              setNewHolidayDate('');
+            }}
+            style={{ padding: '8px 16px', borderRadius: 8, background: 'var(--accent)', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0 }}
+          >追加</button>
         </div>
-
-        {notifEnabled && notifPerm === 'granted' && (<>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">事前通知</div>
-              <div className="settings-row-sub">時刻設定済みタスクを何分前に通知するか</div>
-            </div>
-            <select
-              className="notif-select"
-              value={notifAdvanceMin}
-              onChange={e => onChange('notifAdvanceMin', Number(e.target.value))}
-            >
-              <option value={0}>時刻ちょうど</option>
-              <option value={15}>15分前</option>
-              <option value={30}>30分前</option>
-              <option value={60}>1時間前</option>
-            </select>
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">デフォルト通知時刻</div>
-              <div className="settings-row-sub">時刻未設定タスクをこの時間に通知</div>
-            </div>
-            <input
-              type="time"
-              className="notif-time-input"
-              value={notifDailyTime}
-              onChange={e => onChange('notifDailyTime', e.target.value)}
-            />
-          </div>
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">テスト通知</div>
-              <div className="settings-row-sub">通知が届くか確認する</div>
-            </div>
-            <button className="notif-test-btn" onClick={sendTestNotif}>テスト送信</button>
-          </div>
-        </>)}
-
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">完了サウンド</div>
-            <div className="settings-row-sub">TODOにチェックを入れた時に音とアニメーション</div>
-          </div>
-          <button className={`toggle${soundOn ? ' on' : ' off'}`} onClick={() => onChange('completeSound', !soundOn)} />
-        </div>
-        {soundOn && (
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">サウンドの種類</div>
-              <div className="settings-row-sub">タップして試聴</div>
-            </div>
-            <div className="sound-type-opts">
-              {SOUND_TYPES.filter(s =>
-                DEFAULT_SOUNDS.includes(s.key) ||
-                (settings.gachaUnlocked?.sounds || []).includes(s.key) ||
-                (settings.soundType || 'doremi') === s.key
-              ).map(s => (
-                <button
-                  key={s.key}
-                  className={`sound-type-btn${(settings.soundType || 'doremi') === s.key ? ' sel' : ''}`}
-                  onClick={() => { onChange('soundType', s.key); playSound(s.key); }}
-                >{s.label}</button>
-              ))}
-            </div>
-            <div className="settings-row-sub" style={{ marginTop: 8 }}>
-              🔒 その他のサウンドはガチャで当てると選べるようになります
-            </div>
+        {(settings.customHolidays || []).length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {(settings.customHolidays || []).map(d => (
+              <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, background: '#fde8e8', color: '#c62828', fontSize: 13 }}>
+                {d}
+                <button onClick={() => onChange('customHolidays', (settings.customHolidays || []).filter(x => x !== d))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c62828', padding: 0, fontSize: 14, lineHeight: 1 }}>×</button>
+              </span>
+            ))}
           </div>
         )}
       </div>
+    </div>
+  </>);
 
-      <div className="settings-section-title">AI 連携</div>
+  const secTest = (<>
+    {settings.infiniteCoinsUnlocked && <>
+      <div className="settings-section-title">テスト</div>
       <div className="settings-card">
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">AI プロバイダ</div>
-            <div className="settings-row-sub">音声・画像・メモ解析・書庫チャットに使う AI を選べます</div>
+            <div className="settings-row-label">コイン無限モード</div>
+            <div className="settings-row-sub">ガチャのコスト不要（テスト用）</div>
           </div>
-          <div className="font-size-opts">
-            {(['gemini', 'openai', 'anthropic'] as AiProvider[]).map(p => (
-              <button
-                key={p}
-                className={`font-size-opt${aiProvider === p ? ' sel' : ''}`}
-                onClick={() => onChange('aiProvider', p)}
-              >{p === 'gemini' ? 'Gemini' : p === 'openai' ? 'GPT' : 'Claude'}</button>
-            ))}
-          </div>
-        </div>
-        <div className="api-row">
-          <div className="settings-row-label">{AI_LABEL[aiProvider]} APIキー</div>
-          <div className="settings-row-sub">
-            {aiProvider === 'gemini' && <>取得: aistudio.google.com → Get API key（モデル: {GEMINI_MODEL}）</>}
-            {aiProvider === 'openai' && <>取得: platform.openai.com → API keys（モデル: {OPENAI_TEXT_MODEL} / 音声: Whisper）</>}
-            {aiProvider === 'anthropic' && <>取得: console.anthropic.com → API Keys（モデルは下で指定・既定 {ANTHROPIC_TEXT_MODEL}／音声入力は非対応）</>}
-            <br/>未設定時はローカル解析にフォールバック。キーは端末内にのみ保存されます。
-          </div>
-          <div className="api-input-row">
-            <input
-              type={keyVisible ? 'text' : 'password'}
-              value={keyInput}
-              onChange={e => setKeyInput(e.target.value)}
-              placeholder={providerKeyPlaceholder[aiProvider]}
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <button className="secondary" onClick={() => setKeyVisible(v => !v)} style={{ padding: '0 8px', display: 'flex', alignItems: 'center' }}>
-              {keyVisible
-                ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
-                : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
-              }
-            </button>
-          </div>
-          <div className="api-input-row">
-            <button onClick={saveKey} disabled={keyInput.trim() === storedProviderKey}>保存</button>
-            <button className="secondary" onClick={testKey} disabled={!keyInput.trim()}>接続テスト</button>
-            {storedProviderKey && (
-              <button className="secondary" onClick={() => { setKeyInput(''); onChange(providerKeyField[aiProvider], ''); setApiStatus({ kind: 'ok', msg: '削除しました' }); }}>削除</button>
-            )}
-          </div>
-          {apiStatus.msg && (
-            <div className={`api-status ${apiStatus.kind}`}>{apiStatus.msg}</div>
-          )}
-          {aiProvider === 'anthropic' && (
-            <div className="api-model-row">
-              <div className="settings-row-label">Claude モデル</div>
-              <div className="settings-row-sub">
-                使用するモデル ID をテキストで指定できます（例: claude-haiku-4-5 / claude-sonnet-4-5）。
-                空欄にすると既定の {ANTHROPIC_TEXT_MODEL} を使います。
-              </div>
-              <div className="api-input-row">
-                <input
-                  type="text"
-                  value={settings.anthropicModel || ''}
-                  onChange={e => onChange('anthropicModel', e.target.value)}
-                  placeholder={ANTHROPIC_TEXT_MODEL}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                {(settings.anthropicModel || '').trim() && (settings.anthropicModel || '').trim() !== ANTHROPIC_TEXT_MODEL && (
-                  <button className="secondary" onClick={() => onChange('anthropicModel', '')}>既定に戻す</button>
-                )}
-              </div>
-              <div className="settings-row-sub">現在のモデル: <strong>{anthropicModel}</strong></div>
-            </div>
-          )}
+          <button className={`toggle${settings.infiniteCoins ? ' on' : ' off'}`} onClick={() => onChange('infiniteCoins', !settings.infiniteCoins)} />
         </div>
       </div>
+    </>}
+  </>);
 
-      <div className="settings-section-title">AI 分析</div>
-      <div className="settings-card">
+  const secNotif = (<>
+    <div className="settings-section-title">通知・サウンド</div>
+    <div className="settings-card">
+      {/* Permission status */}
+      <div className="notif-perm-row">
+        <span className="notif-perm-label">通知の許可状態：</span>
+        {notifPerm === 'granted' && <span className="notif-perm-badge ok">許可済み ✓</span>}
+        {notifPerm === 'denied'  && <span className="notif-perm-badge ng">拒否（ブラウザ設定から変更）</span>}
+        {notifPerm === 'default' && (
+          <button className="notif-perm-btn" onClick={requestNotifPermission}>通知を許可する</button>
+        )}
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">タスク通知</div>
+          <div className="settings-row-sub">
+            {notifPerm === 'granted'
+              ? 'アプリ起動中に期限前リマインドを送信'
+              : '通知を許可すると有効になります'}
+          </div>
+        </div>
+        <button
+          className={`toggle${notifEnabled ? ' on' : ' off'}`}
+          onClick={() => {
+            if (!notifEnabled && notifPerm !== 'granted') { requestNotifPermission(); return; }
+            onChange('notifEnabled', !notifEnabled);
+          }}
+        />
+      </div>
+
+      {notifEnabled && notifPerm === 'granted' && (<>
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">傾向を分析する</div>
-            <div className="settings-row-sub">TODO・ナレッジ・削除履歴からAIが傾向とアドバイスを生成します</div>
+            <div className="settings-row-label">事前通知</div>
+            <div className="settings-row-sub">時刻設定済みタスクを何分前に通知するか</div>
           </div>
-          <button
-            className="insights-run-btn"
-            onClick={onInsights}
-            disabled={!storedProviderKey}
-            title={storedProviderKey ? 'AI分析を実行' : `${AI_LABEL[aiProvider]} のAPIキーを設定してください`}
+          <select
+            className="notif-select"
+            value={notifAdvanceMin}
+            onChange={e => onChange('notifAdvanceMin', Number(e.target.value))}
           >
-            {storedProviderKey ? '🔍 分析する' : '🔒 要APIキー'}
-          </button>
-        </div>
-      </div>
-
-      <div className="settings-section-title">AI 設定</div>
-      <div className="settings-card">
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">自動タグ付け</div>
-            <div className="settings-row-sub">タスク解析時に自動でタグを付与</div>
-          </div>
-          <button className={`toggle${autoTag ? ' on' : ' off'}`} onClick={() => onChange('autoTag', !autoTag)} />
+            <option value={0}>時刻ちょうど</option>
+            <option value={15}>15分前</option>
+            <option value={30}>30分前</option>
+            <option value={60}>1時間前</option>
+          </select>
         </div>
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">日付の自動推定</div>
-            <div className="settings-row-sub">「来週」などの相対日付を解析</div>
-          </div>
-          <button className={`toggle${autoDate ? ' on' : ' off'}`} onClick={() => onChange('autoDate', !autoDate)} />
-        </div>
-        <div className="settings-row">
-          <div>
-            <div className="settings-row-label">反映ボタンを分ける</div>
-            <div className="settings-row-sub">「TODOに反映」「ナレッジに反映」を個別ボタンで表示</div>
-          </div>
-          <button className={`toggle${settings.splitReflectButtons !== false ? ' on' : ' off'}`} onClick={() => onChange('splitReflectButtons', settings.splitReflectButtons === false)} />
-        </div>
-      </div>
-
-      <div className="settings-section-title">タグ</div>
-      <div className="settings-card">
-        <div className="tag-row">
-          <div className="settings-row-label">既定タグ</div>
-          <div className="settings-row-sub">ナレッジ用の既定タグは「アイデア」のみ</div>
-          <div className="tag-chip-list">
-            {BUILTIN_IDEA_TAGS.map(t => (
-              <span key={t} className="tag-chip tag-chip-builtin">{t}</span>
-            ))}
-          </div>
-        </div>
-        <div className="tag-row">
-          <div className="settings-row-label">カスタムタグ</div>
-          <div className="settings-row-sub">独自のタグを追加・削除できます（TODO・ナレッジ両方で使用可能）</div>
-          {(settings.customTags || []).length > 0 && (
-            <div className="tag-chip-list">
-              {(settings.customTags || []).map(t => (
-                <span key={t} className="tag-chip">
-                  {t}
-                  <button onClick={() => onChange('customTags', (settings.customTags || []).filter(x => x !== t))}>×</button>
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="tag-add-row">
-            <input value={newTag} onChange={e => setNewTag(e.target.value)}
-              placeholder="新しいタグ名（例: 副業）"
-              onKeyDown={e => { if (e.key === 'Enter') addTag(); }}
-              maxLength={12} />
-            <button disabled={!canAdd} onClick={addTag}>追加</button>
-          </div>
-        </div>
-      </div>
-
-      {memoMons.length > 0 && <>
-        <div className="settings-section-title">メモモン</div>
-        <div className="settings-card">
-          <div className="settings-row">
-            <div>
-              <div className="settings-row-label">メモモンを表示する</div>
-              <div className="settings-row-sub">画面上を歩き回るモンスターの表示</div>
-            </div>
-            <button
-              className={`toggle${settings.memoMonVisible === false ? ' off' : ' on'}`}
-              onClick={() => onChange('memoMonVisible', settings.memoMonVisible === false ? true : false)}
-            />
-          </div>
-          {settings.memoMonVisible !== false && <>
-            <div className="settings-row">
-              <div>
-                <div className="settings-row-label">サイズ</div>
-              </div>
-              <div className="font-size-opts">
-                {(['small', 'medium', 'large'] as const).map((s, i) => (
-                  <button
-                    key={s}
-                    className={`font-size-opt${(settings.memoMonSize || 'medium') === s ? ' sel' : ''}`}
-                    style={{ fontSize: i === 0 ? '11px' : i === 1 ? '13px' : '15px' }}
-                    onClick={() => onChange('memoMonSize', s)}
-                  >{['小', '中', '大'][i]}</button>
-                ))}
-              </div>
-            </div>
-            <div className="settings-row">
-              <div>
-                <div className="settings-row-label">タップで吹き出し</div>
-                <div className="settings-row-sub">メモモンをタップしたときにセリフを表示</div>
-              </div>
-              <button
-                className={`toggle${settings.memoMonSpeech === false ? ' off' : ' on'}`}
-                onClick={() => onChange('memoMonSpeech', settings.memoMonSpeech === false ? true : false)}
-              />
-            </div>
-          </>}
-        </div>
-      </>}
-
-      <div className="settings-section-title">プレゼントコード</div>
-      <div className="settings-card">
-        <div className="api-row">
-          <div className="settings-row-label">コードを入力</div>
-          <div className="settings-row-sub">プレゼントコードを入力してコインをゲット！</div>
-          <div className="api-input-row">
-            <input
-              type="text"
-              value={giftCode}
-              onChange={e => { setGiftCode(e.target.value); setGiftMsg({ kind: 'idle', msg: '' }); }}
-              placeholder="コードを入力"
-              autoComplete="off"
-              spellCheck={false}
-              onKeyDown={e => { if (e.key === 'Enter') redeemGift(); }}
-            />
-            <button onClick={redeemGift} disabled={!giftCode.trim()}>使用</button>
-          </div>
-          {giftMsg.msg && <div className={`api-status ${giftMsg.kind}`}>{giftMsg.msg}</div>}
-        </div>
-      </div>
-
-      <div className="settings-section-title">データ管理</div>
-      <div className="settings-card">
-        <div className="api-row">
-          <div className="settings-row-label">バックアップ</div>
-          <div className="settings-row-sub">
-            すべてのデータ（TODO・アイデア・設定・メモモンなど）を JSON ファイルに書き出し／読み込みできます。端末の変更やデータ消失に備えてバックアップを取れます。
-          </div>
-          <div className="backup-btn-row">
-            <button className="backup-btn" onClick={exportAllData}>エクスポート</button>
-            <button className="backup-btn" onClick={() => importFileRef.current?.click()}>インポート</button>
+            <div className="settings-row-label">デフォルト通知時刻</div>
+            <div className="settings-row-sub">時刻未設定タスクをこの時間に通知</div>
           </div>
           <input
-            ref={importFileRef}
-            type="file"
-            accept="application/json,.json"
-            style={{ display: 'none' }}
-            onChange={handleImportFile}
+            type="time"
+            className="notif-time-input"
+            value={notifDailyTime}
+            onChange={e => onChange('notifDailyTime', e.target.value)}
           />
-          {backupStatus.kind && (
-            <div className={`api-status ${backupStatus.kind}`}>{backupStatus.msg}</div>
-          )}
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">テスト通知</div>
+            <div className="settings-row-sub">通知が届くか確認する</div>
+          </div>
+          <button className="notif-test-btn" onClick={sendTestNotif}>テスト送信</button>
+        </div>
+      </>)}
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">完了サウンド</div>
+          <div className="settings-row-sub">TODOにチェックを入れた時に音とアニメーション</div>
+        </div>
+        <button className={`toggle${soundOn ? ' on' : ' off'}`} onClick={() => onChange('completeSound', !soundOn)} />
+      </div>
+      {soundOn && (
+        // 見出し・選択肢・注記の 3 つを縦に積む。既定の settings-row は
+        // 横並びなので、3 つを入れると見出しが折り返して選択肢が潰れる。
+        <div className="settings-row settings-row--stack">
+          <div>
+            <div className="settings-row-label">サウンドの種類</div>
+            <div className="settings-row-sub">タップして試聴</div>
+          </div>
+          <div className="sound-type-opts">
+            {SOUND_TYPES.filter(s =>
+              DEFAULT_SOUNDS.includes(s.key) ||
+              (settings.gachaUnlocked?.sounds || []).includes(s.key) ||
+              (settings.soundType || 'doremi') === s.key
+            ).map(s => (
+              <button
+                key={s.key}
+                className={`sound-type-btn${(settings.soundType || 'doremi') === s.key ? ' sel' : ''}`}
+                onClick={() => { onChange('soundType', s.key); playSound(s.key); }}
+              >{s.label}</button>
+            ))}
+          </div>
+          <div className="settings-row-sub" style={{ marginTop: 8 }}>
+            🔒 その他のサウンドはガチャで当てると選べるようになります
+          </div>
+        </div>
+      )}
+    </div>
+  </>);
+
+  const secAiLink = (<>
+    <div className="settings-section-title">AI 連携</div>
+    <div className="settings-card">
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">AI プロバイダ</div>
+          <div className="settings-row-sub">音声・画像・メモ解析・書庫チャットに使う AI を選べます</div>
+        </div>
+        <div className="font-size-opts">
+          {(['gemini', 'openai', 'anthropic'] as AiProvider[]).map(p => (
+            <button
+              key={p}
+              className={`font-size-opt${aiProvider === p ? ' sel' : ''}`}
+              onClick={() => onChange('aiProvider', p)}
+            >{p === 'gemini' ? 'Gemini' : p === 'openai' ? 'GPT' : 'Claude'}</button>
+          ))}
         </div>
       </div>
-
-      <div className="settings-section-title">アプリ情報</div>
-      <div className="about-card">
-        <div className="about-app-name">SmartMemo</div>
-        <div className="about-version">Version {APP_VERSION} (TypeScript)</div>
+      <div className="api-row">
+        <div className="settings-row-label">{AI_LABEL[aiProvider]} APIキー</div>
+        <div className="settings-row-sub">
+          {aiProvider === 'gemini' && <>取得: aistudio.google.com → Get API key（モデル: {GEMINI_MODEL}）</>}
+          {aiProvider === 'openai' && <>取得: platform.openai.com → API keys（モデル: {OPENAI_TEXT_MODEL} / 音声: Whisper）</>}
+          {aiProvider === 'anthropic' && <>取得: console.anthropic.com → API Keys（モデルは下で指定・既定 {ANTHROPIC_TEXT_MODEL}／音声入力は非対応）</>}
+          <br/>未設定時はローカル解析にフォールバック。キーは端末内にのみ保存されます。
+        </div>
+        <div className="api-input-row">
+          <input
+            type={keyVisible ? 'text' : 'password'}
+            value={keyInput}
+            onChange={e => setKeyInput(e.target.value)}
+            placeholder={providerKeyPlaceholder[aiProvider]}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <button className="secondary" onClick={() => setKeyVisible(v => !v)} style={{ padding: '0 8px', display: 'flex', alignItems: 'center' }}>
+            {keyVisible
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+              : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+            }
+          </button>
+        </div>
+        <div className="api-input-row">
+          <button onClick={saveKey} disabled={keyInput.trim() === storedProviderKey}>保存</button>
+          <button className="secondary" onClick={testKey} disabled={!keyInput.trim()}>接続テスト</button>
+          {storedProviderKey && (
+            <button className="secondary" onClick={() => { setKeyInput(''); onChange(providerKeyField[aiProvider], ''); setApiStatus({ kind: 'ok', msg: '削除しました' }); }}>削除</button>
+          )}
+        </div>
+        {apiStatus.msg && (
+          <div className={`api-status ${apiStatus.kind}`}>{apiStatus.msg}</div>
+        )}
+        {aiProvider === 'anthropic' && (
+          <div className="api-model-row">
+            <div className="settings-row-label">Claude モデル</div>
+            <div className="settings-row-sub">
+              使用するモデル ID をテキストで指定できます（例: claude-haiku-4-5 / claude-sonnet-4-5）。
+              空欄にすると既定の {ANTHROPIC_TEXT_MODEL} を使います。
+            </div>
+            <div className="api-input-row">
+              <input
+                type="text"
+                value={settings.anthropicModel || ''}
+                onChange={e => onChange('anthropicModel', e.target.value)}
+                placeholder={ANTHROPIC_TEXT_MODEL}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              {(settings.anthropicModel || '').trim() && (settings.anthropicModel || '').trim() !== ANTHROPIC_TEXT_MODEL && (
+                <button className="secondary" onClick={() => onChange('anthropicModel', '')}>既定に戻す</button>
+              )}
+            </div>
+            <div className="settings-row-sub">現在のモデル: <strong>{anthropicModel}</strong></div>
+          </div>
+        )}
       </div>
+    </div>
+  </>);
+
+  const secAiAnly = (<>
+    <div className="settings-section-title">AI 分析</div>
+    <div className="settings-card">
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">傾向を分析する</div>
+          <div className="settings-row-sub">TODO・ナレッジ・削除履歴からAIが傾向とアドバイスを生成します</div>
+        </div>
+        <button
+          className="insights-run-btn"
+          onClick={onInsights}
+          disabled={!storedProviderKey}
+          title={storedProviderKey ? 'AI分析を実行' : `${AI_LABEL[aiProvider]} のAPIキーを設定してください`}
+        >
+          {storedProviderKey ? '🔍 分析する' : '🔒 要APIキー'}
+        </button>
+      </div>
+    </div>
+  </>);
+
+  const secAiConf = (<>
+    <div className="settings-section-title">AI 設定</div>
+    <div className="settings-card">
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">自動タグ付け</div>
+          <div className="settings-row-sub">タスク解析時に自動でタグを付与</div>
+        </div>
+        <button className={`toggle${autoTag ? ' on' : ' off'}`} onClick={() => onChange('autoTag', !autoTag)} />
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">日付の自動推定</div>
+          <div className="settings-row-sub">「来週」などの相対日付を解析</div>
+        </div>
+        <button className={`toggle${autoDate ? ' on' : ' off'}`} onClick={() => onChange('autoDate', !autoDate)} />
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">反映ボタンを分ける</div>
+          <div className="settings-row-sub">「TODOに反映」「ナレッジに反映」を個別ボタンで表示</div>
+        </div>
+        <button className={`toggle${settings.splitReflectButtons !== false ? ' on' : ' off'}`} onClick={() => onChange('splitReflectButtons', settings.splitReflectButtons === false)} />
+      </div>
+    </div>
+  </>);
+
+  const secTags = (<>
+    <div className="settings-section-title">タグ</div>
+    <div className="settings-card">
+      <div className="tag-row">
+        <div className="settings-row-label">既定タグ</div>
+        <div className="settings-row-sub">ナレッジ用の既定タグは「アイデア」のみ</div>
+        <div className="tag-chip-list">
+          {BUILTIN_IDEA_TAGS.map(t => (
+            <span key={t} className="tag-chip tag-chip-builtin">{t}</span>
+          ))}
+        </div>
+      </div>
+      <div className="tag-row">
+        <div className="settings-row-label">カスタムタグ</div>
+        <div className="settings-row-sub">独自のタグを追加・削除できます（TODO・ナレッジ両方で使用可能）</div>
+        {(settings.customTags || []).length > 0 && (
+          <div className="tag-chip-list">
+            {(settings.customTags || []).map(t => (
+              <span key={t} className="tag-chip">
+                {t}
+                <button onClick={() => onChange('customTags', (settings.customTags || []).filter(x => x !== t))}>×</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="tag-add-row">
+          <input value={newTag} onChange={e => setNewTag(e.target.value)}
+            placeholder="新しいタグ名（例: 副業）"
+            onKeyDown={e => { if (e.key === 'Enter') addTag(); }}
+            maxLength={12} />
+          <button disabled={!canAdd} onClick={addTag}>追加</button>
+        </div>
+      </div>
+    </div>
+  </>);
+
+  const secMemomon = (<>
+    {memoMons.length > 0 && <>
+      <div className="settings-section-title">メモモン</div>
+      <div className="settings-card">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">メモモンを表示する</div>
+            <div className="settings-row-sub">画面上を歩き回るモンスターの表示</div>
+          </div>
+          <button
+            className={`toggle${settings.memoMonVisible === false ? ' off' : ' on'}`}
+            onClick={() => onChange('memoMonVisible', settings.memoMonVisible === false ? true : false)}
+          />
+        </div>
+        {settings.memoMonVisible !== false && <>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">サイズ</div>
+            </div>
+            <div className="font-size-opts">
+              {(['small', 'medium', 'large'] as const).map((s, i) => (
+                <button
+                  key={s}
+                  className={`font-size-opt${(settings.memoMonSize || 'medium') === s ? ' sel' : ''}`}
+                  style={{ fontSize: i === 0 ? '11px' : i === 1 ? '13px' : '15px' }}
+                  onClick={() => onChange('memoMonSize', s)}
+                >{['小', '中', '大'][i]}</button>
+              ))}
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">タップで吹き出し</div>
+              <div className="settings-row-sub">メモモンをタップしたときにセリフを表示</div>
+            </div>
+            <button
+              className={`toggle${settings.memoMonSpeech === false ? ' off' : ' on'}`}
+              onClick={() => onChange('memoMonSpeech', settings.memoMonSpeech === false ? true : false)}
+            />
+          </div>
+        </>}
+      </div>
+    </>}
+  </>);
+
+  const secGift = (<>
+    <div className="settings-section-title">プレゼントコード</div>
+    <div className="settings-card">
+      <div className="api-row">
+        <div className="settings-row-label">コードを入力</div>
+        <div className="settings-row-sub">プレゼントコードを入力してコインをゲット！</div>
+        <div className="api-input-row">
+          <input
+            type="text"
+            value={giftCode}
+            onChange={e => { setGiftCode(e.target.value); setGiftMsg({ kind: 'idle', msg: '' }); }}
+            placeholder="コードを入力"
+            autoComplete="off"
+            spellCheck={false}
+            onKeyDown={e => { if (e.key === 'Enter') redeemGift(); }}
+          />
+          <button onClick={redeemGift} disabled={!giftCode.trim()}>使用</button>
+        </div>
+        {giftMsg.msg && <div className={`api-status ${giftMsg.kind}`}>{giftMsg.msg}</div>}
+      </div>
+    </div>
+  </>);
+
+  const secData = (<>
+    <div className="settings-section-title">データ管理</div>
+    <div className="settings-card">
+      <div className="api-row">
+        <div className="settings-row-label">バックアップ</div>
+        <div className="settings-row-sub">
+          すべてのデータ（TODO・アイデア・設定・メモモンなど）を JSON ファイルに書き出し／読み込みできます。端末の変更やデータ消失に備えてバックアップを取れます。
+        </div>
+        <div className="backup-btn-row">
+          <button className="backup-btn" onClick={exportAllData}>エクスポート</button>
+          <button className="backup-btn" onClick={() => importFileRef.current?.click()}>インポート</button>
+        </div>
+        <input
+          ref={importFileRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
+        {backupStatus.kind && (
+          <div className={`api-status ${backupStatus.kind}`}>{backupStatus.msg}</div>
+        )}
+      </div>
+    </div>
+  </>);
+
+  const secAbout = (<>
+    <div className="settings-section-title">アプリ情報</div>
+    <div className="about-card">
+      <div className="about-app-name">SmartMemo</div>
+      <div className="about-version">Version {APP_VERSION} (TypeScript)</div>
+    </div>
+  </>);
+
+  const SUB_PAGES: Record<SettingsPage & string, { title: string; body: React.ReactNode }> = {
+    display:  { title: '表示',            body: secDisplay },
+    calendar: { title: 'カレンダー・通知', body: <>{secCalendar}{secNotif}</> },
+    ai:       { title: 'AI',              body: <>{secAiLink}{secAiAnly}{secAiConf}</> },
+    tags:     { title: 'タグ',            body: secTags },
+    memomon:  { title: 'メモモン',        body: secMemomon },
+    gift:     { title: 'プレゼントコード', body: secGift },
+    data:     { title: 'データ管理',      body: secData },
+    // コイン無限モードは解放済みのときだけ、アプリ情報の末尾に出す
+    about:    { title: 'アプリ情報',      body: <>{secAbout}{secTest}</> },
+  };
+
+  if (page) {
+    const sub = SUB_PAGES[page];
+    return (
+      <div className="settings-tab tab-pane">
+        <div className="sub-header">
+          <button className="sub-back" onClick={() => setPage(null)}>
+            <IcoChevronLeft />設定
+          </button>
+          <div className="sub-header-title">{sub.title}</div>
+          <div className="sub-header-right" />
+        </div>
+        <div className="settings-scroll">{sub.body}</div>
+      </div>
+    );
+  }
+
+  const MENU: { group: string; items: { key: SettingsPage & string; label: string; sub: string; Icon: React.FC }[] }[] = [
+    { group: 'アプリ', items: [
+      { key: 'display',  label: '表示',             sub: 'テーマ・ベースカラー・文字サイズ', Icon: IcoSetDisplay },
+      { key: 'calendar', label: 'カレンダー・通知', sub: '休日・リマインド・サウンド',       Icon: IcoSetBell },
+      { key: 'ai',       label: 'AI',               sub: '連携・分析・自動タグ',             Icon: IcoSetSparkle },
+      { key: 'tags',     label: 'タグ',             sub: 'タグの追加と削除',                 Icon: IcoSetTag },
+    ]},
+    { group: 'メモモン', items: [
+      { key: 'memomon',  label: 'メモモン',         sub: '表示・ふきだし・おでかけ',         Icon: IcoSetEgg },
+      { key: 'gift',     label: 'プレゼントコード', sub: 'コードを入力してコインを受け取る', Icon: IcoSetGift },
+    ]},
+    { group: 'データ・その他', items: [
+      { key: 'data',     label: 'データ管理',       sub: 'バックアップと復元',               Icon: IcoSetData },
+      { key: 'about',    label: 'アプリ情報',       sub: 'バージョン・利用状況',             Icon: IcoSetInfo },
+    ]},
+  ];
+
+  return (
+    <div className="settings-tab tab-pane">
+      <h1 className="settings-page-title">設定</h1>
+      {isSupabaseConfigured && secAccount}
+      {MENU.map(g => (
+        <div key={g.group}>
+          <div className="settings-group-label">{g.group}</div>
+          <div className="settings-menu">
+            {g.items.map(it => (
+              <button key={it.key} className="settings-menu-row" onClick={() => setPage(it.key)}>
+                <span className="settings-menu-ico"><it.Icon /></span>
+                <span className="settings-menu-text">
+                  <span className="settings-menu-label">{it.label}</span>
+                  <span className="settings-menu-sub">{it.sub}</span>
+                </span>
+                <IcoChevronRight />
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -7840,21 +8055,21 @@ function SmartMemoApp() {
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
-  // ボトムナビ。「にわ」「書庫」「ずかん」は愛称なので、それだけでは何の画面か
-  // 推測できない。機能名を小さく添えて初見でも辿れるようにする（設定は自明なので不要）。
+  // ボトムナビは機能名だけの 1 行にする。以前は「にわ／タスク」のように
+  // 愛称と機能名を 2 段で出していたが、5 タブぶん積むと下端が窮屈になり、
+  // どちらを読めばよいのかも決まらなかった。
+  // 愛称（にわ・書庫・ずかん）は各画面のタイトルとして本文側に残してある。
   // 中央のメモボタンぶんの隙間も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
-  type NavItem = { key: Tab; label: string; sub?: string; Icon: React.FC<{ active: boolean }> };
+  type NavItem = { key: Tab; label: string; Icon: React.FC<{ active: boolean }> };
   const navItems: (NavItem | 'memo-slot')[] = [
-    { key: 'todo',     label: 'にわ',   sub: 'タスク',   Icon: IcoHomeNav },
-    { key: 'idea',     label: '書庫',   sub: 'ナレッジ', Icon: IcoBookNav },
+    { key: 'todo',     label: 'タスク',   Icon: IcoHomeNav },
+    { key: 'idea',     label: 'ナレッジ', Icon: IcoBookNav },
     'memo-slot',
-    { key: 'zukan',    label: 'ずかん', sub: 'メモモン', Icon: IcoEggNav },
-    { key: 'settings', label: '設定',                    Icon: IcoGearNav },
+    { key: 'zukan',    label: 'メモモン', Icon: IcoEggNav },
+    { key: 'settings', label: '設定',     Icon: IcoGearNav },
   ];
 
   const now = new Date();
-  const headerDate = `${now.getMonth() + 1}/${now.getDate()}`;
-  const headerDow  = DOW[now.getDay()];
 
   // メモモンは庭（ガーデンワールド）の中でだけ歩く
   const monLayer = (() => {
@@ -8206,8 +8421,11 @@ function SmartMemoApp() {
   return (
     <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
       <div className="app-header">
+        {/* 日付はここではなく にわ のシート見出しに一本化した。
+            両方に出ていたころは、ヘッダーの日付とシートの日付が
+            別々の意味に見えて（今日／選択日）迷いのもとになっていた。 */}
         <div className="header-left">
-          <div className="gw-date-chip">{headerDate}<span className="gw-dow">({headerDow})</span></div>
+          <IcoAppMark />
           <span className="tagline">SmartMemo</span>
         </div>
         <div className="header-right">
@@ -8230,7 +8448,7 @@ function SmartMemoApp() {
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
@@ -8253,9 +8471,6 @@ function SmartMemoApp() {
               >
                 <span className="nav-icon"><item.Icon active={tab === item.key} /></span>
                 <span className="nav-label">{item.label}</span>
-                {/* 補助ラベルが無いタブ（設定）でも枠は置く。無いと下端揃えの
-                    せいでそのタブだけラベルが 12px 下がって見える。 */}
-                <span className="nav-sub" aria-hidden={!item.sub}>{item.sub ?? ''}</span>
               </button>
             )
           )}
