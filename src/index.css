@@ -2716,6 +2716,69 @@
 
     /* SETTINGS TAB */
     .settings-tab { padding:18px 16px; display:flex; flex-direction:column; gap:10px; }
+
+    /* ── 設定トップ（一覧）と、サブページの共通ヘッダー ────────────
+       13 セクションを 1 本のスクロールに平置きしていたころは、目的の
+       項目に着くまで延々スクロールする必要があった。8 つに束ねて、
+       トップは「どこに何があるか」だけを見せる。 */
+    .settings-page-title { font-size:22px; font-weight:700; color:var(--ink); padding:0 2px; }
+    .settings-group-label {
+      font-size:var(--fs-xs); font-weight:700; color:var(--ink-mute);
+      letter-spacing:.6px; padding:0 2px; margin:14px 0 6px;
+    }
+    .settings-menu {
+      background:var(--surface); border:1px solid var(--rule);
+      border-radius:var(--r-lg); overflow:hidden;
+    }
+    .settings-menu-row {
+      width:100%; min-height:58px; padding:0 var(--sp-3);
+      display:flex; align-items:center; gap:var(--sp-3);
+      background:none; border:none; border-bottom:1px solid var(--rule);
+      font-family:inherit; text-align:left; cursor:pointer; color:var(--ink);
+    }
+    .settings-menu-row:last-child { border-bottom:none; }
+    .settings-menu-row:active { background:var(--surface-sunk); }
+    /* アイコンの座布団。行の先頭を四角で揃えると、ラベルの開始位置が
+       文字数によらず一定になる。 */
+    .settings-menu-ico {
+      width:36px; height:36px; flex:none; border-radius:var(--r-md);
+      background:var(--surface-sunk); color:var(--ink-soft);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .settings-menu-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+    .settings-menu-label { font-size:var(--fs-base); font-weight:700; color:var(--ink); }
+    .settings-menu-sub {
+      font-size:var(--fs-xs); color:var(--ink-mute); font-weight:500;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    .settings-menu-chev { flex:none; color:var(--ink-faint); }
+
+    /* サブページの戻るヘッダー（3.8）。フルスクリーン画面と同じ形。 */
+    .sub-header {
+      display:flex; align-items:center; gap:var(--sp-2);
+      height:var(--h-header); flex:none;
+      margin:-18px -16px 4px; padding:0 var(--sp-2);
+      border-bottom:1px solid var(--rule);
+    }
+    .sub-back {
+      display:flex; align-items:center; gap:2px;
+      height:var(--tap-min); padding:0 var(--sp-2);
+      background:none; border:none; cursor:pointer; font-family:inherit;
+      font-size:var(--fs-base); font-weight:600; color:var(--ink-soft);
+      flex:1 1 0; min-width:0; justify-content:flex-start;
+    }
+    .sub-header-title {
+      font-size:17px; font-weight:700; color:var(--ink);
+      white-space:nowrap;
+    }
+    /* 左右を同じ幅にして、中央のタイトルを画面中央で止める */
+    .sub-header-right { flex:1 1 0; }
+    .settings-scroll {
+      flex:1; min-height:0; overflow-y:auto;
+      display:flex; flex-direction:column; gap:10px;
+      margin:0 -16px; padding:0 16px 24px;
+    }
+
     .settings-section-title {
       font-size:var(--fs-xs);
       text-transform:uppercase; letter-spacing:.6px;
@@ -2727,6 +2790,11 @@
       border-bottom:1px solid #f0f0ee;
     }
     .settings-row:last-child { border-bottom:none; }
+    /* 中身が 3 つ以上ある行は縦に積む。横並びのままだと見出しが
+       折り返して、隣の選択肢が縦に潰れる。 */
+    .settings-row--stack {
+      flex-direction:column; align-items:stretch; gap:var(--sp-2);
+    }
     .settings-row-label { font-size:var(--fs-base); color:var(--ink); }
     .settings-row-sub   { font-size:var(--fs-xs); color:var(--ink-mute); margin-top:1px; }
 

@@ -53,14 +53,20 @@ async function capture(dark) {
   await page.goto(URL, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1400);
 
-  await page.locator('.nav-tab:has-text("設定")').first().click();
-  await page.waitForTimeout(700);
-  await page.locator('.settings-row', { hasText: 'メモモンを表示する' }).first().locator('.toggle').click();
-  await page.waitForTimeout(500);
-  if (dark) {
-    await page.locator('.settings-row', { hasText: 'ダークモード' }).first().locator('.toggle').click();
-    await page.waitForTimeout(600);
-  }
+  // 設定はトップが一覧になり、各項目はサブページの中にある。
+  // 目的のトグルまでサブページを開いて、終わったら戻る。
+  const openSetting = async (menu, rowText) => {
+    await page.locator('.nav-tab:has-text("設定")').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('.settings-menu-row', { hasText: menu }).first().click();
+    await page.waitForTimeout(500);
+    await page.locator('.settings-row', { hasText: rowText }).first().locator('.toggle').click();
+    await page.waitForTimeout(500);
+    await page.locator('.sub-back').click();
+    await page.waitForTimeout(400);
+  };
+  await openSetting('メモモン', 'メモモンを表示する');
+  if (dark) await openSetting('表示', 'ダークモード');
   await page.addStyleTag({ content: FREEZE });
 
   const theme = dark ? 'dark' : 'light';
