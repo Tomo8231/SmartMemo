@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.5';
+const APP_VERSION = '1.40.6';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -4444,7 +4444,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs }: {
+function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs, onGoMemo }: {
   ideas: Idea[];
   aiCfg: AiCfg;
   onUpdate: (i: Idea) => void;
@@ -4454,6 +4454,7 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
   customTags: string[];
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
+  onGoMemo: () => void;
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
@@ -4822,7 +4823,16 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
       {libView === 'shelf' && !selectMode ? (
         <div className="ideas-tab tab-pane lib-body">
           {searchedIdeas.length === 0
-            ? <div className="ideas-empty">{libQuery.trim() ? '見つかりませんでした' : 'まだ本がありません。メモから育てよう'}</div>
+            ? (libQuery.trim()
+                ? <div className="ideas-empty">見つかりませんでした</div>
+                : (
+                  // 空のときに「メモから育てよう」と書いてあっても、
+                  // どこへ行けばよいかは書いていなかった。行き先を置く（4.4）。
+                  <div className="ideas-empty">
+                    <p>まだ本がありません</p>
+                    <button className="u-btn u-btn--primary" onClick={onGoMemo}>メモを書く</button>
+                  </div>
+                ))
             : shelves
           }
           <div className="ideas-bottom-actions">
@@ -8438,7 +8448,7 @@ function SmartMemoApp() {
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
