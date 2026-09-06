@@ -1678,8 +1678,13 @@
     }
     .search-input:focus { border-color:var(--accent); background:#fff; }
     .filter-tags {
-      display:flex; gap:6px; flex-wrap:wrap;
+      display:flex; gap:6px; flex-wrap:nowrap;
+      overflow-x:auto; overflow-y:hidden;
+      scrollbar-width:none;
+      /* 端で切れていることが分かるよう、左右の余白ぶんだけ内側に伸ばす */
+      margin:0 calc(var(--sp-4) * -1); padding:0 var(--sp-4);
     }
+    .filter-tags::-webkit-scrollbar { display:none; }
     /* チップの形は .u-chip と揃える（3.4） */
     .filter-tag {
       display:inline-flex; align-items:center; justify-content:center;
@@ -1806,7 +1811,7 @@
     }
 
     .todo-list-area {
-      padding:16px;
+      padding:16px 16px calc(var(--h-fab) - 30px + var(--sp-4));
       flex:1; min-height:0;
       overflow-y:auto; overflow-x:hidden;
       -webkit-overflow-scrolling:touch;
@@ -1884,20 +1889,23 @@
       100% { opacity:1; transform:translateY(0)     scale(1);    box-shadow:0 0 0 0 rgba(0,0,0,0); }
     }
     .todo-body { flex:1; min-width:0; cursor:pointer; }
-    .todo-title { font-size:var(--fs-base); line-height:1.45; }
-    .todo-item.done .todo-title { text-decoration:line-through; }
-    .todo-meta { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
-    .todo-date-str { font-size:10px; color:#b0b0ac; display:flex; align-items:center; gap:3px; }
-    .todo-coin-reward { font-size:10px; font-weight:700; color:#b07000; background:#fff8e1; border-radius:6px; padding:1px 5px; letter-spacing:.1px; }
-    .todo-item.done .todo-coin-reward { opacity:.45; }
-    .todo-del {
-      width:24px; height:24px; border:1px solid var(--rule); background:var(--surface);
-      border-radius:var(--r-sm); cursor:pointer; font-size:11px;
-      display:flex; align-items:center; justify-content:center; color:#c0c0ba;
-      flex-shrink:0; transition:background .12s, color .12s;
-      position:relative;
+    /* タイトル・タグ・時刻を 1 行に置く（4.1）。
+       タイトルだけが伸縮し、タグと時刻は縮まない。 */
+    .todo-main { display:flex; align-items:center; gap:var(--sp-2); min-width:0; }
+    .todo-title {
+      font-size:var(--fs-base); line-height:1.45;
+      flex:1; min-width:0;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     }
-    .todo-del:hover { background:#fdf0f0; color:#c0392b; border-color:#f0d0d0; }
+    .todo-item.done .todo-title { text-decoration:line-through; }
+    .todo-main .tag-pill { flex:none; }
+    /* 時刻は行の右端。桁がそろうよう tabular-nums にする。 */
+    .todo-time {
+      flex:none; font-size:12px; font-weight:600; color:var(--ink-soft);
+      font-variant-numeric:tabular-nums;
+    }
+    .todo-time.is-empty { color:var(--ink-mute); font-weight:500; }
+    .todo-item.done .todo-coin-reward { opacity:.45; }
 
     /* Edit Modal */
     .modal-backdrop {
@@ -1914,8 +1922,10 @@
     @keyframes sheetUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
     .modal-handle { background:#d0d0cc; margin:0 auto 18px; }
     .modal-title { font-size:15px; font-weight:700; margin-bottom:16px; letter-spacing:-.3px; }
-    .modal-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
-    .modal-title-row .modal-title { margin-bottom:16px; }
+    .modal-title-row { display:flex; align-items:center; gap:8px; }
+    /* タイトルに余りを吸わせて、複製と削除を右端でまとめる。
+       space-between のままだと 3 つが均等に散って、複製だけが宙に浮く。 */
+    .modal-title-row .modal-title { margin-bottom:16px; flex:1; min-width:0; }
     .modal-title-delete {
       background:transparent; border:none; cursor:pointer;
       padding:6px; border-radius:8px; color:#a0a09c;
@@ -2035,42 +2045,35 @@
     .ideas-wrapper { display:flex; flex-direction:column; flex:1; min-height:0; overflow:hidden; }
     .ideas-header-row { display:flex; align-items:center; flex-shrink:0; }
     .ideas-header-row .ideas-subtabs { border-bottom:none; flex:1; min-width:0; }
-    /* Add-row buttons — natural inline placement */
-    .todo-add-row {
-      display:flex; align-items:center; gap:7px;
-      width:100%; padding:12px 16px;
-      background:transparent; border:none; border-top:1px solid #f0f0ee;
-      color:var(--accent); font-size:var(--fs-base); font-weight:500;
-      cursor:pointer; text-align:left; font-family:inherit; letter-spacing:.1px;
+    /* 最下段は 1 行（4.1）。主操作＝追加だけを塗りにして、
+       セットとゴミ箱は ghost に落とす。3 つとも同じ見た目のテキストリンクが
+       縦に並んでいたころは、いちばん使う「追加」が埋もれていた。
+       形は .u-btn 側が持つので、ここでは並びと固有の見た目だけを足す。 */
+    .todo-bottom-actions {
+      display:flex; align-items:center; gap:var(--sp-2);
+      padding:var(--sp-3) var(--sp-4);
+      border-top:1px solid var(--rule);
+      flex:none;
     }
-    .todo-add-row:active { background:#f5f5f3; }
-    .todo-set-open-btn {
-      display:flex; align-items:center; gap:6px;
-      width:100%; padding:10px 16px;
-      background:transparent; border:none; border-top:1px solid #f0f0ee;
-      color:var(--accent); font-size:var(--fs-sm); font-weight:500;
-      cursor:pointer; text-align:left; font-family:inherit;
-    }
-    .todo-set-open-btn:active { background:#f5f5f3; }
+    .todo-add-row { flex:1; }
+    .todo-set-open-btn { flex:none; }
     .todo-set-count {
-      background:var(--accent); color:#fff; font-size:10px; font-weight:700;
-      border-radius:10px; padding:1px 6px;
+      background:var(--accent); color:var(--accent-text); font-size:10px; font-weight:700;
+      border-radius:var(--r-full); padding:1px 6px;
     }
-    .trash-open-btn {
-      display:flex; align-items:center; gap:6px;
-      width:100%; padding:10px 16px;
-      background:transparent; border:none; border-top:1px solid #f0f0ee;
-      color:#a0a09c; font-size:var(--fs-sm); font-weight:500;
-      cursor:pointer; text-align:left; font-family:inherit;
-    }
-    .trash-open-btn:active { background:#f5f5f3; }
+    .trash-open-btn { position:relative; }
     /* 絵文字から Ico* に差し替えたぶんのサイズ揃え。
        Ico* は 13〜24px と定義がまちまちなので、置き場所ごとに指定が要る。
        本来はアイコン側を 16/20/24 の 3 段階に統一すべき（docs/design-tokens.md）。 */
     .todo-set-open-btn > svg, .trash-open-btn > svg { width:16px; height:16px; flex:none; }
+    /* ゴミ箱はアイコンのみのボタンなので、件数は右上の小さなバッジで出す。
+       中に並べるとアイコンごと押し出されて 40px の丸から溢れる。 */
     .trash-count {
-      background:#c8c8c4; color:#fff; font-size:10px; font-weight:700;
-      border-radius:10px; padding:1px 6px;
+      position:absolute; top:-2px; right:-2px;
+      min-width:16px; height:16px; padding:0 4px;
+      display:flex; align-items:center; justify-content:center;
+      background:var(--ink-mute); color:var(--surface);
+      font-size:10px; font-weight:700; border-radius:var(--r-full);
     }
 
     /* TodoSet modals */
@@ -3544,7 +3547,7 @@
     .app.dark .bottom-nav { background:var(--surface); }
 
     /* ── にわ（ガーデンワールド） ── */
-    .gw { position:relative; flex:none; height:clamp(225px, 32vh, 330px); overflow:hidden; transition:background 1.2s ease; }
+    .gw { position:relative; flex:none; height:236px; overflow:hidden; transition:background 1.2s ease; }
     .gw.t-morning { background:linear-gradient(#FFE9C8 0%, #CBE7F2 70%); }
     .gw.t-day     { background:linear-gradient(#8FD3F2 0%, #C8ECF7 75%); }
     .gw.t-evening { background:linear-gradient(#FFB37A 0%, #C79ED0 70%); }
@@ -3584,16 +3587,20 @@
     }
     .gw-time-btn {
       position:absolute; top:10px; right:12px; z-index:6;
-      border:none; background:rgba(255,255,255,.9); border-radius:12px;
-      padding:5px 9px; cursor:pointer; font-size:14px;
-      box-shadow:0 1px 4px rgba(0,0,0,.08);
+      width:36px; height:36px; padding:0;
+      display:flex; align-items:center; justify-content:center;
+      border:none; background:var(--surface); border-radius:50%;
+      cursor:pointer; font-size:14px;
+      box-shadow:var(--sh-1);
     }
     /* にわの集中モード起動ボタン */
     .gw-focus-btn {
       position:absolute; top:10px; left:12px; z-index:6;
-      border:none; border-radius:99px; cursor:pointer; font-family:inherit;
-      background:var(--surface); color:var(--ink); font-weight:800; font-size:12.5px;
-      padding:7px 13px; box-shadow:0 2px 8px rgba(0,0,0,.14);
+      height:36px; padding:0 13px;
+      display:flex; align-items:center; gap:6px;
+      border:none; border-radius:var(--r-full); cursor:pointer; font-family:inherit;
+      background:var(--surface); color:var(--ink); font-weight:700; font-size:12.5px;
+      box-shadow:var(--sh-1);
       transition:transform .08s;
     }
     .gw-focus-btn:active { transform:scale(.95); }
@@ -3692,8 +3699,15 @@
     .gw-sheet.dragging .gw-grab-zone { cursor:grabbing; }
     .gw-grab { width:44px; height:5px; border-radius:99px; background:#D8DFE7; margin:2px auto; flex:none; transition:background .15s, width .15s; }
     .gw-grab-zone:hover .gw-grab, .gw-sheet.dragging .gw-grab { background:#A9B6C4; width:56px; }
-    .gw-sheet-head { display:flex; align-items:baseline; gap:8px; padding:2px 20px 6px; flex:none; }
-    .gw-sheet-head h2 { font-size:15px; font-weight:800; color:var(--gw-ink); }
+    .gw-sheet-head {
+      display:flex; align-items:center; gap:var(--sp-2);
+      padding:2px var(--sp-4) 6px; flex:none;
+    }
+    .gw-sheet-head h2 { font-size:17px; font-weight:700; color:var(--ink); }
+    /* 日付とカレンダーは見出し行の右端にまとめる。
+       押すとカレンダーが開く、という 1 つの操作にする。 */
+    .gw-sheet-head .cal-toggle { margin-left:auto; }
+    .gw-sheet-date { font-size:13px; font-weight:600; color:var(--ink-soft); }
     .gw-prog { font-size:12px; font-weight:800; color:var(--accent); }
     .gw-sheet-body { flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
     @media (min-width:760px) {
@@ -3713,9 +3727,12 @@
     .app.dark .todo-tab.garden .calendar-section { background:transparent; }
 
     /* ── タスク行（.row 風） ── */
+    /* タスク行は 56px を基本の高さにする（4.1）。
+       添付があるときだけ下に伸びる。 */
     .todo-item {
-      border:none; border-radius:16px; padding:12px 14px; margin-bottom:9px;
-      box-shadow:0 1px 3px rgba(60,80,110,.06); align-items:center;
+      border:1px solid var(--rule); border-radius:var(--r-lg);
+      padding:0 var(--sp-3); margin-bottom:var(--sp-2);
+      min-height:var(--h-row); box-shadow:none; align-items:center;
       transition:opacity .4s, background .4s;
     }
     .todo-item.done { opacity:.7; background:#F3FAF4; }

@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.2';
+const APP_VERSION = '1.40.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -950,6 +950,19 @@ function todoDisplayRange(t: Todo): { start: string; end: string } | null {
 }
 const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 const DOW = ['日','月','火','水','木','金','土'];
+
+// タスク行の右端に出す時刻。ISO 形式（2026-08-14 10:00）をそのまま出すと
+// 幅を食ううえ、並んだときにどれも同じ文字列に見えて日付の差が読めない。
+//   今日        → 10:00 ／ 終日
+//   今日以外    → 8/15 10:00 ／ 8/15
+// 「終日」だけは弱い色で出す（呼び出し側で is-empty を見る）。
+function formatTodoTime(t: Todo, todayStr: string): { text: string; muted: boolean } {
+  const d = t.startDate;
+  if (!d) return t.time ? { text: t.time, muted: false } : { text: '終日', muted: true };
+  const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
+  if (d === todayStr) return t.time ? { text: t.time, muted: false } : { text: '終日', muted: true };
+  return { text: t.time ? `${md} ${t.time}` : md, muted: false };
+}
 const JP_HOLIDAYS = new Set([
   // 2024
   '2024-01-01','2024-01-08','2024-02-11','2024-02-12','2024-02-23',
@@ -2708,11 +2721,12 @@ function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange,
 // ─────────────────────────────────────────────────────────────
 // Edit Modal
 // ─────────────────────────────────────────────────────────────
-function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags = [] }: {
+function EditModal({ todo, mode = 'edit', onSave, onDelete, onDuplicate, onClose, customTags = [] }: {
   todo: Todo | (TodoDraft & { id: string });
   mode?: 'add' | 'edit';
   onSave: (t: any) => void;
   onDelete?: () => void;
+  onDuplicate?: () => void;
   onClose: () => void;
   customTags?: string[];
 }) {
@@ -2751,6 +2765,14 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onClose, customTags 
         <div className="modal-handle"/>
         <div className="modal-title-row">
           <div className="modal-title">{mode === 'add' ? 'タスクを追加' : 'タスクを編集'}</div>
+          {/* 複製は以前タスク行に常時出ていたが、24px のアイコンが
+              チェックの隣に 2 つ並ぶ形で誤タップの元だった。
+              行からは外し、開いたこの画面に置く（4.1）。 */}
+          {mode === 'edit' && onDuplicate && (
+            <button className="u-btn u-btn--icon" onClick={onDuplicate} aria-label="複製" title="複製">
+              <IcoCopy />
+            </button>
+          )}
           {onDelete && (
             <button className="modal-title-delete" onClick={onDelete} aria-label="削除" title="削除">
               <IcoTrash />
@@ -2936,18 +2958,19 @@ const SPARK_POS = [
   { dx: 21, dy: 21, bg: 'var(--accent)' },
 ];
 
-function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 'doremi', overdue }: {
+function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', overdue, todayStr }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
-  onDelete: (id: number | string) => void;
   onEdit: (t: Todo) => void;
   soundEnabled: boolean;
   soundType?: string;
   overdue?: boolean;
+  todayStr: string;
 }) {
   const [animating, setAnimating] = useState(false);
   const [sparkling, setSparkling] = useState(false);
   const justAdded = !!todo.addedAt && (Date.now() - todo.addedAt) < 800;
+  const time = formatTodoTime(todo, todayStr);
 
   function handleToggle() {
     if (!todo.done) {
@@ -2971,24 +2994,21 @@ function TodoItem({ todo, onToggle, onDelete, onEdit, soundEnabled, soundType = 
       <div className={`todo-check${todo.done ? ' checked' : ''}${animating ? ' animate-pop' : ''}`} onClick={handleToggle}>
         {todo.done && <IcoCheck />}
       </div>
+      {/* 1 行 1 目的（1 節）。主情報はタイトルで、タグと時刻は補助。
+          複製と削除は常時表示せず、行を開いた編集シートに置く。
+          24px のアイコンが 2 つ並んでいたころは、チェックを押したつもりで
+          削除に触れる事故が起きやすかった。 */}
       <div className="todo-body" onClick={() => onEdit(todo)}>
-        <div className="todo-title">{todo.title}</div>
-        <div className="todo-meta">
-          {todo.startDate && (
-            <span className="todo-date-str">
-              <IcoCalSm />
-              {todo.startDate}{todo.endDate ? ` — ${todo.endDate}` : ''}{todo.time ? `  ${todo.time}` : ''}
-            </span>
-          )}
+        <div className="todo-main">
+          <span className="todo-title">{todo.title}</span>
           {(todo.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
           {todo.coinReward != null && (
-            <span className="todo-coin-reward">🪙 +{todo.coinReward}</span>
+            <span className="tag-pill todo-coin-reward">+{todo.coinReward}</span>
           )}
+          <span className={`todo-time${time.muted ? ' is-empty' : ''}`}>{time.text}</span>
         </div>
         <AttachmentRow attachments={todo.attachments || []} />
       </div>
-      <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildTodoCopyText(todo)); }} title="コピー"><IcoCopy /></button>
-      <button className="todo-del" onClick={() => onDelete(todo.id)}>✕</button>
     </div>
   );
 }
@@ -3985,7 +4005,10 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
         >
           <div className="gw-cointag">🪙{t.coinReward ?? 10}</div>
           {(t.attachments?.length ?? 0) > 0 && <div className="gw-clip">📎</div>}
-          <div className="gw-board gw-dot">{t.title}</div>
+          {/* 看板は小さいので全角 6 文字で切る。省略記号は付けない（4.1）。
+              「…」の 1 文字ぶんも札の中では大きく、正式名はシートの
+              タスク行で読めるため、ここでは付けずに詰める。 */}
+          <div className="gw-board gw-dot">{t.title.slice(0, 6)}</div>
           <div className="gw-pole" />
         </div>
       ))}
@@ -4091,6 +4114,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
       return Array.from(s);
     });
   };
+  const clearTags = () => setSelTagsArr([]);
 
   function handleEditStart(todo: Todo) {
     if (todo.recurringGroupId) {
@@ -4227,6 +4251,22 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
           onDelete(editing.todo.id);
         }
         setEditing(null);
+      }} onDuplicate={() => {
+        // 繰り返しの設定は引き継がない。複製した側も一緒に増殖して
+        // 意図しない件数になるため、複製は単発の 1 件として作る。
+        const stamp = Date.now();
+        const src = editing.todo;
+        onAdd({
+          ...src,
+          id: stamp,
+          addedAt: stamp,
+          done: false,
+          completedAt: undefined,
+          recurring: undefined,
+          recurringDay: undefined,
+          recurringGroupId: undefined,
+        });
+        setEditing(null);
       }} onClose={() => setEditing(null)} customTags={customTags} />}
       {adding && <EditModal mode="add" todo={{ id: Date.now(), title: '', startDate: sel, endDate: sel, time: '', tags: [], done: false, addedAt: Date.now() }} onSave={t => {
         const tWithCoin = { ...t, coinReward: t.coinReward ?? estimateCoinReward(t.title, t.tags) };
@@ -4271,30 +4311,38 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             : <><IcoChevronUp />タスク一覧</>}
         </span>
       </div>
+      {/* 見出し行に日付とカレンダーを寄せる（4.1）。
+          以前は「きょうのタスク」の下にもう 1 本 “2026/08/14” の行があり、
+          同じ日付が 2 段に分かれて出ていた。 */}
       <div className="gw-sheet-head">
         <h2>{sel === todayStr ? 'きょうのタスク' : `${sel.slice(5).replace('-', '/')}のタスク`}</h2>
         <span className="gw-prog">{doneOfDay} / {dateTodos.length}</span>
+        <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
+          <span className="gw-sheet-date">
+            {Number(sel.slice(5, 7))}/{Number(sel.slice(8, 10))}（{DOW[new Date(sel + 'T00:00:00').getDay()]}）
+          </span>
+          <IcoCalendar />
+        </button>
       </div>
       <div className="gw-sheet-body">
       <div className="todo-pane-left">
         <div className="todo-controls">
           <div className="filter-tags">
+            {/* 先頭の「すべて」は、絞り込みが外れている状態を選択肢として
+                見せるためのもの。無いと「どれも選ばれていない」のか
+                「絞り込み中」なのかがチップの並びから読めない。 */}
+            <button
+              className={`filter-tag${selectedTags.size === 0 ? ' active' : ''}`}
+              onClick={() => clearTags()}
+            >
+              すべて
+            </button>
             {tagOptions.map(tag => (
               <button key={tag} className={`filter-tag${selectedTags.has(tag) ? ' active' : ''}`} onClick={() => toggleTag(tag)}>
                 {tag}
               </button>
             ))}
           </div>
-        </div>
-        <div className="todo-list-header">
-          <div style={{ display:'flex', alignItems:'center', gap:'7px', flex:1, minWidth:0 }}>
-            <span className="section-head-label">{sel.replace(/-/g, '/')}</span>
-            {sortedDateTodos.length > 0 && <span className="section-count">{sortedDateTodos.length}</span>}
-          </div>
-          <button className="cal-toggle" onClick={() => setShowCalendar(v => !v)} title={showCalendar ? 'スケジュールを非表示' : 'スケジュールを表示'}>
-            <IcoCalendar />
-            {showCalendar ? <IcoChevronUp /> : <IcoChevronDown />}
-          </button>
         </div>
         <div className={`calendar-section${showCalendar ? '' : ' hide'}`}>
           <Calendar todos={filteredTodos} selectedDate={sel} onSelect={setSel} mode={calendarMode} onModeChange={setCalendarMode} holidayConfig={holidayConfig} />
@@ -4308,12 +4356,12 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="section-head-label">期限切れ</span>
               <span className="section-count">{overdueTodos.length}</span>
             </div>
-            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} overdue />)}
+            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} overdue />)}
             <div className="divider"/>
           </>}
           {sortedDateTodos.length === 0
             ? <div className="todo-empty">この日のタスクはありません</div>
-            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)
+            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)
           }
           {sortedUndated.length > 0 && <>
             <div className="divider"/>
@@ -4323,20 +4371,24 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
             </div>
             <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
-              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onDelete={onDelete} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} />)}
+              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)}
             </div>
           </>}
-          <button className="todo-add-row" onClick={() => setAdding(true)}>
-            ＋ タスクを追加
-          </button>
-          {/* 絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
-              揃わない。既存の Ico* に寄せる。 */}
-          <button className="todo-set-open-btn" onClick={() => setShowSets(true)}>
-            <IcoList /> TODOセット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
-          </button>
-          <button className="trash-open-btn" onClick={() => setShowTrash(true)}>
-            <IcoTrash /> ゴミ箱{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
-          </button>
+          {/* 最下段は 1 行にまとめる（4.1）。以前は同じ見た目のテキストリンクが
+              3 つ縦に並んでいて、いちばん使う「タスクを追加」が他と区別できなかった。
+              絵文字は OS ごとに絵柄も色も変わり、自作の線画アイコンと並ぶと
+              揃わないので、既存の Ico* に寄せる。 */}
+          <div className="todo-bottom-actions">
+            <button className="u-btn u-btn--primary todo-add-row" onClick={() => setAdding(true)}>
+              ＋ タスクを追加
+            </button>
+            <button className="u-btn u-btn--ghost todo-set-open-btn" onClick={() => setShowSets(true)}>
+              <IcoList /> セット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
+            </button>
+            <button className="u-btn u-btn--icon trash-open-btn" onClick={() => setShowTrash(true)} title="ゴミ箱" aria-label="ゴミ箱">
+              <IcoTrash />{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
+            </button>
+          </div>
         </div>
       </div>
       </div>
