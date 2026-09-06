@@ -49,11 +49,17 @@
       --ink-mute:     #a0a09c;
 
       /* 罫線 */
+      --ink-faint:    #b4b3ae;  /* プレースホルダ、シェブロン。--ink-mute より更に弱い */
+
       --rule:         #ebebea;
       --rule-strong:  #e0e0de;
       /* メモモン画面（木目調）と にわ の見出しで使う暖色系の文字色 */
       --warm-ink:     #5a3818;
       --gw-ink:       #3a3532;
+
+      /* コインだけはベースカラーに追従させない。通貨の色が設定で変わると
+         「コイン＝黄色」の手がかりが消えるため、5 色すべてで固定にする。 */
+      --coin:         #f2c230;
 
       /* 状態（アクセントとは別系統。警告色をブランド色と兼ねない） */
       --danger:       #c0492f;
@@ -67,12 +73,24 @@
       --fs-xs:        11px;
       --fs-lg:        16px;
 
-      /* 角丸 — 4 段階。用途で選ぶ（チップ/ボタン/カード/シート） */
-      --r-sm:   6px;
+      /* 角丸 — 5 段階。用途で選ぶ（タグ/チップ/カード/…/シート） */
+      --r-sm:    6px;   /* タグ */
       --r-md:   10px;
-      --r-lg:   14px;
+      --r-lg:   14px;   /* カード */
       --r-xl:   18px;
-      --r-full: 999px;
+      --r-sheet:20px;   /* ボトムシートの上端 */
+      --r-full: 999px;  /* pill（ボタン・チップ） */
+
+      /* 高さ — 部品の縦寸法をここで 1 回だけ決める。
+         個々のルールで px を書くと、画面ごとにボタンの高さが 2px ずつ
+         ずれていく（実際そうなっていた）。 */
+      --h-header: 52px;  /* ヘッダー・フルスクリーンの戻るヘッダー */
+      --h-nav:    76px;  /* ボトムナビ */
+      --h-row:    56px;  /* タスク行・抽出結果行 */
+      --h-btn:    44px;  /* 通常のボタン・入力欄 */
+      --h-btn-lg: 52px;  /* 画面の主 CTA */
+      --h-chip:   30px;  /* フィルタ／選択チップ */
+      --h-fab:    52px;  /* 中央の FAB */
 
       /* 影 — 3 段階。浮き上がりの高さを表す */
       --sh-1: 0 1px 4px rgba(0,0,0,.08);
@@ -177,7 +195,7 @@
     .gacha-close-btn:hover { background:rgba(255,255,255,.2); }
     .gacha-title {
       font-size:22px; font-weight:800; letter-spacing:1px; position:relative; z-index:1;
-      background:linear-gradient(135deg,#ffd700 0%,#ff6b35 50%,#e91e63 100%);
+      background:linear-gradient(135deg,#ffd700 0%,#ff6b35 50%,var(--accent) 100%);
       -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
     }
     .gacha-cost-info { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.45); position:relative; z-index:1; }
@@ -319,11 +337,11 @@
     /* Pull button with shimmer */
     .gacha-pull-btn {
       width:100%; padding:14px 24px; border:none; border-radius:14px;
-      background:linear-gradient(135deg,#ffd700 0%,#ff6b35 50%,#e91e63 100%);
-      color:#fff; font-size:var(--fs-base); font-weight:800; cursor:pointer; font-family:inherit;
+      background:var(--accent);
+      color:var(--accent-text); font-size:var(--fs-base); font-weight:800; cursor:pointer; font-family:inherit;
       transition:opacity .15s,transform .1s;
       position:relative; overflow:hidden; z-index:1;
-      box-shadow:0 4px 20px rgba(255,107,53,.45);
+      box-shadow:var(--sh-2);
     }
     .gacha-pull-btn::after {
       content:''; position:absolute; inset:0;
@@ -460,11 +478,11 @@
       object-fit: contain;
       image-rendering: pixelated;
     }
-    .playground-item-card:hover { border-color: #ff8a3d; box-shadow: 0 2px 8px rgba(255,138,61,.25); }
+    .playground-item-card:hover { border-color: var(--accent); box-shadow: 0 2px 8px var(--accent-light); }
     .playground-item-card:active { transform: scale(.94); }
     .playground-item-count {
       position: absolute; bottom: -4px; right: -4px;
-      background: #ff8a3d; color: #fff;
+      background: var(--accent); color: #fff;
       font-size: 10px; font-weight: 800;
       padding: 1px 6px; border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,.18);
@@ -488,9 +506,9 @@
       width: 100%; max-width: 280px;
       padding: 22px 18px 18px;
       background:var(--surface-2);
-      border: 2px solid #ff8a3d;
+      border: 2px solid var(--accent);
       border-radius: 18px;
-      box-shadow: 0 0 28px rgba(255,138,61,.55), 0 16px 40px rgba(0,0,0,.30);
+      box-shadow: 0 0 28px var(--accent-light), 0 16px 40px rgba(0,0,0,.30);
       display: flex; flex-direction: column; align-items: center; gap: 8px;
       text-align: center;
       animation: detail-pop .35s cubic-bezier(.17, .67, .34, 1.4);
@@ -509,11 +527,11 @@
     .bonus-reveal-close {
       margin-top: 6px;
       padding: 8px 26px;
-      background: linear-gradient(135deg, #ff8a3d, #e91e63);
+      background: var(--accent);
       color: #fff; font-weight: 800; font-size: 13px;
       border: none; border-radius: 999px;
       cursor: pointer; font-family: inherit;
-      box-shadow: 0 4px 14px rgba(233,30,99,.40);
+      box-shadow: 0 4px 14px var(--accent-light);
       transition: transform .08s;
     }
     .bonus-reveal-close:active { transform: scale(.95); }
@@ -636,11 +654,11 @@
     .gift-reveal-close {
       margin-top: 8px;
       padding: 9px 28px;
-      background: linear-gradient(135deg, #ff8a3d, #e91e63);
+      background: var(--accent);
       color: #fff; font-weight: 800; font-size: 13px;
       border: none; border-radius: 999px;
       cursor: pointer; font-family: inherit;
-      box-shadow: 0 4px 14px rgba(233,30,99,.40);
+      box-shadow: 0 4px 14px var(--accent-light);
       transition: transform .08s;
     }
     .gift-reveal-close:active { transform: scale(.95); }
@@ -694,7 +712,7 @@
       width: 100%; text-align: left;
     }
     .playground-item-count-label {
-      font-size: 11px; font-weight: 700; color: #ff8a3d;
+      font-size: 11px; font-weight: 700; color: var(--accent);
     }
     .app.dark .playground-item-sheet {
       background: linear-gradient(160deg, #2a1f12 0%, #1f1a14 100%);
@@ -727,9 +745,9 @@
     }
     .playground-mon-card.active {
       background: #fff;
-      border-color: #ff8a3d;
+      border-color: var(--accent);
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(255,138,61,.3);
+      box-shadow: 0 4px 12px var(--accent-light);
     }
     .playground-mon-card img {
       width: 48px; height: 48px; object-fit: contain;
@@ -741,16 +759,16 @@
       text-overflow: ellipsis; white-space: nowrap;
     }
     .playground-mon-card-aff {
-      font-size: 10px; font-weight: 700; color: #e91e63;
+      font-size: 10px; font-weight: 700; color: var(--accent);
     }
     .playground-mon-card { position: relative; }
     .playground-mon-card.onscreen {
-      box-shadow: 0 0 0 2px #4caf50, 0 4px 12px rgba(76,175,80,.3);
+      box-shadow: 0 0 0 2px var(--accent), 0 4px 12px var(--accent-light);
     }
     .playground-mon-card-badge {
       position: absolute;
       top: -6px; left: 50%; transform: translateX(-50%);
-      background: #4caf50; color: #fff;
+      background: var(--accent); color: #fff;
       font-size: 9px; font-weight: 700;
       padding: 2px 8px; border-radius: 8px;
       letter-spacing: .5px;
@@ -758,9 +776,9 @@
     }
     .playground-btn-active {
       width: 100%; padding: 10px 12px; margin-top: 6px;
-      border: 2px solid #4caf50;
+      border: 2px solid var(--accent);
       background: #fff;
-      color: #2e7d32;
+      color: var(--accent);
       font-size: 12px; font-weight: 700;
       border-radius: 12px; cursor: pointer; font-family: inherit;
       transition: transform .08s, background .12s;
@@ -768,15 +786,15 @@
     .playground-btn-active:active:not(:disabled) { transform: scale(.98); }
     .playground-btn-active:hover:not(:disabled) { background: #f1f8e9; }
     .playground-btn-active.onscreen {
-      background: #4caf50; color: #fff;
+      background: var(--accent); color: #fff;
       cursor: default;
     }
     .playground-btn-active:disabled { cursor: default; }
     .app.dark .playground-btn-active {
-      background: rgba(76,175,80,.1); color: #81c784;
+      background: var(--accent-light); color: var(--accent);
     }
     .app.dark .playground-btn-active.onscreen {
-      background: #4caf50; color: #fff;
+      background: var(--accent); color: #fff;
     }
 
     /* あそびば（メモモンずかん）モーダルの閉じるボタン。
@@ -836,16 +854,16 @@
       transition: background .12s, transform .12s;
     }
     .playground-dot:hover { background: rgba(0,0,0,.30); }
-    .playground-dot.active { background: #ff8a3d; transform: scale(1.25); }
+    .playground-dot.active { background: var(--accent); transform: scale(1.25); }
     .playground-dot.is-active-mon::after {
       content: '';
       position: absolute;
       transform: translate(-1px, -10px);
-      width: 4px; height: 4px; border-radius: 50%; background: #4caf50;
+      width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
     }
     .playground-dot { position: relative; }
     .app.dark .playground-dot { background: rgba(255,255,255,.15); }
-    .app.dark .playground-dot.active { background: #ff8a3d; }
+    .app.dark .playground-dot.active { background: var(--accent); }
 
     .playground-detail.swipe-prev { animation: swipe-from-left .22s ease; }
     .playground-detail.swipe-next { animation: swipe-from-right .22s ease; }
@@ -900,7 +918,7 @@
     }
     .playground-list-row:active { transform: scale(.98); }
     .playground-list-row.selected {
-      border-color: #ff8a3d;
+      border-color: var(--accent);
       background: #fff;
     }
     .playground-list-row img {
@@ -917,12 +935,12 @@
     }
     .playground-list-row-onscreen {
       font-size: 9px; font-weight: 700;
-      background: #4caf50; color: #fff;
+      background: var(--accent); color: #fff;
       padding: 1px 6px; border-radius: 6px;
       letter-spacing: .5px;
     }
     .playground-list-row-level {
-      font-size: 10px; font-weight: 700; color: #ff8a3d;
+      font-size: 10px; font-weight: 700; color: var(--accent);
     }
     .playground-list-row-level span { color: #5a3818; margin-left: 4px; font-weight: 600; }
     .playground-list-row-meter {
@@ -934,10 +952,10 @@
     }
     .playground-list-row-meter-fill {
       height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #ff8a3d, #e91e63);
+      background: var(--accent);
     }
     .playground-list-row-meter-val {
-      font-size: 10px; font-weight: 700; color: #e91e63;
+      font-size: 10px; font-weight: 700; color: var(--accent);
       min-width: 40px; text-align: right;
     }
     .app.dark .playground-list-sheet {
@@ -950,7 +968,7 @@
       background: rgba(255,255,255,.05);
     }
     .app.dark .playground-list-row.selected {
-      background: rgba(255,138,61,.18);
+      background: var(--accent-light);
     }
     .app.dark .playground-list-row-meter-bar { background: rgba(255,255,255,.10); }
 
@@ -1014,7 +1032,7 @@
       font-size: 16px; font-weight: 800; color: #5a3818;
     }
     .playground-level {
-      font-size: 12px; font-weight: 700; color: #ff8a3d;
+      font-size: 12px; font-weight: 700; color: var(--accent);
       letter-spacing: .5px;
     }
     .playground-level span {
@@ -1050,7 +1068,7 @@
       height: 100%; border-radius: 6px;
       transition: width .25s ease;
     }
-    .playground-meter-aff { background: linear-gradient(90deg, #ff8a3d, #e91e63); }
+    .playground-meter-aff { background: var(--accent); }
     .playground-meter-hun { background: linear-gradient(90deg, #ffc107, #ff9800); }
     .playground-meter-val {
       font-size: 11px; font-weight: 600; color: #5a3818;
@@ -1106,12 +1124,12 @@
     }
     .playground-gift-slot.filled {
       background: rgba(255,255,255,.55);
-      border: 1.5px solid rgba(255,138,61,.5);
-      box-shadow: 0 2px 6px rgba(255,138,61,.18);
+      border: 1.5px solid var(--accent-light);
+      box-shadow: 0 2px 6px var(--accent-light);
       cursor: pointer;
       transition: transform .08s, background .12s, border-color .12s;
     }
-    .playground-gift-slot.filled:hover { background: #fff; border-color: #ff8a3d; }
+    .playground-gift-slot.filled:hover { background: #fff; border-color: var(--accent); }
     .playground-gift-slot.filled:active { transform: scale(.95); }
     .playground-gift-slot img {
       max-width: 100%; max-height: 100%;
@@ -1119,7 +1137,7 @@
     }
     .playground-gift-slot-count {
       position: absolute; bottom: -4px; right: -4px;
-      background: #ff8a3d; color: #fff;
+      background: var(--accent); color: #fff;
       font-size: 10px; font-weight: 800;
       padding: 1px 6px; border-radius: 8px;
       box-shadow: 0 1px 3px rgba(0,0,0,.18);
@@ -1137,7 +1155,7 @@
     }
     .app.dark .playground-gift-slot.filled {
       background: rgba(255,255,255,.07);
-      border-color: rgba(255,138,61,.50);
+      border-color: var(--accent-light);
     }
     .app.dark .playground-gift-slot.filled:hover { background: rgba(255,255,255,.12); }
     .app.dark .playground-gifts-empty-hint { color: rgba(240,226,200,.45); }
@@ -1158,8 +1176,8 @@
     .playground-btn-sub {
       font-size: 10px; font-weight: 500; opacity: .9;
     }
-    .playground-btn-pet  { background: linear-gradient(135deg, #4caf50, #2e7d32); }
-    .playground-btn-feed { background: linear-gradient(135deg, #ff8a3d, #e91e63); }
+    .playground-btn-pet  { background: var(--accent); }
+    .playground-btn-feed { background: var(--accent); }
 
     /* Settings entry button */
     .playground-open-btn {
@@ -1171,7 +1189,7 @@
       cursor: pointer; font-family: inherit;
       margin-bottom: 12px;
       transition: transform .08s, box-shadow .12s;
-      box-shadow: 0 2px 8px rgba(255,138,61,.2);
+      box-shadow: 0 2px 8px var(--accent-light);
     }
     .playground-open-btn:active { transform: scale(.98); }
     .playground-open-btn-emoji { font-size: 26px; line-height: 1; }
@@ -1227,10 +1245,10 @@
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       transition: transform .08s, border-color .12s, background .12s;
     }
-    .playground-food-card:hover:not(.disabled) { border-color: #ff8a3d; background: #fff8f0; }
+    .playground-food-card:hover:not(.disabled) { border-color: var(--accent); background: #fff8f0; }
     .playground-food-card:active:not(.disabled) { transform: scale(.96); }
     .playground-food-card.disabled { opacity: .4; cursor: not-allowed; }
-    .playground-food-card.fav { border-color: #e91e63; box-shadow: 0 0 0 2px rgba(233,30,99,.15); }
+    .playground-food-card.fav { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
     .playground-food-card.dis { border-color: #9e9e9e; opacity: .7; }
     .playground-food-card.grade-1 { background: #fafafa; }
     .playground-food-card.grade-2 { background: #f1f8e9; }
@@ -1244,27 +1262,27 @@
       font-size: 11px; font-weight: 700; color: #5a3818;
     }
     .playground-food-card.in-stock {
-      border-color: #4caf50;
-      box-shadow: 0 0 0 1.5px rgba(76,175,80,.25);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1.5px var(--accent-light);
     }
     .playground-food-stock {
       position: absolute; top: 4px; right: 4px;
-      background: #4caf50; color: #fff;
+      background: var(--accent); color: #fff;
       font-size: 10px; font-weight: 800;
       padding: 2px 6px; border-radius: 8px;
       letter-spacing: .5px;
     }
     .playground-food-stock-label {
-      color: #2e7d32; font-weight: 700; font-size: 11px;
+      color: var(--accent); font-weight: 700; font-size: 11px;
     }
-    .app.dark .playground-food-stock-label { color: #81c784; }
+    .app.dark .playground-food-stock-label { color: var(--accent); }
     .playground-food-tag {
       position: absolute; top: 4px; right: 4px;
       font-size: 9px; font-weight: 700;
       padding: 2px 5px; border-radius: 6px;
       color: #fff;
     }
-    .playground-food-tag.fav { background: #e91e63; }
+    .playground-food-tag.fav { background: var(--accent); }
     .playground-food-tag.dis { background: #9e9e9e; }
     .playground-food-cancel {
       width: 100%; margin-top: 10px;
@@ -1286,12 +1304,14 @@
       text-align: center;
       pointer-events: none;
     }
-    .playground-toast-fav      { background: rgba(233,30,99,.95); }
+    /* トーストは白文字を載せるので、地は必ず不透明にする。
+       ここに --accent-light のような薄い面を置くと白が白に沈んで読めなくなる。 */
+    .playground-toast-fav      { background: var(--accent); color: var(--accent-text); }
     .playground-toast-dis      { background: rgba(96,96,96,.95); }
-    .playground-toast-pet      { background: rgba(76,175,80,.95); }
-    .playground-toast-cooldown { background: rgba(255,152,0,.95); }
-    .playground-toast-broke    { background: rgba(244,67,54,.95); }
-    .playground-toast-full     { background: rgba(255,152,0,.95); }
+    .playground-toast-pet      { background: var(--accent); color: var(--accent-text); }
+    .playground-toast-cooldown { background: var(--danger); }
+    .playground-toast-broke    { background: var(--danger); }
+    .playground-toast-full     { background: var(--danger); }
 
     /* Dark mode */
     .app.dark .playground-modal {
@@ -1309,7 +1329,7 @@
     .app.dark .playground-coin-display,
     .app.dark .playground-empty { color: rgba(240,226,200,.5); }
     .app.dark .playground-mon-card { background: rgba(255,255,255,.05); }
-    .app.dark .playground-mon-card.active { background: rgba(255,138,61,.15); }
+    .app.dark .playground-mon-card.active { background: var(--accent-light); }
     .app.dark .playground-detail { background: rgba(255,255,255,.04); }
     .app.dark .playground-prefs { background: rgba(0,0,0,.2); }
     .app.dark .playground-open-btn {
@@ -1547,7 +1567,7 @@
       pointer-events:none;
     }
     .reflect-btn:hover::after { left:120%; }
-    .reflect-btn-idea { background:#7c6af5; }
+    .reflect-btn-idea { background:var(--accent); }
 
     .hint-card { background:#fff; border:1px solid #ebebea; border-radius:12px; padding:12px 14px; }
     .hint-title { font-size:var(--fs-xs); font-weight:600; color:#4a4a48; margin-bottom:6px; }
@@ -2152,7 +2172,7 @@
     }
     /* Link chip in todo/idea row */
     .attachment-row-link {
-      font-size:10px; color:#2e7d32; font-weight:600;
+      font-size:10px; color:var(--accent); font-weight:600;
       border:1px solid #c8e6c9; background:#f1f8f1;
       border-radius:6px; padding:4px 8px; cursor:pointer;
       max-width:90px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
@@ -2275,9 +2295,9 @@
     .ideas-chat-btn {
       flex-shrink:0;
       padding:12px 14px; border:none; border-radius:12px;
-      background:linear-gradient(135deg, #7c6af5, #b06af5);
+      background:var(--accent);
       color:#fff; font-size:var(--fs-base); font-weight:700; cursor:pointer;
-      font-family:inherit; box-shadow:0 4px 14px rgba(124,106,245,.30);
+      font-family:inherit; box-shadow:var(--sh-2);
       transition:transform .08s, opacity .15s;
     }
     .ideas-chat-btn:active { transform:scale(.97); opacity:.9; }
@@ -2437,8 +2457,8 @@
       font-size:12px;
     }
     .knowchat-picker-row:hover { background:#f5f5f3; }
-    .knowchat-picker-row.selected { background:rgba(124,106,245,.08); }
-    .knowchat-picker-row input { accent-color:#7c6af5; }
+    .knowchat-picker-row.selected { background:var(--accent-light); }
+    .knowchat-picker-row input { accent-color:var(--accent); }
     .knowchat-picker-name { font-weight:700; color:var(--ink); flex-shrink:0; }
     .knowchat-picker-sub {
       color:#6a6a68; flex:1; min-width:0;
@@ -2470,7 +2490,7 @@
       white-space:pre-wrap; word-break:break-word;
     }
     .knowchat-msg-user .knowchat-msg-bubble {
-      background:linear-gradient(135deg, #7c6af5, #b06af5);
+      background:var(--accent);
       color:#fff;
       border-bottom-right-radius:4px;
     }
@@ -2485,7 +2505,7 @@
     }
     .knowchat-dot {
       width:6px; height:6px; border-radius:50%;
-      background:#7c6af5;
+      background:var(--accent);
       animation:knowDot 1.2s ease-in-out infinite;
     }
     .knowchat-dot:nth-child(2) { animation-delay:.15s; }
@@ -2508,11 +2528,11 @@
       resize:none; outline:none;
       background:var(--surface-2); color:var(--ink);
     }
-    .knowchat-input:focus { border-color:#7c6af5; }
+    .knowchat-input:focus { border-color:var(--accent); }
     .knowchat-send {
       flex-shrink:0;
       padding:11px 18px;
-      background:linear-gradient(135deg, #7c6af5, #b06af5);
+      background:var(--accent);
       color:#fff; border:none; border-radius:10px;
       font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;
       transition:opacity .15s, transform .08s;
@@ -2528,7 +2548,7 @@
     .app.dark .knowchat-pick-btn:hover { background:rgba(255,255,255,.06); }
     .app.dark .knowchat-picker { background:#1e1e21; border-bottom-color:#2e2e32; }
     .app.dark .knowchat-picker-row:hover { background:rgba(255,255,255,.05); }
-    .app.dark .knowchat-picker-row.selected { background:rgba(124,106,245,.18); }
+    .app.dark .knowchat-picker-row.selected { background:var(--accent-light); }
     .app.dark .knowchat-picker-sub { color:#9a9a98; }
     .app.dark .knowchat-messages { background:#16161a; }
     .app.dark .knowchat-empty { color:#9a9a98; }
@@ -2857,6 +2877,7 @@
       --ink:          #f0f0ee;
       --ink-soft:     #c8c8c4;
       --ink-mute:     #6a6a68;
+      --ink-faint:    #4a4a48;
       --rule:         #2e2e32;
       --rule-strong:  #3a3a40;
       --surface-2:    #28282c;
@@ -3262,7 +3283,7 @@
       background: transparent;
     }
     .app.glass .cal-cell:hover { background: rgba(255,255,255,.4); }
-    .app.glass .cal-cell.selected { background: rgba(255,138,61,.30); }
+    .app.glass .cal-cell.selected { background: var(--accent-light); }
     .app.glass .cal-cell.today .cal-num { background: var(--accent); color: #fff; }
     .app.glass .todo-list-area { background: transparent; }
     .app.glass .overdue-head,
@@ -3357,7 +3378,7 @@
     .app.dark.glass .memo-card { border-bottom-color: rgba(255,255,255,.08); }
     .app.dark.glass .memo-actions { border-top-color: rgba(255,255,255,.08); }
     .app.dark.glass .cal-cell:hover { background: rgba(255,255,255,.08); }
-    .app.dark.glass .cal-cell.selected { background: rgba(255,138,61,.30); }
+    .app.dark.glass .cal-cell.selected { background: var(--accent-light); }
     .app.dark.glass .boss-item {
       background: linear-gradient(135deg, rgba(58,40,0,.55), rgba(40,30,0,.45));
       border-color: rgba(255,215,0,.40);
@@ -3427,8 +3448,8 @@
       position:absolute; left:50%; transform:translateX(-50%);
       bottom:calc(100% - 40px);
       width:70px; height:70px; border-radius:50%; border:none; cursor:pointer;
-      background:radial-gradient(circle at 32% 28%, #FF9A54, var(--accent, #E8722E)); color:#fff;
-      box-shadow:0 5px 14px rgba(232,114,46,.45), 0 0 0 5px #FBFBF9;
+      background:var(--accent); color:var(--accent-text);
+      box-shadow:var(--sh-2), 0 0 0 5px var(--surface);
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
       font-family:inherit; font-weight:800; font-size:10px;
       z-index:2; transition:transform .15s;
@@ -3486,7 +3507,7 @@
     .gw-focus-btn {
       position:absolute; top:10px; left:12px; z-index:6;
       border:none; border-radius:99px; cursor:pointer; font-family:inherit;
-      background:rgba(255,255,255,.92); color:#B95A18; font-weight:800; font-size:12.5px;
+      background:var(--surface); color:var(--ink); font-weight:800; font-size:12.5px;
       padding:7px 13px; box-shadow:0 2px 8px rgba(0,0,0,.14);
       transition:transform .08s;
     }
@@ -3547,10 +3568,10 @@
     .gw-pop-btns { display:flex; gap:8px; }
     .gw-pop-done {
       flex:1; border:none; border-radius:14px; padding:12px; cursor:pointer;
-      background:linear-gradient(90deg,#F5A623,#E8722E); color:#fff;
-      font-family:inherit; font-weight:800; font-size:14px; box-shadow:0 3px 0 #B95A18;
+      background:var(--accent); color:var(--accent-text);
+      font-family:inherit; font-weight:800; font-size:14px; box-shadow:none;
     }
-    .gw-pop-done:active { transform:translateY(2px); box-shadow:0 1px 0 #B95A18; }
+    .gw-pop-done:active { transform:translateY(1px); opacity:.88; }
     .gw-pop-edit {
       border:2.5px solid #E8DCC8; background:#fff; color:#8A7A66;
       border-radius:14px; font-family:inherit; font-weight:800; font-size:13px;
@@ -3618,7 +3639,7 @@
       width:26px; height:26px; border:2.5px solid #D9CFC6; margin-top:0;
       transition:.2s;
     }
-    .todo-check.checked { background:#3BAA5C; border-color:#3BAA5C; }
+    .todo-check.checked { background:var(--accent); border-color:var(--accent); }
     .todo-title { font-weight:700; color:#3A3532; }
     .tag-pill { background:#F5E3D6; color:#D65A1F; border-radius:99px; font-weight:800; padding:2px 8px; font-size:10.5px; }
     .filter-tag { border-radius:99px; font-weight:700; }
@@ -3638,15 +3659,21 @@
     .action-btn { border:2px solid #E8DCC8; border-radius:12px; color:#A08A68; font-weight:800; background:#fff; }
     .action-btn:hover { background:#F5EDDD; }
     .reflect-actions { background:#FBF6EC; }
+    /* 反映ボタンは primary（塗り）と ghost（白＋枠）の 2 種類だけで表す。
+       以前は TODO=緑・ナレッジ=黄 と行き先ごとに色を割り当てていたが、
+       ベースカラーを変えてもここだけ緑と黄のままで浮くうえ、
+       「緑と黄のどちらが主か」が読み取れなかった。 */
     .reflect-btn {
-      border-radius:16px; font-weight:800;
-      background:linear-gradient(90deg,#4CB86A,#2E9B52); box-shadow:0 3px 0 #1F7A3C;
+      border-radius:var(--r-full); font-weight:800;
+      height:var(--h-btn-lg); padding:0 16px;
+      background:var(--accent); box-shadow:none;
     }
-    .reflect-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #1F7A3C; }
+    .reflect-btn:active { transform:translateY(1px); }
     .reflect-btn.reflect-btn-idea {
-      background:linear-gradient(90deg,#F0B429,#DE8F1F); box-shadow:0 3px 0 #B06E12;
+      background:var(--surface); color:var(--ink);
+      border:1px solid var(--rule-strong); box-shadow:none;
     }
-    .reflect-btn.reflect-btn-idea:active { transform:translateY(2px); box-shadow:0 1px 0 #B06E12; }
+    .reflect-btn.reflect-btn-idea:active { transform:translateY(1px); }
     .app.dark .memo-tab, .app.dark .memo-card, .app.dark .reflect-actions { background:#141416; }
     .app.dark .memo-textarea-wrap { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .action-btn { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
@@ -3669,12 +3696,12 @@
     .lib-tt h1 { font-size:18px; font-weight:800; color:var(--gw-ink); }
     .lib-tt p { font-size:11.5px; color:#9A8468; font-weight:700; margin-top:2px; }
     .lib-ask-btn {
-      border:none; border-radius:14px; flex:none;
-      background:linear-gradient(135deg,#8A6ACB,#6A4ABB); color:#fff;
+      border:none; border-radius:var(--r-full); flex:none;
+      background:var(--accent); color:var(--accent-text);
       font-family:inherit; font-weight:800; font-size:12px; padding:9px 13px;
-      cursor:pointer; box-shadow:0 3px 0 #503592; white-space:nowrap;
+      cursor:pointer; box-shadow:none; white-space:nowrap;
     }
-    .lib-ask-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #503592; }
+    .lib-ask-btn:active { transform:translateY(1px); opacity:.88; }
     .lib-search-row { display:flex; gap:8px; margin:10px 18px 2px; flex:none; align-items:center; }
     .lib-search {
       flex:1; display:flex; align-items:center; gap:8px; min-width:0;
@@ -3691,28 +3718,31 @@
       font-size:16px; color:#9A8468; flex:none;
     }
     .lib-head-btns { display:flex; flex-direction:column; gap:6px; flex:none; }
+    /* 出力は「にきく」と並ぶ副次操作なので ghost。
+       主従が付かないと、書庫を開くたびに塗りボタンが 2 つ競合する。 */
     .lib-export-btn {
-      border:none; border-radius:14px; flex:none;
-      background:linear-gradient(135deg,#4FA36B,#2E8B52); color:#fff;
+      border-radius:var(--r-full); flex:none;
+      background:var(--surface); color:var(--ink);
+      border:1px solid var(--rule-strong);
       font-family:inherit; font-weight:800; font-size:12px; padding:9px 13px;
-      cursor:pointer; box-shadow:0 3px 0 #216E3E; white-space:nowrap;
+      cursor:pointer; box-shadow:none; white-space:nowrap;
     }
-    .lib-export-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #216E3E; }
+    .lib-export-btn:active { transform:translateY(1px); opacity:.88; }
 
     /* 出力（複数選択）バー */
     .ideas-export-bar {
       display:flex; align-items:center; gap:8px; flex:none;
       margin:10px 18px 0; padding:9px 11px; border-radius:14px;
-      background:#EAF5EE; border:1.5px solid #BCE3C9;
+      background:var(--accent-light); border:1.5px solid var(--rule-strong);
     }
-    .ideas-export-count { font-size:12px; font-weight:800; color:#2E8B52; margin-right:auto; }
+    .ideas-export-count { font-size:12px; font-weight:800; color:var(--accent); margin-right:auto; }
     .ideas-export-all {
-      border:none; border-radius:10px; background:var(--surface); color:#3A7A54;
+      border:none; border-radius:10px; background:var(--surface); color:var(--accent);
       font-family:inherit; font-weight:800; font-size:11.5px; padding:7px 10px;
-      cursor:pointer; box-shadow:0 1px 3px rgba(46,139,82,.18);
+      cursor:pointer; box-shadow:0 1px 3px var(--sh-1);
     }
     .ideas-export-act {
-      border:none; border-radius:10px; background:#2E8B52; color:#fff;
+      border:none; border-radius:10px; background:var(--accent); color:#fff;
       font-family:inherit; font-weight:800; font-size:12px; padding:8px 11px;
       cursor:pointer; white-space:nowrap;
     }
@@ -3722,12 +3752,12 @@
       font-family:inherit; font-weight:800; font-size:13px; width:32px; height:32px;
       cursor:pointer; flex:none;
     }
-    .app.dark .ideas-export-bar { background:#17251c; border-color:#2c4a37; }
-    .app.dark .ideas-export-all {  color:#8fd7a6; }
+    .app.dark .ideas-export-bar { background:var(--accent-light); border-color:var(--rule-strong); }
+    .app.dark .ideas-export-all {  color:var(--accent); }
 
     /* 選択モードのカードとチェック */
     .idea-card.select-mode { cursor:pointer; }
-    .idea-card.select-mode.selected { box-shadow:0 0 0 2.5px #2E8B52 inset; }
+    .idea-card.select-mode.selected { box-shadow:0 0 0 2.5px var(--accent) inset; }
     .idea-select-check {
       position:absolute; top:10px; right:10px; z-index:2;
       width:24px; height:24px; border-radius:50%;
@@ -3736,9 +3766,9 @@
       display:flex; align-items:center; justify-content:center;
       font-size:13px; font-weight:900; color:#fff;
     }
-    .idea-select-check.on { background:#2E8B52; border-color:#2E8B52; }
+    .idea-select-check.on { background:var(--accent); border-color:var(--accent); }
     .app.dark .idea-select-check { background:#2a2a2e; border-color:#44443f; }
-    .app.dark .idea-select-check.on { background:#2E8B52; border-color:#2E8B52; }
+    .app.dark .idea-select-check.on { background:var(--accent); border-color:var(--accent); }
     /* 本棚と背表紙 */
     .lib-body { padding:0 10px 24px; }
     .lib-shelf { margin:16px 8px 0; }
@@ -3777,7 +3807,7 @@
 
     /* ── ずかん（メモモンずかん） ── */
     .zukan-tab {
-      background:linear-gradient(#EAF2FA, #DCE9F5);
+      background:var(--bg);
       display:flex; flex-direction:column;
     }
     .zukan-head { display:flex; align-items:flex-start; gap:10px; padding:16px 18px 6px; flex:none; }
@@ -3785,12 +3815,12 @@
     .zukan-tt h1 { font-size:18px; font-weight:800; color:#3A3532; }
     .zukan-tt p { font-size:12px; color:#96A0AB; font-weight:700; margin-top:3px; }
     .zukan-playground-btn {
-      border:none; border-radius:14px; flex:none;
-      background:linear-gradient(135deg,#4CB86A,#2E9B52); color:#fff;
+      border:none; border-radius:var(--r-full); flex:none;
+      background:var(--accent); color:var(--accent-text);
       font-family:inherit; font-weight:800; font-size:12px; padding:9px 13px;
-      cursor:pointer; box-shadow:0 3px 0 #1F7A3C; white-space:nowrap;
+      cursor:pointer; box-shadow:none; white-space:nowrap;
     }
-    .zukan-playground-btn:active { transform:translateY(2px); box-shadow:0 1px 0 #1F7A3C; }
+    .zukan-playground-btn:active { transform:translateY(1px); opacity:.88; }
     .zukan-grid {
       display:grid; grid-template-columns:repeat(3, 1fr); gap:12px;
       align-content:start; padding:10px 16px 30px;
@@ -3835,12 +3865,13 @@
       background:#F7F9FC; border-radius:14px; padding:12px 14px; margin-top:10px;
     }
     .zukan-detail-play {
-      width:100%; border:none; border-radius:14px; margin-top:12px;
-      background:linear-gradient(135deg,#4CB86A,#2E9B52); color:#fff;
-      font-family:inherit; font-weight:800; font-size:14px; padding:12px;
-      cursor:pointer; box-shadow:0 3px 0 #1F7A3C;
+      width:100%; border:none; border-radius:var(--r-full); margin-top:12px;
+      background:var(--accent); color:var(--accent-text);
+      font-family:inherit; font-weight:800; font-size:14px;
+      height:var(--h-btn-lg); padding:0 12px;
+      cursor:pointer; box-shadow:none;
     }
-    .zukan-detail-play:active { transform:translateY(2px); box-shadow:0 1px 0 #1F7A3C; }
+    .zukan-detail-play:active { transform:translateY(1px); opacity:.88; }
     .app.dark .zukan-tab { background:#141416; }
     .app.dark .zukan-card {  box-shadow:none; }
     .app.dark .zukan-name, .app.dark .zukan-tt h1 { color:#e8e8e4; }
@@ -3860,19 +3891,23 @@
     /* ===== 集中モード（Focus Mode）— 全画面オーバーレイ ===== */
     .fm-overlay {
       position:fixed; inset:0; z-index:1000;
-      background:#C7D4E1; display:flex; justify-content:center;
+      background:var(--bg); display:flex; justify-content:center;
       overscroll-behavior:contain;
     }
     .fm-app {
-      width:100%; max-width:460px; height:100dvh; background:#EAF2FA;
+      width:100%; max-width:460px; height:100dvh; background:var(--bg);
       display:flex; flex-direction:column; position:relative; overflow:hidden;
-      color:#3A3532; font-family:inherit;
-      --fm-accent:#E8722E; --fm-accent-d:#B95A18; --fm-soft:#F5E3D6;
-      --fm-sub:#96A0AB; --fm-run:#2E9B52; --fm-pause:#B98A12; --fm-ink:#3A3532;
+      color:var(--ink); font-family:inherit;
+      /* 集中モードは以前ここで独自に橙と緑を持っていた。そのため
+         ベースカラーを青にしても、この画面だけ橙のまま取り残されていた。
+         ローカル名は残しつつ、値は共通トークンから引く。 */
+      --fm-accent:var(--accent); --fm-soft:var(--accent-light);
+      --fm-sub:var(--ink-mute); --fm-run:var(--accent);
+      --fm-pause:var(--ink-mute); --fm-ink:var(--ink);
     }
     .fm-app .num { font-variant-numeric:tabular-nums; }
     .fm-header {
-      background:#FAFAF7; padding:12px 12px; display:flex; align-items:center;
+      background:var(--surface); padding:12px 12px; display:flex; align-items:center;
       justify-content:space-between; box-shadow:0 1px 0 rgba(0,0,0,.05); z-index:20; flex:none;
     }
     .fm-back { border:none; background:none; font-family:inherit; font-weight:800; font-size:15px; color:var(--fm-accent); cursor:pointer; padding:4px 6px; }
@@ -3895,7 +3930,7 @@
     .fm-nowtitle { font-size:17px; font-weight:800; line-height:1.45; margin:8px 0 2px; min-height:25px; }
     .fm-nowtitle.empty { color:var(--fm-sub); font-weight:700; font-size:15px; }
     .fm-timerow { display:flex; align-items:flex-end; gap:12px; margin:8px 0 4px; }
-    .fm-timer { font-size:44px; font-weight:700; letter-spacing:-.02em; line-height:1; }
+    .fm-timer { font-size:48px; font-weight:700; letter-spacing:-.02em; line-height:1; font-variant-numeric:tabular-nums; }
     .fm-timer.idle { color:#C7CFD8; }
     .fm-mon { position:absolute; right:16px; top:14px; width:44px; height:44px; }
     .fm-px { position:absolute; width:4px; height:4px; }
@@ -3905,9 +3940,9 @@
     .fm-acts { display:flex; gap:9px; margin-top:12px; }
     .fm-acts button { flex:1; border:none; border-radius:15px; font-family:inherit; font-weight:800; font-size:14.5px; padding:14px 8px; cursor:pointer; }
     .fm-acts button:active { transform:translateY(2px); }
-    .fm-bstart { background:linear-gradient(90deg,#F5A623,var(--fm-accent)); color:#fff; box-shadow:0 3px 0 var(--fm-accent-d); }
-    .fm-bpause { background:#fff; color:#8A7A66; border:2.5px solid #E7EBEF; }
-    .fm-bdone { background:linear-gradient(90deg,#4CB86A,#2E9B52); color:#fff; box-shadow:0 3px 0 #217A3E; }
+    .fm-bstart { background:var(--accent); color:var(--accent-text); box-shadow:none; }
+    .fm-bpause { background:var(--surface); color:var(--ink); border:1px solid var(--rule-strong); }
+    .fm-bdone { background:var(--accent); color:var(--accent-text); box-shadow:none; }
     .fm-acts button:disabled { opacity:.35; box-shadow:none; cursor:default; }
     .fm-rest { margin-top:10px; background:#FFF6E8; border:2px solid #F5DFC0; border-radius:14px; padding:10px 12px; font-size:12px; font-weight:700; color:#A87A2E; display:flex; align-items:center; gap:8px; line-height:1.5; }
 
@@ -3925,7 +3960,7 @@
     .fm-susp-t { flex:1; min-width:0; }
     .fm-susp-t b { display:block; font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .fm-susp-t span { font-size:11px; color:#A87A2E; font-weight:700; }
-    .fm-susp-go { background:#E8722E; color:#fff; border-radius:99px; font-size:11.5px; font-weight:800; padding:6px 12px; white-space:nowrap; }
+    .fm-susp-go { background:var(--accent); color:var(--accent-text); border-radius:99px; font-size:11.5px; font-weight:800; padding:6px 12px; white-space:nowrap; }
 
     .fm-seclabel { font-size:12px; font-weight:800; color:var(--fm-sub); margin:20px 4px 9px; display:flex; align-items:center; gap:8px; }
     .fm-tot { margin-left:auto; color:var(--fm-accent); font-weight:800; }
