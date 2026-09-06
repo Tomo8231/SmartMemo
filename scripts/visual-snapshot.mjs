@@ -74,13 +74,15 @@ async function capture(dark) {
     await page.screenshot({ path: out + '/' + tag + '-' + theme + '-' + name + '.png' });
   };
 
-  for (const [label, name] of [['にわ', 'niwa'], ['書庫', 'shoko'], ['ずかん', 'zukan'], ['設定', 'settei']]) {
+  // ナビのラベルは機能名 1 行（タスク／ナレッジ／メモ／メモモン／設定）。
+  // 撮影ファイル名は画面の愛称のまま（before/after を突き合わせるため）。
+  for (const [label, name] of [['タスク', 'niwa'], ['ナレッジ', 'shoko'], ['メモモン', 'zukan'], ['設定', 'settei']]) {
     await page.locator('.nav-tab:has-text("' + label + '")').first().click();
     await page.waitForTimeout(900);
     await dump(name);
   }
   await page.locator('.nav-center-memo').click(); await page.waitForTimeout(800); await dump('memo');
-  await page.locator('.nav-tab:has-text("にわ")').first().click(); await page.waitForTimeout(900);
+  await page.locator('.nav-tab:has-text("タスク")').first().click(); await page.waitForTimeout(900);
   await page.locator('.todo-item').first().click(); await page.waitForTimeout(700); await dump('edit');
   await page.keyboard.press('Escape'); await page.waitForTimeout(500);
   await page.locator('.coin-badge').click(); await page.waitForTimeout(800); await dump('gacha');

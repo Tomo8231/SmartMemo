@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.1';
+const APP_VERSION = '1.40.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1400,8 +1400,20 @@ function pickGachaUltra(): GachaPrize {
 }
 
 const IcoCoin = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--accent)">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--coin)">
     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"/>
+  </svg>
+);
+
+/* ヘッダー左のアプリマーク。public/icon.svg（罫線 3 本 + チェック）と
+   同じ形。角丸の地は置かず、線だけをアクセント色で描く。 */
+const IcoAppMark = () => (
+  <svg className="app-mark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+    <g stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" fill="none">
+      <path d="M4 7h16" />
+      <path d="M4 12h16" />
+      <path d="M4 17h11" />
+    </g>
   </svg>
 );
 
@@ -1409,7 +1421,9 @@ function CoinBadge({ coins, infinite, onGacha }: { coins: number; infinite?: boo
   return (
     <button className="coin-badge" onClick={onGacha} title="ガチャを引く">
       <IcoCoin />
-      <span className="coin-badge-count">{infinite ? '∞' : coins}</span>
+      {/* 3 桁区切り + tabular-nums。桁が増えても数字の幅が動かないので、
+          コインが増減するたびに「ガチャ」ボタンが横へずれるのを防げる。 */}
+      <span className="coin-badge-count">{infinite ? '∞' : coins.toLocaleString('ja-JP')}</span>
       <span className="coin-badge-gacha">ガチャ</span>
     </button>
   );
@@ -7840,21 +7854,21 @@ function SmartMemoApp() {
 
   const handleFabMic = () => { setTab('memo'); setMicTrigger(t => t + 1); };
 
-  // ボトムナビ。「にわ」「書庫」「ずかん」は愛称なので、それだけでは何の画面か
-  // 推測できない。機能名を小さく添えて初見でも辿れるようにする（設定は自明なので不要）。
+  // ボトムナビは機能名だけの 1 行にする。以前は「にわ／タスク」のように
+  // 愛称と機能名を 2 段で出していたが、5 タブぶん積むと下端が窮屈になり、
+  // どちらを読めばよいのかも決まらなかった。
+  // 愛称（にわ・書庫・ずかん）は各画面のタイトルとして本文側に残してある。
   // 中央のメモボタンぶんの隙間も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
-  type NavItem = { key: Tab; label: string; sub?: string; Icon: React.FC<{ active: boolean }> };
+  type NavItem = { key: Tab; label: string; Icon: React.FC<{ active: boolean }> };
   const navItems: (NavItem | 'memo-slot')[] = [
-    { key: 'todo',     label: 'にわ',   sub: 'タスク',   Icon: IcoHomeNav },
-    { key: 'idea',     label: '書庫',   sub: 'ナレッジ', Icon: IcoBookNav },
+    { key: 'todo',     label: 'タスク',   Icon: IcoHomeNav },
+    { key: 'idea',     label: 'ナレッジ', Icon: IcoBookNav },
     'memo-slot',
-    { key: 'zukan',    label: 'ずかん', sub: 'メモモン', Icon: IcoEggNav },
-    { key: 'settings', label: '設定',                    Icon: IcoGearNav },
+    { key: 'zukan',    label: 'メモモン', Icon: IcoEggNav },
+    { key: 'settings', label: '設定',     Icon: IcoGearNav },
   ];
 
   const now = new Date();
-  const headerDate = `${now.getMonth() + 1}/${now.getDate()}`;
-  const headerDow  = DOW[now.getDay()];
 
   // メモモンは庭（ガーデンワールド）の中でだけ歩く
   const monLayer = (() => {
@@ -8206,8 +8220,11 @@ function SmartMemoApp() {
   return (
     <div className={`app${settings.darkMode ? ' dark' : ''}${settings.glassUI ? ' glass' : ''}`} style={appStyle}>
       <div className="app-header">
+        {/* 日付はここではなく にわ のシート見出しに一本化した。
+            両方に出ていたころは、ヘッダーの日付とシートの日付が
+            別々の意味に見えて（今日／選択日）迷いのもとになっていた。 */}
         <div className="header-left">
-          <div className="gw-date-chip">{headerDate}<span className="gw-dow">({headerDow})</span></div>
+          <IcoAppMark />
           <span className="tagline">SmartMemo</span>
         </div>
         <div className="header-right">
@@ -8253,9 +8270,6 @@ function SmartMemoApp() {
               >
                 <span className="nav-icon"><item.Icon active={tab === item.key} /></span>
                 <span className="nav-label">{item.label}</span>
-                {/* 補助ラベルが無いタブ（設定）でも枠は置く。無いと下端揃えの
-                    せいでそのタブだけラベルが 12px 下がって見える。 */}
-                <span className="nav-sub" aria-hidden={!item.sub}>{item.sub ?? ''}</span>
               </button>
             )
           )}

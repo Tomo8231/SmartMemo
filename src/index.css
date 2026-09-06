@@ -118,6 +118,71 @@
       font-size:var(--fs-base);
     }
 
+    /* ============================================================
+       共通コンポーネント
+       ボタン・チップ・タグ・カードはここでだけ形を決める。
+       画面ごとに .xxx-btn を新しく作らず、u-btn に修飾子を足す。
+       （既存の画面固有クラスは順次ここへ寄せている）
+    ============================================================ */
+
+    /* ボタン ── 塗り(primary) と 白+枠(ghost) の 2 種類だけ。
+       「無効なので薄いオレンジ」のような第 3 の色を作らない。
+       色が増えるほど、どれが押せてどれが主かが読めなくなる。 */
+    .u-btn {
+      display:inline-flex; align-items:center; justify-content:center; gap:6px;
+      height:var(--h-btn); padding:0 18px;
+      border-radius:var(--r-full); border:1px solid transparent;
+      font-family:inherit; font-size:var(--fs-base); font-weight:700;
+      cursor:pointer; white-space:nowrap;
+      transition:opacity .15s, transform .08s;
+    }
+    .u-btn:active { transform:translateY(1px); opacity:.88; }
+    .u-btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+    .u-btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+
+    .u-btn--primary { background:var(--accent); color:var(--accent-text); }
+    .u-btn--ghost   { background:var(--surface); color:var(--ink); border-color:var(--rule-strong); }
+    /* 画面の主 CTA だけ一段大きくする */
+    .u-btn--lg { height:var(--h-btn-lg); font-size:15px; }
+    .u-btn--block { width:100%; }
+    /* アイコンのみ。40x40 の ghost */
+    .u-btn--icon {
+      width:40px; height:40px; padding:0; flex:none;
+      background:var(--surface); color:var(--ink-soft); border-color:var(--rule-strong);
+    }
+
+    /* チップ ── フィルタと選択肢。未選択は白+枠、選択は塗り。 */
+    .u-chip {
+      display:inline-flex; align-items:center; justify-content:center;
+      height:var(--h-chip); padding:0 12px; flex:none;
+      border-radius:var(--r-full);
+      border:1px solid var(--rule-strong); background:var(--surface);
+      color:var(--ink-soft); font-family:inherit; font-size:12px; font-weight:600;
+      cursor:pointer; white-space:nowrap;
+      transition:background .15s, color .15s, border-color .15s;
+    }
+    .u-chip.is-on {
+      background:var(--accent); color:var(--accent-text);
+      border-color:var(--accent); font-weight:700;
+    }
+    .u-chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+    /* タグ ── 表示専用。分類ごとに色を割り当てない。
+       タグの色分けは数が増えた瞬間に破綻し、色の意味も覚えられない。 */
+    .u-tag {
+      display:inline-flex; align-items:center;
+      padding:1px 8px; border-radius:var(--r-sm);
+      background:var(--surface-sunk); color:var(--ink-soft);
+      font-size:11px; font-weight:600; white-space:nowrap;
+    }
+
+    /* カード ── 枠で分ける。影は付けない（ガラス風のときだけ既存の影を許可）。 */
+    .u-card {
+      background:var(--surface);
+      border:1px solid var(--rule);
+      border-radius:var(--r-lg);
+    }
+
     /* Header */
     .app-header {
       display:flex; align-items:center; justify-content:space-between;
@@ -1360,17 +1425,20 @@
          シート内容に被って切れないようにする */
       z-index:20;
     }
+    /* 5 等分のグリッド。flex:1 だとラベルの文字数（「設定」と「メモモン」）で
+       幅が変わり、アイコンの間隔が不揃いになる。 */
     .bottom-nav {
-      display:flex;
-      padding:4px 0 6px;
-      align-items:flex-end;
-      width:100%;
+      display:grid; grid-template-columns:repeat(5, 1fr);
+      align-items:center;
+      width:100%; height:var(--h-nav);
+      background:var(--surface);
+      border-top:1px solid var(--rule);
       position:relative; z-index:1;
     }
     .nav-tab {
-      flex:1; display:flex; flex-direction:column;
-      align-items:center; justify-content:flex-end;
-      gap:2px; cursor:pointer; padding:0 0 5px; min-height:58px;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      gap:4px; cursor:pointer; padding:0; height:100%;
       /* button 要素なので既定の見た目を消す（div から置き換え済み。
          キーボード操作と読み上げのために button であることが必要） */
       background:none; border:none; font:inherit;
@@ -1379,7 +1447,7 @@
       outline:2px solid var(--accent); outline-offset:-3px; border-radius:var(--r-sm);
     }
     .nav-mic-slot {
-      width:72px; flex-shrink:0; /* empty placeholder aligned with mic button */
+      /* 中央 FAB のぶんの空きマス。グリッドの 1 列を占めるだけでよい。 */
     }
     .nav-center-mic {
       position:absolute;
@@ -1404,15 +1472,16 @@
       position:relative;
     }
     .item-copy-btn:hover { background:#f0f5ff; color:#2e7bef; border-color:#cce0ff; }
-    .nav-tab .nav-icon svg { transition:all 0.2s; }
-    .nav-tab .nav-label { letter-spacing:0.2px; transition:color 0.2s; }
-    .nav-tab.active .nav-label { color:var(--accent); }
-    /* 愛称の下に添える機能名。慣れた人が読み飛ばせるよう十分に弱く。 */
-    .nav-tab .nav-sub {
-      font-size:8.5px; letter-spacing:.1px; line-height:1.2; opacity:.7; transition:color .2s, opacity .2s;
-      min-height:10px; /* 空でも高さを保ち、タブ間でラベルの下端を揃える */
+    .nav-tab .nav-icon { display:flex; }
+    .nav-tab .nav-icon svg { width:24px; height:24px; transition:all 0.2s; }
+    /* アクティブは色ではなく濃さ（--ink + 700）で示す。
+       ここをアクセント色にすると、下辺に塗りの FAB と色付きラベルが
+       並んで主役が 2 つになるため、色は FAB に譲る。 */
+    .nav-tab .nav-label {
+      font-size:11px; line-height:1; letter-spacing:0.2px;
+      color:var(--ink-mute); font-weight:600; transition:color 0.2s;
     }
-    .nav-tab.active .nav-sub { opacity:.85; }
+    .nav-tab.active .nav-label { color:var(--ink); font-weight:700; }
     .nav-tab.pulse { animation: nav-pulse .9s ease-out 1; }
     @keyframes nav-pulse {
       0%   { transform:scale(1); }
@@ -1611,12 +1680,19 @@
     .filter-tags {
       display:flex; gap:6px; flex-wrap:wrap;
     }
+    /* チップの形は .u-chip と揃える（3.4） */
     .filter-tag {
-      padding:6px 11px; border:1px solid #e0e0de;
-      background:#fff; cursor:pointer; font-size:var(--fs-xs); color:#4a4a48; transition:all .12s; font-family:inherit;
+      display:inline-flex; align-items:center; justify-content:center;
+      height:var(--h-chip); padding:0 12px; flex:none;
+      border:1px solid var(--rule-strong); background:var(--surface);
+      cursor:pointer; font-size:12px; font-weight:600; color:var(--ink-soft);
+      transition:background .12s, color .12s, border-color .12s; font-family:inherit;
     }
-    .filter-tag:hover { background:#f5f5f3; }
-    .filter-tag.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .filter-tag:hover { background:var(--surface-sunk); }
+    .filter-tag.active {
+      background:var(--accent); border-color:var(--accent);
+      color:var(--accent-text); font-weight:700;
+    }
 
     .calendar-section {
       background:#fff; border-bottom:1px solid #ebebea; flex-shrink:0;
@@ -2896,8 +2972,8 @@
     .app.dark .app-header { border-color:#2e2e32; }
     .app.dark .tagline { color:#6a6a68; }
     .app.dark .bottom-nav-wrapper { /* inherits from .bottom-nav */ }
-    .app.dark .nav-tab .nav-label { color:#5a5a58; }
-    .app.dark .nav-tab.active .nav-label { color:var(--accent); }
+    /* ラベルの色は .nav-tab .nav-label がトークンで決めるので、
+       ダーク用の上書きは不要（--ink / --ink-mute が差し替わる）。 */
     .app.dark .tab-content { background:#141416; }
     .app.dark .memo-card { border-color:#2e2e32; }
     .app.dark .memo-textarea { color:#f0f0ee; background:transparent; }
@@ -3417,46 +3493,55 @@
     #root { background:#B9C6D4; }
     .gw-dot { font-family:'DotGothic16','M PLUS Rounded 1c',monospace; }
 
-    /* ── ヘッダー：日付チップ + コイン ── */
-    .app-header { border-bottom:none; background:transparent; padding:10px 14px 6px; }
-    .header-left { align-items:center; }
-    .gw-date-chip {
-      background:#fff; border-radius:12px; padding:6px 11px;
-      font-size:13px; font-weight:800; color:var(--gw-ink);
-      box-shadow:0 1px 4px rgba(0,0,0,.08);
+    /* ── ヘッダー：アプリマーク + コインチップ ── */
+    .app-header {
+      border-bottom:none; background:transparent;
+      height:var(--h-header); padding:0 var(--sp-4); flex:none;
     }
-    .gw-dow { color:#96A0AB; font-weight:700; margin-left:4px; font-size:11px; }
-    .app-header .tagline { font-size:10px; color:#A8B2BD; font-weight:800; letter-spacing:.4px; }
+    .header-left { align-items:center; gap:var(--sp-2); }
+    .app-mark { flex:none; display:block; }
+    .app-header .tagline {
+      font-size:15px; font-weight:700; letter-spacing:-.2px; color:var(--ink);
+    }
+    /* コインチップ全体で 44px のタップ判定を確保する（3.1）。
+       見た目は 32px 程度なので、判定だけを ::after で外へ出す。 */
     .coin-badge {
-      background:#fff; border-radius:99px; padding:6px 12px;
-      box-shadow:0 1px 4px rgba(0,0,0,.08);
+      background:var(--surface); border:1px solid var(--rule);
+      border-radius:var(--r-full); padding:3px 3px 3px 10px;
+      gap:6px; box-shadow:none; position:relative;
     }
-    .coin-badge-count { color:var(--gw-ink); font-weight:800; }
+    .coin-badge::after {
+      content:""; position:absolute; left:0; right:0; top:50%;
+      transform:translateY(-50%); height:var(--tap-min);
+    }
+    .coin-badge-count {
+      color:var(--ink); font-weight:700; font-size:13px;
+      font-variant-numeric:tabular-nums;
+    }
+    .coin-badge-gacha {
+      display:flex; align-items:center; height:24px; padding:0 10px;
+      border-radius:var(--r-full);
+      background:var(--accent); color:var(--accent-text);
+      font-size:11px; font-weight:700;
+    }
     .app.dark .app-header { background:transparent; }
-    .app.dark .gw-date-chip { background:#242428;  box-shadow:0 1px 4px rgba(0,0,0,.3); }
-    .app.dark .coin-badge { background:#242428; }
 
     /* ── ナビ：中央のメモボタン ── */
-    .bottom-nav { background:#FBFBF9; box-shadow:0 -1px 0 rgba(0,0,0,.06); border-radius:0; }
-    .nav-tab .nav-label { font-weight:700; color:#B7BEC7; font-size:10.5px; }
-    .nav-tab .nav-sub { font-weight:700; color:#C3C9D1; }
-    .nav-tab.active .nav-sub { color:var(--accent); }
-    .nav-tab { color:#B7BEC7; }
-    .nav-tab.active { color:var(--accent); }
-    .nav-tab .nav-icon svg { width:22px; height:22px; }
     .nav-center-memo {
       position:absolute; left:50%; transform:translateX(-50%);
-      bottom:calc(100% - 40px);
-      width:70px; height:70px; border-radius:50%; border:none; cursor:pointer;
+      /* 上に 30px はみ出す（3.2）。FAB 52px なので 52-30=22px がナビに掛かる。 */
+      bottom:calc(100% - 30px);
+      width:var(--h-fab); height:var(--h-fab);
+      border-radius:50%; border:none; cursor:pointer;
       background:var(--accent); color:var(--accent-text);
-      box-shadow:var(--sh-2), 0 0 0 5px var(--surface);
+      box-shadow:0 6px 16px var(--accent-light);
       display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-      font-family:inherit; font-weight:800; font-size:10px;
+      font-family:inherit; font-weight:700; font-size:11px;
       z-index:2; transition:transform .15s;
     }
+    .nav-center-memo svg { width:20px; height:20px; }
     .nav-center-memo:active { transform:translateX(-50%) scale(.94); }
-    .app.dark .bottom-nav { background:#1e1e21; }
-    .app.dark .nav-center-memo { box-shadow:0 5px 14px rgba(232,114,46,.45), 0 0 0 5px #1e1e21; }
+    .app.dark .bottom-nav { background:var(--surface); }
 
     /* ── にわ（ガーデンワールド） ── */
     .gw { position:relative; flex:none; height:clamp(225px, 32vh, 330px); overflow:hidden; transition:background 1.2s ease; }
@@ -3641,9 +3726,13 @@
     }
     .todo-check.checked { background:var(--accent); border-color:var(--accent); }
     .todo-title { font-weight:700; color:#3A3532; }
-    .tag-pill { background:#F5E3D6; color:#D65A1F; border-radius:99px; font-weight:800; padding:2px 8px; font-size:10.5px; }
-    .filter-tag { border-radius:99px; font-weight:700; }
-    .filter-tag.active { box-shadow:0 1px 3px rgba(60,80,110,.15); }
+    /* タグは分類ごとに色を割り当てない（3.5）。
+       タグが 3 つ並ぶと橙の面が主張しすぎて、肝心のタイトルより先に目に入っていた。 */
+    .tag-pill {
+      background:var(--surface-sunk); color:var(--ink-soft);
+      border-radius:var(--r-sm); font-weight:600; padding:1px 8px; font-size:11px;
+    }
+    .filter-tag { border-radius:var(--r-full); }
     .app.dark .todo-item { background:#1e1e21; box-shadow:none; }
     .app.dark .todo-item.done { background:#1b241d; }
     .app.dark .todo-title { color:#e8e8e4; }
