@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.7';
+const APP_VERSION = '1.40.8';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1420,6 +1420,29 @@ const IcoCoin = () => (
 
 /* ヘッダー左のアプリマーク。public/icon.svg（罫線 3 本 + チェック）と
    同じ形。角丸の地は置かず、線だけをアクセント色で描く。 */
+/* 没入する画面（集中モード・メモモン画面・ガチャ・書庫にきく）の
+   共通ヘッダー（3.8）。以前は画面ごとに閉じ方が違い、右上の ✕ だけの
+   ものと戻る矢印のものが混在していて、どこへ戻るのかも分からなかった。
+   左に「‹ 遷移元」、中央に画面名、右は任意。左右を同じ幅にして
+   中央のタイトルが画面中央で止まるようにする。 */
+function FsHeader({ from, title, right, onBack, tone = 'light' }: {
+  from: string;
+  title: string;
+  right?: React.ReactNode;
+  onBack: () => void;
+  tone?: 'light' | 'dark';
+}) {
+  return (
+    <div className={`fs-header${tone === 'dark' ? ' fs-header--dark' : ''}`}>
+      <button className="fs-back" onClick={onBack} aria-label={`${from}へ戻る`}>
+        <IcoChevronLeft />{from}
+      </button>
+      <div className="fs-title">{title}</div>
+      <div className="fs-right">{right}</div>
+    </div>
+  );
+}
+
 const IcoAppMark = () => (
   <svg className="app-mark" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
     <g stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" fill="none">
@@ -1629,12 +1652,13 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
       )}
       <div className="modal-backdrop gacha-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="gacha-modal">
-          <button className="gacha-close-btn" onClick={onClose}>✕</button>
-          <div className="gacha-title">🎰 ガチャ</div>
-          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+          <FsHeader from="にわ" title="ガチャ" tone="dark" onBack={onClose} />
+          {/* 単発／10連／メモモン確定 はチップ（3.4）。
+              以前は 3 つともグラデーションの塗りで、どれが選択中か読めなかった。 */}
+          <div className="gacha-modes">
             {(['single', 'ten', 'memomon'] as GachaMode[]).map(m => (
               <button key={m} onClick={() => switchMode(m)}
-                className={`gacha-mode-btn${mode === m ? ' active' : ''}`}>
+                className={`u-chip gacha-mode-btn${mode === m ? ' is-on' : ''}`}>
                 {m === 'single' ? '単発' : m === 'ten' ? '10連' : 'メモモン'}
               </button>
             ))}
@@ -1723,12 +1747,12 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
             onClick={phase === 'result' ? again : pull}
             disabled={phase === 'spinning' || phase === 'flashing' || (phase === 'idle' && !canAfford)}
           >
-            {phase === 'result'   ? '✨ もう一度引く'
+            {phase === 'result'   ? 'もう一度引く'
              : phase === 'spinning' || phase === 'flashing' ? 'ガチャ中...'
              : !canAfford         ? 'コインが足りません'
-             : mode === 'ten'     ? '🌟 10連ガチャ！'
-             : mode === 'memomon' ? '🐾 メモモンガチャ！'
-             : '✨ ガチャを引く！'}
+             : mode === 'ten'     ? '10連ガチャ！'
+             : mode === 'memomon' ? 'メモモンガチャ！'
+             : 'ガチャを引く！'}
           </button>
 
           {detailIdx !== null && tenResults[detailIdx] && (() => {
@@ -4935,6 +4959,7 @@ function AccountModal({ authUser, onClose }: { authUser: User | null; onClose: (
   return (
     <div className="modal-backdrop account-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="account-modal">
+        <div className="modal-handle" />
         <button className="knowchat-close" onClick={onClose} aria-label="閉じる" style={{ position: 'absolute', top: 12, right: 12 }}>✕</button>
         <div className="account-title">{authUser ? 'アカウント' : 'ログイン / 新規登録'}</div>
 
@@ -5073,10 +5098,7 @@ function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg;
   return (
     <div className="modal-backdrop knowchat-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="knowchat-modal">
-        <div className="knowchat-header">
-          <div className="knowchat-title">💬 ナレッジAIチャット</div>
-          <button className="knowchat-close" onClick={onClose} aria-label="閉じる">✕</button>
-        </div>
+        <FsHeader from="書庫" title="書庫にきく" onBack={onClose} />
         <div className="knowchat-scope">
           <span className="knowchat-scope-label">参照:</span>
           <span className="knowchat-scope-count">
@@ -5207,6 +5229,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
         <Dismissable onClose={() => setDetail(null)}>
         <div className="modal-backdrop zukan-detail-backdrop" onClick={() => setDetail(null)}>
           <div className="zukan-detail" onClick={e => e.stopPropagation()}>
+            <div className="modal-handle" />
             <button className="gw-pop-close" onClick={() => setDetail(null)}>✕</button>
             <div className={`zukan-detail-sprite${detailInst ? '' : ' locked'}`}>
               <img src={MEMOMON_IMGS[detail.id]} alt="" />
@@ -6664,9 +6687,10 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   return (
     <div className="modal-backdrop playground-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="playground-modal">
-        <button className="playground-close-btn" onClick={onClose} aria-label="閉じる">✕</button>
-        <div className="playground-title">メモモンずかん</div>
-        <div className="playground-coin-display">所持: <IcoCoin />&nbsp;{infinite ? '∞' : coins}</div>
+        <FsHeader
+          from="ずかん" title="メモモン" onBack={onClose}
+          right={<span className="playground-coin-display"><IcoCoin />{infinite ? '∞' : coins.toLocaleString('ja-JP')}</span>}
+        />
 
         {visibleMons.length === 0 ? (
           <div className="playground-empty">
@@ -7574,11 +7598,10 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
   return (
     <div className="fm-overlay">
       <div className="fm-app">
-        <header className="fm-header">
-          <button className="fm-back" onClick={onClose} aria-label="にわに戻る">‹ にわ</button>
-          <div className="fm-b">集中モード</div>
-          <div className="fm-coin">🪙 {infinite ? '∞' : coins}</div>
-        </header>
+        <FsHeader
+          from="にわ" title="集中モード" onBack={onClose}
+          right={<span className="fm-coin"><IcoCoin />{infinite ? '∞' : coins.toLocaleString('ja-JP')}</span>}
+        />
         <main className="fm-main">
           {/* 進行中 */}
           <section className={`fm-now ${running ? 'running' : (curTask ? 'paused' : '')}`}>
@@ -7594,7 +7617,7 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
               <div className={`fm-timer num ${curTask ? '' : 'idle'}`}>{fmtDur(elapsedOf(curTask))}</div>
             </div>
             <div className="fm-acts">
-              <button className={running ? 'fm-bpause' : 'fm-bstart'} disabled={!curTask} onClick={() => running ? focusPause() : focusResume()}>
+              <button className="fm-bpause" disabled={!curTask} onClick={() => running ? focusPause() : focusResume()}>
                 {running ? '一時停止' : '再開'}
               </button>
               <button className="fm-bdone" disabled={!curTask} onClick={focusFinish}>完了</button>
@@ -7635,7 +7658,6 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
               const cur = t.id === sess.curId;
               const el = elapsedOf(t);
               const tag = (t.tags || [])[0];
-              const c = focusTagColor(tag);
               return (
                 <div key={t.id} className={`fm-task ${cur ? 'cur' : ''} ${t.done ? 'done' : ''}`}>
                   <button className="fm-play" onClick={() => {
@@ -7648,7 +7670,7 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
                   </button>
                   <div className="fm-tbody">
                     <div className="fm-tt">{t.title}</div>
-                    {tag && <div className="fm-tmeta"><span className="fm-tag" style={{ background: c + '22', color: c }}>{tag}</span></div>}
+                    {tag && <div className="fm-tmeta"><span className="fm-tag u-tag">{tag}</span></div>}
                   </div>
                   <span className={`fm-telapsed num ${el ? '' : 'zero'} ${cur && sess.startedAt ? 'live' : ''}`}>{el ? fmtDur(el) : '–:––'}</span>
                 </div>

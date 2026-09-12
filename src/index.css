@@ -183,6 +183,36 @@
       border-radius:var(--r-lg);
     }
 
+    /* 没入する画面の共通ヘッダー（3.8）。
+       集中モード・メモモン画面・ガチャ・書庫にきく が同じ形を使う。 */
+    .fs-header {
+      display:flex; align-items:center; gap:var(--sp-2);
+      height:var(--h-header); flex:none;
+      width:100%; align-self:stretch;
+      padding:0 var(--sp-2);
+      border-bottom:1px solid var(--rule);
+      background:var(--surface);
+      position:relative; z-index:5;
+    }
+    .fs-back {
+      display:flex; align-items:center; gap:2px;
+      height:var(--tap-min); padding:0 var(--sp-2);
+      background:none; border:none; cursor:pointer; font-family:inherit;
+      font-size:var(--fs-base); font-weight:600; color:var(--ink-soft);
+      flex:1 1 0; min-width:0; justify-content:flex-start;
+      white-space:nowrap; overflow:hidden;
+    }
+    .fs-title { font-size:17px; font-weight:700; color:var(--ink); white-space:nowrap; }
+    /* 左右を同じ幅にして、中央のタイトルを画面中央で止める */
+    .fs-right { flex:1 1 0; display:flex; align-items:center; justify-content:flex-end; gap:var(--sp-2); }
+    /* ガチャのように暗い演出面に載せる場合だけ、地と文字を反転する。
+       演出そのもの（紺の背景・光の筋）は変えない。 */
+    .fs-header--dark {
+      background:transparent; border-bottom-color:rgba(255,255,255,.14);
+    }
+    .fs-header--dark .fs-back  { color:rgba(255,255,255,.72); }
+    .fs-header--dark .fs-title { color:#fff; }
+
     /* Header */
     .app-header {
       display:flex; align-items:center; justify-content:space-between;
@@ -232,14 +262,14 @@
     .coin-badge-gacha { font-size:10px; font-weight:700; color:var(--accent); background:var(--accent); color:#fff; border-radius:8px; padding:1px 5px; letter-spacing:.2px; }
 
     /* Gacha modal */
-    .gacha-backdrop { align-items:center; justify-content:center; background:rgba(8,8,24,.92); }
+    .gacha-backdrop { background:rgba(8,8,24,.92); }
     .gacha-modal {
       background:linear-gradient(160deg,#1a1a2e 0%,#16213e 55%,#0f3460 100%);
-      border:1px solid rgba(255,255,255,.1); border-radius:24px;
-      padding:22px 20px 26px; width:calc(100% - 32px); max-width:380px;
-      min-height:440px; overflow:hidden;
+      border:none; border-radius:0;
+      padding:0 20px 26px; width:100%; height:100%;
+      overflow-y:auto;
       position:relative; display:flex; flex-direction:column; align-items:center; gap:12px;
-      box-shadow:0 16px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.05);
+      box-shadow:none;
     }
     .gacha-modal::before {
       content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
@@ -258,18 +288,18 @@
       display:flex; align-items:center; justify-content:center; transition:background .12s;
     }
     .gacha-close-btn:hover { background:rgba(255,255,255,.2); }
-    .gacha-title {
-      font-size:22px; font-weight:800; letter-spacing:1px; position:relative; z-index:1;
-      background:linear-gradient(135deg,#ffd700 0%,#ff6b35 50%,var(--accent) 100%);
-      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
-    }
     .gacha-cost-info { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.45); position:relative; z-index:1; }
-    .gacha-mode-btn {
-      padding:5px 14px; border-radius:20px; font-size:12px; font-weight:700; cursor:pointer;
-      border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.07); color:rgba(255,255,255,.55);
-      transition:background .15s,color .15s,border-color .15s;
+    /* チップの形は .u-chip が決める。暗い演出面に載るので、
+       未選択の地と枠だけをここで反転させる（選択時は --accent の塗り）。 */
+    .gacha-modes {
+      display:flex; gap:6px; justify-content:center;
+      position:relative; z-index:1; margin-top:var(--sp-3);
     }
-    .gacha-mode-btn.active { background:rgba(255,255,255,.18); color:#fff; border-color:rgba(255,255,255,.4); }
+    .gacha-mode-btn:not(.is-on) {
+      border-color:rgba(255,255,255,.18);
+      background:rgba(255,255,255,.07);
+      color:rgba(255,255,255,.62);
+    }
     /* Capsule wrap & orbiting stars */
     .gacha-capsule-wrap {
       position:relative; display:flex; align-items:center; justify-content:center;
@@ -398,7 +428,7 @@
       font-size:12px; line-height:1.7; color:rgba(255,255,255,.75);
       text-align:left; max-height:80px; overflow-y:auto;
     }
-    .gacha-coin-display { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.4); position:relative; z-index:1; }
+    .gacha-coin-display { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.4); position:relative; z-index:1; margin-top:auto; }
     /* Pull button with shimmer */
     .gacha-pull-btn {
       width:100%; padding:14px 24px; border:none; border-radius:14px;
@@ -485,21 +515,16 @@
     .tab-pane > * { flex-shrink:0; }
 
     /* ────────── Playground modal ────────── */
-    .playground-backdrop {
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
-    }
+    .playground-backdrop { z-index: 200; }
     .playground-modal {
       background: linear-gradient(160deg, #FFF7E8 0%, #FFEAD0 55%, #FFD9A8 100%);
-      border-radius: 24px;
-      width: calc(100% - 32px); max-width: 420px;
-      max-height: calc(100vh - 64px);
-      padding: 22px 18px 20px;
+      border-radius: 0;
+      width: 100%; height: 100%;
+      padding: 0 18px 20px;
       display: flex; flex-direction: column; gap: 12px;
       position: relative;
       overflow-y: auto;
-      box-shadow: 0 16px 60px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.05);
+      box-shadow: none;
       animation: detail-pop .22s cubic-bezier(.17, .67, .34, 1.4);
     }
     .playground-title {
@@ -694,7 +719,7 @@
       text-shadow: 0 1px 0 rgba(255,255,255,.7);
     }
     .gift-reveal-mon {
-      font-size: 11px; font-weight: 700; color: #5a3818;
+      font-size: 11px; font-weight: 700; color: var(--ink-soft);
     }
     .gift-reveal-stage {
       width: 120px; height: 120px;
@@ -1123,7 +1148,7 @@
       display: grid; grid-template-columns: 70px 1fr 60px; align-items: center; gap: 8px;
     }
     .playground-meter-label {
-      font-size: 11px; font-weight: 700; color: #5a3818;
+      font-size: 11px; font-weight: 700; color: var(--ink-soft);
     }
     .playground-meter-bar {
       height: 10px; border-radius: 6px;
@@ -1303,28 +1328,27 @@
     }
     .playground-food-card {
       position: relative;
-      background: #fff;
-      border: 1.5px solid #e0e0de; border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--rule); border-radius: var(--r-lg);
       padding: 10px 6px;
       cursor: pointer; font-family: inherit;
       display: flex; flex-direction: column; align-items: center; gap: 2px;
       transition: transform .08s, border-color .12s, background .12s;
     }
-    .playground-food-card:hover:not(.disabled) { border-color: var(--accent); background: #fff8f0; }
+    .playground-food-card:hover:not(.disabled) { border-color: var(--accent); background: var(--surface-sunk); }
     .playground-food-card:active:not(.disabled) { transform: scale(.96); }
     .playground-food-card.disabled { opacity: .4; cursor: not-allowed; }
     .playground-food-card.fav { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-    .playground-food-card.dis { border-color: #9e9e9e; opacity: .7; }
-    .playground-food-card.grade-1 { background: #fafafa; }
-    .playground-food-card.grade-2 { background: #f1f8e9; }
-    .playground-food-card.grade-3 { background: #e3f2fd; }
-    .playground-food-card.grade-4 { background: linear-gradient(135deg, #fff8e1, #fff3c0); }
+    .playground-food-card.dis { border-color: var(--rule-strong); opacity: .7; }
+    /* 等級ごとの色分け（黄・緑・青・赤）は廃止した（4.5）。
+       レアリティは星と価格で分かるうえ、色は 4 つ覚える必要があり、
+       しかも「青と緑のどちらが上か」が誰にも読めなかった。 */
     .playground-food-emoji { font-size: 28px; line-height: 1; }
-    .playground-food-name { font-size: 12px; font-weight: 600; color: #1a1a18; }
-    .playground-food-grade { font-size: 9px; color: #ffa000; letter-spacing: 1px; }
+    .playground-food-name { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .playground-food-grade { font-size: 9px; color: var(--coin); letter-spacing: 1px; }
     .playground-food-cost {
       display: flex; align-items: center; gap: 3px;
-      font-size: 11px; font-weight: 700; color: #5a3818;
+      font-size: 11px; font-weight: 700; color: var(--ink-soft);
     }
     .playground-food-card.in-stock {
       border-color: var(--accent);
@@ -1348,7 +1372,7 @@
       color: #fff;
     }
     .playground-food-tag.fav { background: var(--accent); }
-    .playground-food-tag.dis { background: #9e9e9e; }
+    .playground-food-tag.dis { background: var(--ink-mute); }
     .playground-food-cancel {
       width: 100%; margin-top: 10px;
       padding: 10px; border: 1px solid #e0e0de; border-radius: 10px;
@@ -1921,14 +1945,16 @@
       animation:bdIn .2s ease;
     }
     @keyframes bdIn { from{opacity:0} to{opacity:1} }
+    /* 編集・選択・確認はすべてこの 1 つの形に載せる（3.7）。
+       角丸 20px・36x4 のハンドル・左右 16px・タイトル 17px/700。 */
     .modal-sheet {
-      background:#fafaf9;
-      width:100%; padding:20px 18px 32px;
+      background:var(--bg);
+      width:100%; padding:12px var(--sp-4) 32px;
       animation:sheetUp .25s ease;
     }
     @keyframes sheetUp { from{transform:translateY(60px);opacity:0} to{transform:translateY(0);opacity:1} }
-    .modal-handle { background:#d0d0cc; margin:0 auto 18px; }
-    .modal-title { font-size:15px; font-weight:700; margin-bottom:16px; letter-spacing:-.3px; }
+    .modal-handle { background:var(--rule-strong); margin:0 auto 14px; }
+    .modal-title { font-size:17px; font-weight:700; margin-bottom:16px; letter-spacing:-.3px; }
     .modal-title-row { display:flex; align-items:center; gap:8px; }
     /* タイトルに余りを吸わせて、複製と削除を右端でまとめる。
        space-between のままだと 3 つが均等に散って、複製だけが宙に浮く。 */
@@ -1966,26 +1992,31 @@
       display:flex; align-items:center; justify-content:center;
     }
     .modal-day-btn.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
-    .modal-actions { display:flex; gap:8px; margin-top:18px; }
+    /* フッターは「キャンセル(ghost)」「保存(primary)」の 2 分割（3.7）。
+       以前は保存が flex:2 で幅が倍あり、シートごとに比率も違っていた。
+       押し間違えたときの取り返しが利かないのは「保存」ではなく
+       「キャンセル」なので、幅で優劣を付けずに色で主従を示す。 */
+    .modal-actions { display:flex; gap:var(--sp-2); margin-top:18px; }
     .modal-delete {
-      flex:1; padding:12px; border:none; border-radius:10px;
-      background:#ff4d4f; color:#fff;
-      font-size:var(--fs-base); font-weight:600; cursor:pointer; font-family:inherit;
+      flex:1; height:var(--h-btn); border:none; border-radius:var(--r-full);
+      background:var(--danger); color:#fff;
+      font-size:var(--fs-base); font-weight:700; cursor:pointer; font-family:inherit;
     }
     .modal-cancel {
-      flex:1; padding:12px; border:1px solid #e0e0de; border-radius:10px;
-      background:var(--surface); font-size:var(--fs-base); font-weight:500; cursor:pointer; font-family:inherit;
+      flex:1; height:var(--h-btn); border:1px solid var(--rule-strong); border-radius:var(--r-full);
+      background:var(--surface); color:var(--ink);
+      font-size:var(--fs-base); font-weight:700; cursor:pointer; font-family:inherit;
     }
     .modal-save {
-      flex:2; padding:12px; border:none; border-radius:10px;
-      background:var(--accent); color:#fff;
-      font-size:var(--fs-base); font-weight:600; cursor:pointer; font-family:inherit;
+      flex:1; height:var(--h-btn); border:none; border-radius:var(--r-full);
+      background:var(--accent); color:var(--accent-text);
+      font-size:var(--fs-base); font-weight:700; cursor:pointer; font-family:inherit;
     }
 
     /* Confirm Sheet */
     .confirm-sheet {
-      background:#fafaf9;
-      width:100%; max-height:88%; padding:20px 18px 96px;
+      background:var(--bg);
+      width:100%; max-height:88%; padding:12px var(--sp-4) 96px;
       display:flex; flex-direction:column;
       animation:sheetUp .25s ease;
     }
@@ -2393,20 +2424,14 @@
     .ideas-chat-btn:active { transform:scale(.97); opacity:.9; }
 
     /* Knowledge AI Chat Modal */
-    .knowchat-backdrop {
-      align-items:center; justify-content:center;
-      padding:18px;
-    }
+    .knowchat-backdrop { padding:0; }
     /* Account modal (Supabase) */
-    .account-backdrop {
-      align-items:center; justify-content:center; padding:18px;
-    }
     .account-modal {
       position:relative;
       background:var(--surface);
-      border-radius:18px;
-      width:100%; max-width:420px;
-      padding:22px 20px 18px;
+      border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+      width:100%;
+      padding:12px var(--sp-4) 32px;
       box-shadow:0 18px 50px rgba(0,0,0,.30);
       animation:detail-pop .22s cubic-bezier(.17,.67,.34,1.4);
       display:flex; flex-direction:column; gap:10px;
@@ -2490,12 +2515,11 @@
     .app.dark .account-signout { background:#28282c; border-color:#3a3a3e; }
 
     .knowchat-modal {
-      background:#fff;
-      border-radius:18px;
-      width:100%; max-width:520px; max-height:90vh;
+      background:var(--bg);
+      border-radius:0;
+      width:100%; height:100%;
       display:flex; flex-direction:column;
-      box-shadow:0 18px 50px rgba(0,0,0,.30);
-      animation:detail-pop .22s cubic-bezier(.17, .67, .34, 1.4);
+      box-shadow:none;
       overflow:hidden;
     }
     .knowchat-header {
@@ -4046,10 +4070,13 @@
       border-radius:var(--r-sm); padding:1px 8px; display:inline-block; margin-top:4px;
     }
     /* ずかん詳細ポップ */
-    .zukan-detail-backdrop { align-items:center; justify-content:center; }
+    /* 中央ダイアログをやめてボトムシートに揃える（4.5）。
+       中央に浮く箱とボトムシートが混在していると、閉じ方（下へ払う／
+       外側を押す）が画面ごとに変わって覚えられない。 */
     .zukan-detail {
-      position:relative; background:var(--surface); border-radius:22px;
-      width:calc(100% - 48px); max-width:340px; padding:22px 20px 18px;
+      position:relative; background:var(--surface);
+      border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+      width:100%; padding:12px var(--sp-4) 32px;
       text-align:center; animation:sheetUp .25s ease;
     }
     .zukan-detail-sprite { display:flex; justify-content:center; align-items:flex-end; height:96px; }
@@ -4086,8 +4113,10 @@
     .app.dark .settings-card { background:#1e1e21; box-shadow:none; }
 
     /* ── モーダル ── */
-    .modal-sheet, .memo-history-sheet, .confirm-sheet { border-radius:26px 26px 0 0; }
-    .modal-handle { width:44px; height:5px; border-radius:99px; }
+    .modal-sheet, .memo-history-sheet, .confirm-sheet {
+      border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+    }
+    .modal-handle { width:36px; height:4px; border-radius:var(--r-full); }
 
     /* ===== 集中モード（Focus Mode）— 全画面オーバーレイ ===== */
     .fm-overlay {
@@ -4111,7 +4140,6 @@
       background:var(--surface); padding:12px 12px; display:flex; align-items:center;
       justify-content:space-between; box-shadow:0 1px 0 rgba(0,0,0,.05); z-index:20; flex:none;
     }
-    .fm-back { border:none; background:none; font-family:inherit; font-weight:800; font-size:15px; color:var(--fm-accent); cursor:pointer; padding:4px 6px; }
     .fm-b { font-weight:800; font-size:16px; }
     .fm-coin { background:var(--fm-soft); border-radius:99px; padding:5px 11px; font-weight:800; font-size:13px; color:var(--fm-accent); }
     .fm-main { flex:1; overflow-y:auto; padding:14px 14px 28px; min-height:0; }
@@ -4176,7 +4204,8 @@
     .fm-tbody { flex:1; min-width:0; }
     .fm-tt { font-size:14px; font-weight:700; line-height:1.4; }
     .fm-tmeta { display:flex; gap:6px; align-items:center; margin-top:4px; flex-wrap:wrap; }
-    .fm-tag { font-size:10px; font-weight:800; padding:2px 8px; border-radius:99px; }
+    /* 形と色は .u-tag が持つ（色分けはしない） */
+    .fm-tag { font-size:11px; }
     .fm-telapsed { font-size:12.5px; font-weight:800; color:#7A8694; flex:none; }
     .fm-telapsed.zero { color:#C7CFD8; }
     .fm-telapsed.live { color:var(--fm-run); }
