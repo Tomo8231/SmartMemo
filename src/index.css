@@ -3684,9 +3684,9 @@
     .gw-l3 { width:28px; height:24px; left:33px; top:30px; }
     .gw-wchip {
       position:absolute; bottom:-4px; left:-4px;
-      background:#fff; border:2px solid #F0E5DA; border-radius:10px;
-      padding:2px 7px; font-size:10px; font-weight:800; white-space:nowrap;
-      box-shadow:0 1px 3px rgba(0,0,0,.1); color:#D65A1F;
+      background:var(--surface); border:1px solid var(--rule); border-radius:var(--r-md);
+      padding:2px 7px; font-size:10px; font-weight:700; white-space:nowrap;
+      box-shadow:var(--sh-1); color:var(--accent);
     }
     .gw-time-btn {
       position:absolute; top:10px; right:12px; z-index:6;
@@ -3756,10 +3756,13 @@
       display:flex; align-items:center; justify-content:center;
     }
     .gw-pop-meta { display:flex; gap:6px; margin:8px 0 10px; flex-wrap:wrap; }
-    .gw-pop-meta span { font-size:11px; font-weight:800; padding:2px 9px; border-radius:99px; }
-    .gw-pop-tag  { background:#F5E3D6; color:#D65A1F; }
-    .gw-pop-coin { background:#FFF6D9; color:#B98A12; }
-    .gw-pop-time { background:#EAF0F7; color:#5B7290; }
+    /* タグ・コイン・時刻を 3 色に塗り分けていたが、3 つ並ぶと
+       どれが何の情報かは色ではなく中身でしか判別できていなかった。
+       表示用タグの型（3.5）に揃える。 */
+    .gw-pop-meta span {
+      font-size:11px; font-weight:600; padding:1px 8px; border-radius:var(--r-sm);
+      background:var(--surface-sunk); color:var(--ink-soft);
+    }
     .gw-pop-btns { display:flex; gap:8px; }
     .gw-pop-done {
       flex:1; border:none; border-radius:14px; padding:12px; cursor:pointer;
