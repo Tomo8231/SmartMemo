@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.9';
+const APP_VERSION = '1.41.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -273,12 +273,17 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = (key: string) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
 
-async function callGemini(apiKey: string, parts: GeminiPart[]): Promise<string> {
+// json=true では「JSON モード」で呼ぶ。自由文のまま返させると前置きや
+// コードブロックが混ざって抽出に失敗し、精度の低いローカル解析へ落ちる。
+async function callGemini(apiKey: string, parts: GeminiPart[], json = false): Promise<string> {
   if (!apiKey) throw new Error('no_api_key');
   const res = await fetch(GEMINI_URL(apiKey), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts }] }),
+    body: JSON.stringify({
+      contents: [{ parts }],
+      ...(json ? { generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 8192 } } : {}),
+    }),
   });
   if (!res.ok) {
     let detail = '';
@@ -286,7 +291,9 @@ async function callGemini(apiKey: string, parts: GeminiPart[]): Promise<string> 
     throw new Error(`Gemini ${res.status}${detail ? ': ' + detail : ''}`);
   }
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  // 思考するモデルは parts が複数に割れることがあるので全部つなぐ
+  return ((data.candidates?.[0]?.content?.parts || []) as GeminiPart[])
+    .map(p => p?.text || '').join('') || '';
 }
 const callGeminiText = (key: string, text: string) =>
   callGemini(key, [{ text }]);
@@ -347,11 +354,16 @@ function aiAudioSupported(cfg: AiCfg): boolean {
 }
 
 // ── OpenAI (GPT) ──
-async function callOpenAIChat(key: string, content: any): Promise<string> {
+async function callOpenAIChat(key: string, content: any, json = false): Promise<string> {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: OPENAI_TEXT_MODEL, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({
+      model: OPENAI_TEXT_MODEL,
+      messages: [{ role: 'user', content }],
+      // 解析は毎回同じ答えが欲しいので温度 0。JSON モードで前置きを封じる。
+      ...(json ? { temperature: 0, response_format: { type: 'json_object' } } : {}),
+    }),
   });
   if (!res.ok) {
     let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
@@ -379,7 +391,7 @@ async function callOpenAIAudio(key: string, blob: Blob, mime: string): Promise<s
 }
 
 // ── Anthropic (Claude) ──
-async function callAnthropicMessages(key: string, content: any, model?: string): Promise<string> {
+async function callAnthropicMessages(key: string, content: any, model?: string, json = false): Promise<string> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -390,14 +402,23 @@ async function callAnthropicMessages(key: string, content: any, model?: string):
     },
     // メモ全体を1回で解析するため出力が長くなりうる。JSON が途中で切れると
     // 解析に失敗してローカル解析へ落ちてしまうので上限に余裕を持たせる。
-    body: JSON.stringify({ model: (model || '').trim() || ANTHROPIC_TEXT_MODEL, max_tokens: 8192, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({
+      model: (model || '').trim() || ANTHROPIC_TEXT_MODEL,
+      max_tokens: 8192,
+      // json のときは "{" を先に書かせて（prefill）前置きを物理的に不可能にする
+      messages: json
+        ? [{ role: 'user', content }, { role: 'assistant', content: '{' }]
+        : [{ role: 'user', content }],
+      ...(json ? { temperature: 0 } : {}),
+    }),
   });
   if (!res.ok) {
     let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
     throw new Error(`Anthropic ${res.status}${d ? ': ' + d : ''}`);
   }
   const data = await res.json();
-  return (Array.isArray(data.content) ? data.content.map((c: any) => c?.text || '').join('') : '') || '';
+  const text = (Array.isArray(data.content) ? data.content.map((c: any) => c?.text || '').join('') : '') || '';
+  return json ? `{${text}` : text;   // prefill した "{" を戻す
 }
 
 // ── Unified entry points ──
@@ -407,6 +428,14 @@ async function aiText(cfg: AiCfg, prompt: string): Promise<string> {
   if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt);
   if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }], cfg.anthropicModel);
   return callGeminiText(key, prompt);
+}
+// JSON を返させる用の入口。プロバイダごとの JSON モードを必ず通す。
+async function aiJson(cfg: AiCfg, prompt: string): Promise<string> {
+  const key = aiActiveKey(cfg);
+  if (!key) throw new Error('no_api_key');
+  if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt, true);
+  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }], cfg.anthropicModel, true);
+  return callGemini(key, [{ text: prompt }], true);
 }
 async function aiVision(cfg: AiCfg, prompt: string, base64: string, mime: string): Promise<string> {
   const key = aiActiveKey(cfg);
@@ -2139,9 +2168,8 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
   const todayDate = formatDate(new Date());
   for (const inc of incoming) {
     if (!inc || !inc.projectName) continue;
-    const idx = result.findIndex(e =>
-      (e.projectName || '').toLowerCase().trim() === (inc.projectName || '').toLowerCase().trim()
-    );
+    // 全角/半角・空白・記号の違いで別ナレッジに割れないよう正規化して照合する
+    const idx = result.findIndex(e => canonName(e.projectName || '') === canonName(inc.projectName || ''));
     if (idx >= 0) {
       const cur = result[idx];
       const newDetails = [...cur.details];
@@ -2181,12 +2209,247 @@ function mergeIdeas(existing: Idea[], incoming: IdeaDraft[]): Idea[] {
   return result;
 }
 
+// ─────────────────────────────────────────────────────────────
+// AI 出力の後処理
+// モデルはプロンプトのルールを守り切れない（存在しないタグ、実在しない
+// 日付、範囲外のコイン、同じ主題の重複 entry）。ここでコード側が必ず
+// 正規化する。通さないとそのままタスク・ナレッジになってしまう。
+// ─────────────────────────────────────────────────────────────
+const asAiStr = (v: unknown) => (typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '');
+
+// 表記ゆれ（全角/半角・空白・記号・大小文字）を吸収した比較キー。
+// 「旅行の 持ち物」と「旅行の持ち物」が別ナレッジに分かれるのを防ぐ。
+function canonName(s: string): string {
+  return (s || '').normalize('NFKC').toLowerCase().replace(/[\s　・･,、。.\-–—_/]/g, '');
+}
+
+// 前置き・```json・途中で切れた出力からも JSON オブジェクトを拾う。
+// 閉じ括弧の位置と未閉じスタックを控えておき、出力がトークン上限で
+// 切れていても「最後に完結した要素」まで戻して復元する。
+function extractJsonObject(raw: string): any | null {
+  let s = (raw || '').replace(/^﻿/, '').trim();
+  s = s.replace(/^```[a-zA-Z]*\s*/, '').replace(/```\s*$/, '');
+  const start = s.indexOf('{');
+  if (start < 0) return null;
+  const cuts: { at: number; close: string }[] = [];
+  const stack: string[] = [];
+  let inStr = false, esc = false;
+  for (let i = start; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { if (inStr) esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') stack.push('}');
+    else if (c === '[') stack.push(']');
+    else if (c === '}' || c === ']') {
+      stack.pop();
+      cuts.push({ at: i, close: stack.slice().reverse().join('') });
+    }
+  }
+  for (let k = cuts.length - 1, tries = 0; k >= 0 && tries < 80; k--, tries++) {
+    try { return JSON.parse(s.slice(start, cuts[k].at + 1) + cuts[k].close); } catch { /* 次の候補へ */ }
+  }
+  return null;
+}
+
+// "2026/1/5" "2026年1月5日" の揺れを吸収し、実在しない日付は捨てる
+function normalizeYmd(v: unknown): string {
+  const m = /(\d{4})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})/.exec(asAiStr(v));
+  if (!m) return '';
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return '';
+  return `${y}-${pad(mo)}-${pad(d)}`;
+}
+
+// "9:5" "9時30分" "午後3時" を HH:MM に寄せる。範囲外は空にする。
+function normalizeHm(v: unknown): string {
+  const s = asAiStr(v).trim();
+  if (!s) return '';
+  const m = /(\d{1,2})\s*[:時]\s*(\d{1,2})?/.exec(s);
+  if (!m) return '';
+  let h = +m[1];
+  const mi = m[2] ? +m[2] : 0;
+  if (/午後|PM|pm/.test(s) && h < 12) h += 12;
+  if (/午前|AM|am/.test(s) && h === 12) h = 0;
+  if (h < 0 || h > 23 || mi < 0 || mi > 59) return '';
+  return `${pad(h)}:${pad(mi)}`;
+}
+
+// コインは 10〜200 の 10 刻み。モデルは 25 や 500 を平気で返す。
+function normalizeCoin(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : parseInt(asAiStr(v), 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(200, Math.max(10, Math.round(n / 10) * 10));
+}
+
+// 選択肢にないタグはアプリ側で絞り込みも編集もできない「幽霊タグ」に
+// なるので、必ず既存の選択肢へ落とし込む。
+function normalizeAiTags(v: unknown, options: string[], fallback: string): string[] {
+  const canon = new Map(options.map(o => [canonName(o), o]));
+  const out: string[] = [];
+  for (const t of (Array.isArray(v) ? v : [])) {
+    const hit = canon.get(canonName(asAiStr(t)));
+    if (hit && !out.includes(hit)) out.push(hit);
+  }
+  return out.length ? out : [fallback];
+}
+
+const RECURRING_VALUES = ['daily', 'weekly', 'biweekly', 'monthly'] as const;
+
+type NormalizeOpt = {
+  mode: 'todo' | 'idea' | 'both';
+  todoTags: string[];
+  ideaTags: string[];
+  existingNames: string[];
+  todayStr: string;
+};
+
+function normalizeParseResult(raw: any, opt: NormalizeOpt): ParseResult {
+  const todos: TodoDraft[] = [];
+  const seenTodo = new Set<string>();
+  // mode で指定された側だけを残す。モデルは「空配列で返せ」を無視することがある。
+  if (opt.mode !== 'idea') {
+    for (const t of (Array.isArray(raw?.todos) ? raw.todos : [])) {
+      const title = asAiStr(t?.title).trim();
+      if (!title) continue;
+      let sd = normalizeYmd(t?.startDate);
+      let ed = normalizeYmd(t?.endDate);
+      if (sd && ed && ed < sd) { const tmp = sd; sd = ed; ed = tmp; }
+      const rec = RECURRING_VALUES.includes(t?.recurring) ? (t.recurring as TodoDraft['recurring']) : undefined;
+      const rdRaw = typeof t?.recurringDay === 'number' ? t.recurringDay : parseInt(asAiStr(t?.recurringDay), 10);
+      let rd: number | undefined;
+      if (Number.isFinite(rdRaw)) {
+        if ((rec === 'weekly' || rec === 'biweekly') && rdRaw >= 0 && rdRaw <= 6) rd = rdRaw;
+        if (rec === 'monthly' && rdRaw >= 1 && rdRaw <= 31) rd = rdRaw;
+      }
+      const key = `${canonName(title)}|${sd}|${ed}`;
+      if (seenTodo.has(key)) continue;   // 同内容の重複出力を捨てる
+      seenTodo.add(key);
+      todos.push({
+        title,
+        startDate: sd || ed || opt.todayStr,
+        endDate: ed || sd || opt.todayStr,
+        time: normalizeHm(t?.time),
+        tags: normalizeAiTags(t?.tags, opt.todoTags, 'その他'),
+        coinReward: normalizeCoin(t?.coinReward, 20),
+        recurring: rec,
+        recurringDay: rec ? rd : undefined,
+      });
+    }
+  }
+
+  const ideas: IdeaDraft[] = [];
+  const byName = new Map<string, IdeaDraft>();
+  const existing = new Map(opt.existingNames.filter(Boolean).map(n => [canonName(n), n]));
+  if (opt.mode !== 'todo') {
+    for (const i of (Array.isArray(raw?.ideas) ? raw.ideas : [])) {
+      const rawName = asAiStr(i?.projectName).trim();
+      const summary = asAiStr(i?.summary).trim();
+      const details = (Array.isArray(i?.details) ? i.details : [])
+        .map((d: unknown) => asAiStr(d).trim()).filter(Boolean);
+      if (!rawName && !summary && !details.length) continue;
+      // 表記ゆれのせいで既存ナレッジに追記できなくなるのを防ぐ
+      const name = existing.get(canonName(rawName)) || rawName || 'メモ';
+      const key = canonName(name);
+      const prev = byName.get(key);
+      if (prev) {
+        // 同じ主題を複数 entry に割ったら 1 件にまとめ直す（プロンプトの「まとめる」ルールを強制）
+        if (summary && summary !== prev.summary && !prev.details.includes(summary)) prev.details.push(summary);
+        for (const d of details) if (!prev.details.includes(d)) prev.details.push(d);
+        prev.tags = Array.from(new Set([...prev.tags, ...normalizeAiTags(i?.tags, opt.ideaTags, IDEA_TAG)]));
+        prev.coinReward = Math.max(prev.coinReward || 0, normalizeCoin(i?.coinReward, 20));
+        continue;
+      }
+      const draft: IdeaDraft = {
+        projectName: name,
+        summary,
+        details,
+        tags: normalizeAiTags(i?.tags, opt.ideaTags, IDEA_TAG),
+        coinReward: normalizeCoin(i?.coinReward, 20),
+      };
+      byName.set(key, draft);
+      ideas.push(draft);
+    }
+  }
+  return { todos, ideas };
+}
+
+// AI が使えないときのローカル解析。mode 指定を尊重しないと
+// 「TODOに変換」を押したのに行が消える／ナレッジ側に落ちる。
+function localParseForMode(text: string, existingProjects: string[], mode: 'todo' | 'idea' | 'both'): ParseResult {
+  const r = localParseAll(text, existingProjects);
+  if (mode === 'todo') {
+    return {
+      todos: [...r.todos, ...r.ideas.map((i): TodoDraft => ({
+        title: i.summary || i.projectName,
+        startDate: '', endDate: '', time: '',
+        tags: (i.tags || []).filter(t => t !== IDEA_TAG),
+      }))],
+      ideas: [],
+    };
+  }
+  if (mode === 'idea') {
+    return {
+      todos: [],
+      ideas: [...r.ideas, ...r.todos.map((t): IdeaDraft => ({
+        projectName: t.title.length <= 16 ? t.title : t.title.slice(0, 16),
+        summary: t.title,
+        details: [],
+        tags: [IDEA_TAG],
+      }))],
+    };
+  }
+  return r;
+}
+
 // 既存ナレッジの要約。projectName だけだと AI が主題の一致を判断できず、
 // 名前が似ているだけの無関係なナレッジに追記されてしまうため概要も渡す。
 type IdeaBrief = { name: string; summary?: string };
 const MAX_IDEA_BRIEFS = 50;
+const RECENT_IDEA_BRIEFS = 15;
 
-async function parseMemoToItems(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', existingBriefs: IdeaBrief[] = []): Promise<ParseResult> {
+// 直近 N 件で切ると、古いけれど主題が一致するナレッジが候補から消え、
+// 本来は追記すべき内容が新規ナレッジとして増えてしまう。メモ本文との
+// 2-gram の重なりでスコアを付け、関連の濃いものを優先して渡す
+// （直近 RECENT_IDEA_BRIEFS 件は常に残す）。
+function pickRelevantBriefs(briefs: IdeaBrief[], text: string, limit: number): IdeaBrief[] {
+  if (briefs.length <= limit) return briefs;
+  const src = (text || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+  const grams = new Set<string>();
+  for (let i = 0; i + 1 < src.length; i++) grams.add(src.slice(i, i + 2));
+  const score = (b: IdeaBrief) => {
+    const s = `${b.name}${b.summary || ''}`.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+    let hit = 0, n = 0;
+    for (let i = 0; i + 1 < s.length; i++) { n++; if (grams.has(s.slice(i, i + 2))) hit++; }
+    return n ? hit / n : 0;
+  };
+  const keep = new Set<number>();
+  for (let i = Math.max(0, briefs.length - RECENT_IDEA_BRIEFS); i < briefs.length; i++) keep.add(i);
+  briefs
+    .map((b, i) => ({ i, s: score(b) }))
+    .filter(x => !keep.has(x.i) && x.s > 0)
+    .sort((a, b) => b.s - a.s || b.i - a.i)
+    .slice(0, Math.max(0, limit - keep.size))
+    .forEach(x => keep.add(x.i));
+  return briefs.filter((_, i) => keep.has(i));
+}
+
+// 相対表現の解決をモデルの暗算に任せると外す。日付はこちらで計算して渡す。
+function relativeDateHints(now: Date): string {
+  const shift = (n: number) => { const x = new Date(now); x.setDate(x.getDate() + n); return formatDate(x); };
+  const dow = now.getDay();
+  const nextDow = (target: number) => shift(((target - dow + 7) % 7) || 7);
+  const monthEnd = (n: number) => formatDate(new Date(now.getFullYear(), now.getMonth() + n + 1, 0));
+  return (
+    `   明日=${shift(1)} / 明後日=${shift(2)} / 1週間後=${shift(7)} / 2週間後=${shift(14)}\n` +
+    `   次の月曜=${nextDow(1)} 火=${nextDow(2)} 水=${nextDow(3)} 木=${nextDow(4)} 金=${nextDow(5)} 土=${nextDow(6)} 日=${nextDow(0)}\n` +
+    `   今週末(次の土曜)=${nextDow(6)} / 今月末=${monthEnd(0)} / 来月末=${monthEnd(1)}`
+  );
+}
+
+async function parseMemoToItems(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', existingBriefs: IdeaBrief[] = [], customTags: string[] = []): Promise<ParseResult> {
   // 空行区切りは「話題の区切りの目安」として AI に伝える。
   // 以前は段落ごとに独立した AI 呼び出しを並列で行っていたため、AI がメモ全体を
   // 見られず「同じ主題なのに複数ナレッジに分割される」原因になっていた。
@@ -2197,19 +2460,27 @@ async function parseMemoToItems(text: string, existingProjects: string[] = [], c
     .filter(p => p.length > 0)
     .length;
 
-  return parseMemoWithAi(text, existingProjects, cfg, mode, paragraphCount, existingBriefs);
+  return parseMemoWithAi(text, existingProjects, cfg, mode, paragraphCount, existingBriefs, customTags);
 }
 
-async function parseMemoWithAi(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', paragraphCount = 1, existingBriefs: IdeaBrief[] = []): Promise<ParseResult> {
+async function parseMemoWithAi(text: string, existingProjects: string[] = [], cfg: AiCfg, mode: 'todo' | 'idea' | 'both' = 'both', paragraphCount = 1, existingBriefs: IdeaBrief[] = [], customTags: string[] = []): Promise<ParseResult> {
+  // モジュール読み込み時の today を使うと、PWA を開きっぱなしで日付をまたいだとき
+  // 「明日」が 1 日ずれる。解析のたびに現在日時を取り直す。
+  const now = new Date();
+  const nowStr = formatDate(now);
   // 既存ナレッジは「名前: 概要」の形で渡す。多すぎるとプロンプトが薄まり
-  // 誤マッチが増えるので直近 MAX_IDEA_BRIEFS 件までに制限する。
-  const briefs: IdeaBrief[] = (existingBriefs.length
+  // 誤マッチが増えるので、メモとの関連が濃いものを MAX_IDEA_BRIEFS 件まで選ぶ。
+  const allBriefs: IdeaBrief[] = (existingBriefs.length
     ? existingBriefs
     : existingProjects.map((name): IdeaBrief => ({ name }))
-  ).filter(b => b && b.name).slice(-MAX_IDEA_BRIEFS);
+  ).filter(b => b && b.name);
+  const briefs = pickRelevantBriefs(allBriefs, text, MAX_IDEA_BRIEFS);
   const briefLines = briefs.length
-    ? briefs.map(b => `   - ${b.name}${b.summary ? `: ${b.summary.slice(0, 60)}` : ''}`).join('\n')
+    ? briefs.map(b => `   - ${b.name}${b.summary ? `: ${b.summary.slice(0, 80)}` : ''}`).join('\n')
     : '   （既存ナレッジなし → 必ず新規作成）';
+  const todoTags = getTodoTagOptions(customTags);
+  const ideaTags = getIdeaTagOptions(customTags);
+  const tomorrow = (() => { const x = new Date(now); x.setDate(x.getDate() + 1); return formatDate(x); })();
   const modeInstruction =
     mode === 'todo'
       ? `あなたはメモをTODOに変換するアシスタントです。以下のメモをTODOのみに変換し、ideas は必ず空配列で返してください。\n\n`
@@ -2232,12 +2503,15 @@ async function parseMemoWithAi(text: string, existingProjects: string[] = [], cf
     `1. TODOの複数項目は分割。「明日、にんじん、玉ねぎを買う」→「にんじんを買う」「玉ねぎを買う」（「明日」はstartDateへ）\n` +
     `   ※この分割ルールはTODOのみに適用。ナレッジには適用しない（ナレッジは10を参照）\n` +
     `2. 日付は YYYY-MM-DD。期間は startDate と endDate 両方、単日は endDate=""\n` +
-    `   - 「8月中」         → startDate=${today.getFullYear()}-08-01, endDate=${today.getFullYear()}-08-31\n` +
-    `   - 「7月1日〜15日」  → startDate=${today.getFullYear()}-07-01, endDate=${today.getFullYear()}-07-15\n` +
+    `   - 「8月中」         → startDate=${now.getFullYear()}-08-01, endDate=${now.getFullYear()}-08-31\n` +
+    `   - 「7月1日〜15日」  → startDate=${now.getFullYear()}-07-01, endDate=${now.getFullYear()}-07-15\n` +
     `   - 「〇月〇日まで」  → endDate=その日, startDate=本日\n` +
-    `3. 時間は HH:MM か ""\n` +
-    `4. TODOのtags: 買い物 / 仕事 / 家事 / 健康 / 勉強 / その他（「アイデア」タグは使わない）\n` +
-    `   ナレッジのtags: アイデア / 買い物 / 仕事 / 家事 / 健康 / 勉強\n` +
+    `   - 日付の手がかりが無いときは startDate も endDate も ""（推測で埋めない）\n` +
+    `   - 相対表現は次の換算表をそのまま使う（自分で日数を数えない）:\n${relativeDateHints(now)}\n` +
+    `3. 時間は HH:MM か ""（「夕方」「夜」など幅のある表現は ""）\n` +
+    `4. TODOのtags: ${todoTags.join(' / ')}（「${IDEA_TAG}」は使わない）\n` +
+    `   ナレッジのtags: ${ideaTags.join(' / ')}\n` +
+    `   ※ この一覧にない語をタグにしない。迷ったら TODO は「その他」、ナレッジは「${IDEA_TAG}」\n` +
     `5. coinReward（TODO・ナレッジ共通）: 10〜200の整数（10の倍数）\n` +
     `   TODO: 難易度・手間・所要時間で設定\n` +
     `   ナレッジ: 内容の深さ・独自性・有用性で設定\n` +
@@ -2248,8 +2522,9 @@ async function parseMemoWithAi(text: string, existingProjects: string[] = [], cf
     `   - 名前が似ている・同じ単語を含むだけでは追記しない\n` +
     `     例:「旅行の持ち物」と「旅行の予算」は別。「React最適化」と「Reactの学習計画」も別\n` +
     `   - 判定は下の一覧の「概要」まで読んで、内容が地続きかどうかで決めること\n` +
+    `   - 新規作成の名前は主題が分かる10〜20字程度の名詞句にする（「メモ」「アイデア」のような中身の無い名前にしない）\n` +
     `7. 既存ナレッジ一覧（名前: 概要）— ここに無い主題は必ず新規作成:\n${briefLines}\n` +
-    `8. 本日: ${todayStr}（年未指定の月日は${today.getFullYear()}年とする）\n` +
+    `8. 本日: ${nowStr}（${DOW[now.getDay()]}曜日）。年が書かれていない月日は直近の未来として解釈する\n` +
     `9. 定期予定（毎日・毎週・隔週・毎月）は recurring + recurringDay を設定:\n` +
     `   recurring値: "daily" / "weekly" / "biweekly" / "monthly" / ""（非定期）\n` +
     `   recurringDay（曜日・日を指定している場合のみ設定）:\n` +
@@ -2267,31 +2542,43 @@ async function parseMemoWithAi(text: string, existingProjects: string[] = [], cf
     `   - entryを分けてよいのは、主題が明確に別だと言い切れる場合のみ\n` +
     `   - 迷ったら「分ける」ではなく「まとめる」を選ぶ\n` +
     (paragraphCount > 1
-      ? `11. このメモはユーザーが空行で ${paragraphCount} 個の段落に区切っています。空行は話題の区切りの目安なので、原則として段落ごとに別のナレッジにしてください。ただし複数の段落が明らかに同一主題の続きなら1つにまとめて構いません。1つの段落の中身は原則1つのナレッジにまとめます。\n\n`
-      : `11. このメモは段落が1つです。ナレッジは原則【1件】にまとめてください（明確に無関係な複数トピックが混在する場合のみ分割可）。\n\n`) +
-    `形式（JSONのみ、コードブロック不要）:\n` +
+      ? `11. このメモはユーザーが空行で ${paragraphCount} 個の段落に区切っています。空行は話題の区切りの目安なので、原則として段落ごとに別のナレッジにしてください。ただし複数の段落が明らかに同一主題の続きなら1つにまとめて構いません。1つの段落の中身は原則1つのナレッジにまとめます。\n`
+      : `11. このメモは段落が1つです。ナレッジは原則【1件】にまとめてください（明確に無関係な複数トピックが混在する場合のみ分割可）。\n`) +
+    `12. メモに書かれていないことを足さない。固有名詞・数値・言い回しはメモのまま残す\n` +
+    `   - summary はその主題を1〜2文で言い切った要約、details はメモに実際に書かれている個別のポイント\n\n` +
+    `【出力例】メモ:「明日9時に歯医者。あと家計簿アプリを自作したい。レシートを撮ってOCRで読ませたい」\n` +
+    `{"todos":[{"title":"歯医者に行く","startDate":"${tomorrow}","endDate":"","time":"09:00","tags":["健康"],"coinReward":20,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"家計簿アプリの自作","summary":"家計簿アプリを自分で作りたい","details":["レシートを撮影してOCRで読み取る"],"tags":["${IDEA_TAG}"],"coinReward":40}]}\n\n` +
+    `形式（JSONオブジェクトを1つだけ。説明文もコードブロックも書かない）:\n` +
     `{"todos":[{"title":"","startDate":"","endDate":"","time":"","tags":[],"coinReward":10,"recurring":"","recurringDay":null}],"ideas":[{"projectName":"","summary":"","details":[],"tags":[],"coinReward":20}]}\n\n` +
     `メモ:\n${text}`;
 
-  const tryParseJson = (res: string): ParseResult | null => {
-    const m = (res || '').match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try {
-      const parsed = JSON.parse(m[0]);
-      return {
-        todos: Array.isArray(parsed.todos) ? parsed.todos : [],
-        ideas: Array.isArray(parsed.ideas) ? parsed.ideas : [],
-      };
-    } catch { return null; }
+  const normOpt: NormalizeOpt = {
+    mode,
+    todoTags,
+    ideaTags,
+    existingNames: allBriefs.map(b => b.name),
+    todayStr: nowStr,
+  };
+  const toResult = (out: string): ParseResult | null => {
+    const obj = extractJsonObject(out);
+    if (!obj) return null;
+    const norm = normalizeParseResult(obj, normOpt);
+    return (norm.todos.length || norm.ideas.length) ? norm : null;
   };
 
   if (aiConfigured(cfg)) {
-    try {
-      const out = await aiText(cfg, prompt);
-      const parsed = tryParseJson(out);
-      if (parsed) return parsed;
-    } catch (e) {
-      console.warn('[AI] memo parse failed:', e);
+    // JSON として読めなかったときだけ、念押しして 1 回だけ再試行する。
+    // ここで諦めるとローカル解析（キーワード規則のみ）へ落ちて精度が大きく下がる。
+    const attempts = [prompt, `${prompt}\n\n※ 出力はJSONオブジェクト1つだけ。前置き・説明・コードブロックは書かないこと。`];
+    for (const p of attempts) {
+      try {
+        const r = toResult(await aiJson(cfg, p));
+        if (r) return r;
+      } catch (e: any) {
+        console.warn('[AI] memo parse failed:', e);
+        // キー不正・権限エラーは何度投げても同じなので即あきらめる
+        if (/no_api_key|401|403/.test(String(e?.message || e))) break;
+      }
     }
   }
 
@@ -2299,13 +2586,12 @@ async function parseMemoWithAi(text: string, existingProjects: string[] = [], cf
     | ((p: string) => Promise<string>) | undefined;
   if (claude) {
     try {
-      const out = await claude(prompt);
-      const parsed = tryParseJson(out);
-      if (parsed) return parsed;
-    } catch {}
+      const r = toResult(await claude(prompt));
+      if (r) return r;
+    } catch { /* ローカル解析へ */ }
   }
 
-  return localParseAll(text, existingProjects);
+  return localParseForMode(text, existingProjects, mode);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -3436,7 +3722,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
     setLoading(true);
     setLMsg(mode === 'todo' ? 'AI で TODO に変換中' : mode === 'idea' ? 'AI でナレッジに変換中' : 'AI で TODO とナレッジに自動分類中');
     try {
-      const result = await parseMemoToItems(text, existingProjects, aiCfg, mode, existingIdeaBriefs);
+      const result = await parseMemoToItems(text, existingProjects, aiCfg, mode, existingIdeaBriefs, customTags);
       const todos = result.todos || [];
       const ideas = result.ideas || [];
 
