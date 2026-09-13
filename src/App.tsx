@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.41.0';
+const APP_VERSION = '1.41.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -8393,7 +8393,7 @@ function SmartMemoApp() {
   // 愛称と機能名を 2 段で出していたが、5 タブぶん積むと下端が窮屈になり、
   // どちらを読めばよいのかも決まらなかった。
   // 愛称（にわ・書庫・ずかん）は各画面のタイトルとして本文側に残してある。
-  // 中央のメモボタンぶんの隙間も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
+  // 中央のメモボタンの位置も配列で持たせ、並びを変えるときに触る場所を 1 箇所にする。
   type NavItem = { key: Tab; label: string; Icon: React.FC<{ active: boolean }> };
   const navItems: (NavItem | 'memo-slot')[] = [
     { key: 'todo',     label: 'タスク',   Icon: IcoHomeNav },
@@ -8787,13 +8787,25 @@ function SmartMemoApp() {
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
       <div className="bottom-nav-wrapper">
-        <button className={`nav-center-memo${tab === 'memo' ? ' active' : ''}`} onClick={() => setTab('memo')} title="メモ入力">
-          <IcoPencilFab />
-          <span>メモ</span>
-        </button>
         <div className="bottom-nav" role="tablist" aria-label="画面の切り替え">
           {navItems.map(item => item === 'memo-slot'
-            ? <div key="memo-slot" className="nav-mic-slot" />
+            ? (
+              // メモはナビの 1 マスに収める。以前はナビの上に 30px はみ出す丸い
+              // ボタンで、にわの一覧やメモの主ボタンに被らないよう各画面の下端に
+              // 余白を足す必要があった。塗りの丸は残して主役であることは示す。
+              <button
+                key="memo"
+                type="button"
+                role="tab"
+                aria-selected={tab === 'memo'}
+                className={`nav-tab nav-memo${tab === 'memo' ? ' active' : ''}`}
+                onClick={() => setTab('memo')}
+                title="メモ入力"
+              >
+                <span className="nav-memo-ico"><IcoPencilFab /></span>
+                <span className="nav-label">メモ</span>
+              </button>
+            )
             : (
               <button
                 key={item.key}
