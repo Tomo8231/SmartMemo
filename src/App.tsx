@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.43.0';
+const APP_VERSION = '1.43.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1310,7 +1310,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '紺色のまんまるフクロウ。夜が深くなるほど目が冴える夜型で、集中モードのタイマーが動いている間はじっと見守ってくれる。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: YK_SPRITES,
   },
@@ -1319,7 +1319,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '殻がメモ帳柄のカタツムリ。終わらなかったタスクの上をゆっくり這い、遅くても必ず目的地にたどり着く。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: NR_SPRITES,
   },
@@ -1328,7 +1328,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '8本の足でそれぞれ別のペンを握る赤いタコ。同時に8つ進められると言い張るが、たいてい全部が中途半端になる。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: TK_SPRITES,
   },
@@ -1337,7 +1337,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '銀色のクリップに宿った付喪神。散らばったメモをパチンと留めてまとめる、几帳面な性格。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: TP_SPRITES,
   },
@@ -1346,7 +1346,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '頭に鉛筆をさしたビーバー。大きな仕事を小枝サイズにかじり分けて、少しずつ積み上げていく職人。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: DM_SPRITES,
   },
@@ -1355,7 +1355,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '枝にぶら下がったまま眠るナマケモノ。「あとでやる」が口ぐせだが、小さなタスクが片付くたびに少しずつ目が開く。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: AT_SPRITES,
   },
@@ -1364,7 +1364,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '夜空色の小さなクジラ。消されたメモや忘れられたアイデアを大きな口で飲み込み、呼ばれると潮と一緒に返してくれる。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: WK_SPRITES,
   },
@@ -1373,7 +1373,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '炎のような羽を持つ小鳥。三日坊主で途切れた習慣の灰から生まれ、何度途切れてもそのたびに大きく羽ばたく。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: FK_SPRITES,
   },
@@ -1382,7 +1382,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '書庫の奥から発掘された、いにしえの知恵の番人。知識が1つ増えるたびに体の模様が1本増えるらしい。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: HN_SPRITES,
   },
@@ -1391,7 +1391,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '白くてもちもちの月のうさぎ。きねでカレンダーの日付をぺったんとついて回り、満月の日だけ体が少し光る。',
-    monW: 65, monH: 60,
+    monW: 65, monH: 70,
     spriteFacing: 'l',
     sprites: TM_SPRITES,
   },
