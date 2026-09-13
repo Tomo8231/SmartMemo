@@ -36,14 +36,15 @@ def main():
         if not (os.path.exists(walk_p) and os.path.exists(act_p)):
             missing.append(cid)
             continue
+        # 翼やエフェクトが隣のマスに近いと帯の数が合わない。そのときはマス目を等分して切り出す
+        # （slice_sheet が等分に切り替える）ので、飛ばさずに報告だけする
         problems = []
         if not grid_ok(walk_p, 2, 3):
-            problems.append('walk のマス目')
+            problems.append('walk')
         if not grid_ok(act_p, 2, 2):
-            problems.append('actions のマス目')
+            problems.append('actions')
         if problems:
-            bad.append(f'{cid}（{" / ".join(problems)}）')
-            continue
+            bad.append(f'{cid}（{" / ".join(problems)} を等分で切り出し）')
         frames, _, _ = lp.build(cid)
         built.append(cid)
         bg = (246, 244, 240, 255)
@@ -69,11 +70,11 @@ def main():
         for r, row in enumerate(chunk):
             sheet.alpha_composite(row, (0, r * row.height))
         sheet.save(os.path.join(lp.PREVIEW, f'overview_{n // 12}.png'))
-    print(f'作り直した {len(built)} 体 / 画像がまだない {len(missing)} 体 / マス目が合わず飛ばした {len(bad)} 体')
+    print(f'作り直した {len(built)} 体 / 画像がまだない {len(missing)} 体 / 等分で切り出した {len(bad)} 体')
     if missing:
         print('まだない:', ' '.join(missing))
     if bad:
-        print('飛ばした:', ' / '.join(bad))
+        print('等分:', ' / '.join(bad))
 
 
 if __name__ == '__main__':
