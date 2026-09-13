@@ -1233,6 +1233,9 @@
     }
     .playground-meter-aff { background: var(--accent); }
     .playground-meter-hun { background: linear-gradient(90deg, #ffc107, #ff9800); }
+    .playground-meter-evo { background: linear-gradient(90deg, #7ad3a8, #4aa3e0); }
+    /* 進化ゲージがたまる条件。ゲージの直下に小さく添える */
+    .playground-evo-hint { font-size: 11px; line-height: 1.5; color: var(--ink-mute); text-align: center; margin: -2px 0 6px; }
     .playground-meter-val {
       font-size: 11px; font-weight: 600; color: #5a3818;
       text-align: right; font-variant-numeric: tabular-nums;
