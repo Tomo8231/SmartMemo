@@ -864,28 +864,19 @@
       letter-spacing: .5px;
       z-index: 1;
     }
+    /* 「にわに出す」は primary 幅いっぱい（4.5）。お出かけ中はもう押せないので
+       無効の primary（不透明度 40%）で示す（3.3）。ホバーの薄緑（#f1f8e9）は
+       アクセント色を一掃したときの取りこぼしだった。 */
     .playground-btn-active {
-      width: 100%; padding: 10px 12px; margin-top: 6px;
-      border: 2px solid var(--accent);
-      background: #fff;
-      color: var(--accent);
-      font-size: 12px; font-weight: 700;
-      border-radius: 12px; cursor: pointer; font-family: inherit;
-      transition: transform .08s, background .12s;
+      width: 100%; height: var(--h-btn); padding: 0 12px; margin-top: 6px;
+      border: none; background: var(--accent); color: var(--accent-text);
+      font-size: 14px; font-weight: 700;
+      border-radius: var(--r-full); cursor: pointer; font-family: inherit;
+      transition: transform .08s, opacity .12s;
     }
-    .playground-btn-active:active:not(:disabled) { transform: scale(.98); }
-    .playground-btn-active:hover:not(:disabled) { background: #f1f8e9; }
-    .playground-btn-active.onscreen {
-      background: var(--accent); color: #fff;
-      cursor: default;
-    }
-    .playground-btn-active:disabled { cursor: default; }
-    .app.dark .playground-btn-active {
-      background: var(--accent-light); color: var(--accent);
-    }
-    .app.dark .playground-btn-active.onscreen {
-      background: var(--accent); color: #fff;
-    }
+    .playground-btn-active:active:not(:disabled) { transform: translateY(1px); opacity: .88; }
+    .playground-btn-active.onscreen,
+    .playground-btn-active:disabled { opacity: .4; cursor: default; }
 
     /* あそびば（メモモンずかん）モーダルの閉じるボタン。
        背景がクリーム色で明るいので、濃い色にして視認できるようにする。 */
@@ -1254,20 +1245,25 @@
       display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
       margin-top: 6px;
     }
+    /* なでる=primary／餌をあげる=ghost（4.5）。2 つとも同じ塗りだと、
+       どちらが「いつもの操作」なのかが読めなかった。 */
     .playground-btn {
-      padding: 11px 8px; border: none; border-radius: 12px;
-      font-size: 13px; font-weight: 700; color: #fff;
+      height: var(--h-btn-lg); padding: 0 8px;
+      border: 1px solid transparent; border-radius: var(--r-full);
+      font-size: 14px; font-weight: 700; line-height: 1.2;
       cursor: pointer; font-family: inherit;
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
       transition: transform .08s, opacity .12s;
     }
-    .playground-btn:active:not(:disabled) { transform: scale(.96); }
-    .playground-btn:disabled { opacity: .5; cursor: not-allowed; filter: saturate(.6); }
+    .playground-btn:active:not(:disabled) { transform: translateY(1px); opacity: .88; }
+    .playground-btn:disabled { opacity: .4; cursor: not-allowed; }
     .playground-btn-sub {
+      display: inline-flex; align-items: center; gap: 2px;
       font-size: 10px; font-weight: 500; opacity: .9;
     }
-    .playground-btn-pet  { background: var(--accent); }
-    .playground-btn-feed { background: var(--accent); }
+    .playground-btn-sub svg { width: 11px; height: 11px; }
+    .playground-btn-pet  { background: var(--accent); color: var(--accent-text); }
+    .playground-btn-feed { background: var(--surface); color: var(--ink); border-color: var(--rule-strong); }
 
     /* Settings entry button */
     .playground-open-btn {
@@ -1487,15 +1483,27 @@
     }
     .nav-center-mic:active { transform:translateX(-50%) scale(.91); box-shadow:0 2px 8px rgba(0,0,0,.14); }
     /* Copy button for TODO/Idea items */
+    /* 行から外す小さな ✕（AI 反映の確認シート・書庫カード）。
+       タスク行から外したとき（v1.40.3）に基本の見た目ごと消してしまい、
+       ここだけ素のボタン（灰色の地と枠）で出ていた。 */
+    .todo-del {
+      width:32px; height:32px; flex:none; position:relative;
+      display:flex; align-items:center; justify-content:center;
+      border:none; border-radius:var(--r-full);
+      background:transparent; color:var(--ink-faint); cursor:pointer;
+      transition:background .12s, color .12s;
+    }
+    .todo-del:hover { background:var(--surface-sunk); color:var(--danger); }
+    .todo-del svg { width:16px; height:16px; }
     .item-copy-btn {
       width:24px; height:24px; border:1px solid var(--rule); background:var(--surface);
       border-radius:var(--r-sm); cursor:pointer;
-      display:flex; align-items:center; justify-content:center; color:#b0b0ba;
+      display:flex; align-items:center; justify-content:center; color:var(--ink-mute);
       flex-shrink:0; transition:background .12s, color .12s;
       /* 見た目は 24px のまま、タップ判定だけ広げる（下の ::after） */
       position:relative;
     }
-    .item-copy-btn:hover { background:#f0f5ff; color:#2e7bef; border-color:#cce0ff; }
+    .item-copy-btn:hover { background:var(--surface-sunk); color:var(--ink); border-color:var(--rule-strong); }
     .nav-tab .nav-icon { display:flex; }
     .nav-tab .nav-icon svg { width:24px; height:24px; transition:all 0.2s; }
     /* アクティブは色ではなく濃さ（--ink + 700）で示す。
@@ -1961,37 +1969,51 @@
     .modal-title-row .modal-title { margin-bottom:16px; flex:1; min-width:0; }
     .modal-title-delete {
       background:transparent; border:none; cursor:pointer;
-      padding:6px; border-radius:8px; color:#a0a09c;
+      padding:6px; border-radius:var(--r-md); color:var(--ink-mute);
       display:flex; align-items:center; justify-content:center;
       font-family:inherit; margin:-6px -6px 0 0;
       transition:background .12s, color .12s;
     }
-    .modal-title-delete:hover { background:#ffeae9; color:#ff4d4f; }
-    .modal-title-delete:active { background:#ffd6d4; }
-    .modal-field { margin-bottom:12px; }
-    .modal-field label { display:block; font-size:var(--fs-xs); font-weight:600; color:#a0a09c; text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+    .modal-title-delete:hover, .modal-title-delete:active { background:var(--danger-bg); color:var(--danger); }
+    /* ラベル 12px・入力 44px（4.8）。以前は 11px の大文字化ラベルと
+       36px 前後の入力で、指で狙うには小さく、欄ごとに高さも違っていた。 */
+    .modal-field { margin-bottom:14px; }
+    .modal-field label { display:block; font-size:12px; font-weight:600; color:var(--ink-mute); margin-bottom:6px; }
     .modal-field input, .modal-field select {
-      width:100%; padding:9px 11px; border:1px solid #e0e0de; border-radius:8px;
-      font-size:var(--fs-base); color:#1a1a18; background:#fff; font-family:inherit; outline:none;
+      width:100%; height:var(--h-btn); padding:0 12px;
+      border:1px solid var(--rule-strong); border-radius:var(--r-md);
+      font-size:var(--fs-base); color:var(--ink); background:var(--surface); font-family:inherit; outline:none;
+    }
+    /* 「期間にする」。入力欄の下に置く控えめなテキストリンク */
+    .modal-link {
+      display:inline-flex; align-items:center; min-height:32px; margin-top:4px; padding:0 2px;
+      background:none; border:none; cursor:pointer; font-family:inherit;
+      font-size:12px; font-weight:700; color:var(--accent);
     }
     .modal-field input:focus, .modal-field select:focus { border-color:var(--accent); }
     .modal-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
     .modal-tags { display:flex; flex-wrap:wrap; gap:6px; }
+    /* 繰り返し・曜日・タグの選択肢は、にわのフィルタと同じチップの型（3.4）。
+       角丸 6px の小さな四角だったため、同じ「選ぶ」操作なのに画面ごとに
+       形が違って見えていた。 */
     .modal-tag {
-      padding:5px 10px; border-radius:6px; border:1px solid #e0e0de;
-      font-size:var(--fs-xs); font-weight:500; cursor:pointer; background:#fff; color:#4a4a48;
-      transition:all .12s;
+      display:inline-flex; align-items:center; justify-content:center;
+      height:var(--h-chip); padding:0 12px;
+      border-radius:var(--r-full); border:1px solid var(--rule-strong);
+      font-size:12px; font-weight:600; cursor:pointer;
+      background:var(--surface); color:var(--ink-soft); font-family:inherit;
+      transition:background .12s, color .12s, border-color .12s;
     }
-    .modal-tag.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
-    .modal-recurring-note { margin-top:6px; font-size:var(--fs-xs); color:#a0a09c; }
+    .modal-tag.sel { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:700; }
+    .modal-recurring-note { margin-top:6px; font-size:var(--fs-xs); color:var(--ink-mute); }
     .modal-day-picker { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
     .modal-day-btn {
-      width:28px; height:28px; border-radius:6px; border:1px solid #e0e0de;
-      background:#fff; cursor:pointer; font-size:11px; font-weight:500;
-      color:#4a4a48; font-family:inherit; transition:all .12s;
+      width:30px; height:30px; border-radius:50%; border:1px solid var(--rule-strong);
+      background:var(--surface); cursor:pointer; font-size:11px; font-weight:600;
+      color:var(--ink-soft); font-family:inherit; transition:background .12s, color .12s, border-color .12s;
       display:flex; align-items:center; justify-content:center;
     }
-    .modal-day-btn.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .modal-day-btn.sel { background:var(--accent); border-color:var(--accent); color:var(--accent-text); }
     /* フッターは「キャンセル(ghost)」「保存(primary)」の 2 分割（3.7）。
        以前は保存が flex:2 で幅が倍あり、シートごとに比率も違っていた。
        押し間違えたときの取り返しが利かないのは「保存」ではなく
@@ -2025,13 +2047,13 @@
       to { transform:translateY(120%); opacity:0; }
     }
     .confirm-header { margin-bottom:12px; }
-    .confirm-title { font-size:15px; font-weight:700; letter-spacing:-.3px; margin-bottom:4px; }
+    .confirm-title { font-size:17px; font-weight:700; letter-spacing:-.3px; margin-bottom:4px; color:var(--ink); }
     .confirm-sub   { font-size:var(--fs-xs); color:var(--ink-mute); line-height:1.55; }
     .confirm-list  { flex:1; overflow-y:auto; min-height:60px; padding:2px 0 6px; }
     .confirm-list::-webkit-scrollbar { display:none; }
     .confirm-actions {
       display:flex; gap:8px; margin-top:12px;
-      border-top:1px solid #ebebea; padding-top:14px;
+      border-top:1px solid var(--rule); padding-top:14px;
     }
     .modal-save:disabled { opacity:.4; cursor:not-allowed; }
     .confirm-section-head {
@@ -2040,13 +2062,14 @@
       margin:8px 2px 6px;
     }
     .confirm-section-head:first-child { margin-top:0; }
-    .merge-indicator {
-      display:inline-block; font-size:10px; color:var(--accent);
-      font-weight:600; margin-top:3px; margin-right:6px;
+    /* ナレッジの概要は 2 行目に 1 行だけ。長文で行の高さが揃わなくなるのを防ぐ */
+    .confirm-idea-summary {
+      font-size:var(--fs-xs); color:var(--ink-mute); margin-top:2px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
     }
     .modal-field textarea {
-      width:100%; padding:9px 11px; border:1px solid #e0e0de; border-radius:8px;
-      font-size:var(--fs-base); color:#1a1a18; background:#fff; font-family:inherit;
+      width:100%; padding:10px 12px; border:1px solid var(--rule-strong); border-radius:var(--r-md);
+      font-size:var(--fs-base); color:var(--ink); background:var(--surface); font-family:inherit;
       outline:none; resize:vertical; min-height:84px; line-height:1.55;
     }
     .modal-field textarea:focus { border-color:var(--accent); }
@@ -2165,12 +2188,15 @@
       padding-right:24px;
     }
     .ts-item-tags { display:flex; flex-wrap:wrap; gap:4px; }
+    /* TODO セットのタグ選択もチップの型。選択を薄い塗り（accent-light）で
+       示すと primary とも ghost とも付かない第 3 の見た目になる（3.3）。 */
     .ts-tag-btn {
-      padding:2px 8px; border-radius:6px; border:1px solid #e0e0de;
-      background:#fff; color:#6a6a68; font-size:var(--fs-xs); cursor:pointer;
-      font-family:inherit; transition:background .12s, color .12s;
+      display:inline-flex; align-items:center; height:26px; padding:0 10px;
+      border-radius:var(--r-full); border:1px solid var(--rule-strong);
+      background:var(--surface); color:var(--ink-soft); font-size:var(--fs-xs); font-weight:600; cursor:pointer;
+      font-family:inherit; transition:background .12s, color .12s, border-color .12s;
     }
-    .ts-tag-btn.sel { background:var(--accent-light); color:var(--accent); border-color:var(--accent); }
+    .ts-tag-btn.sel { background:var(--accent); color:var(--accent-text); border-color:var(--accent); }
     .ts-item-del {
       position:absolute; top:6px; right:8px;
       background:none; border:none; color:#b0b0ba; font-size:13px;
@@ -3117,9 +3143,6 @@
     .app.dark .mode-btn:not(.active) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-toggle { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .todo-item { border-color:#2e2e32; }
-    .app.dark .todo-del { background:#1e1e21; border-color:#2e2e32; color:#4a4a48; }
-    .app.dark .todo-coin-reward { color:#ffd54f; background:rgba(255,213,79,.12); }
-    .app.dark .item-copy-btn { background:#1e1e21; border-color:#2e2e32; color:#5a5a58; }
     /* 最下段の 3 つは .u-btn が primary / ghost / icon を決めるので、
        ダーク用の上書きは置かない。ここで background:transparent を
        当てていたせいで、ダークだけ「タスクを追加」の塗りが消えていた。 */
@@ -3130,10 +3153,6 @@
     .app.dark .ts-del-btn { background:#1e1e21; }
     .app.dark .ts-create-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-item-row { background:#28282c; border-color:#3e3e42; }
-    /* ダークの基本色。選択状態は .ts-tag-btn.sel が決めるので、ここでは除外する。
-       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
-       ダークだけ選択状態が表示されなくなる。 */
-    .app.dark .ts-tag-btn:not(.sel) { background:#2a2a2e; border-color:#3e3e42; color:#9a9a98; }
     .app.dark .ts-add-btn { border-color:#3e3e42; background:transparent; }
     .app.dark .ts-picker-row { border-color:#2e2e32; }
     .app.dark .ts-picker-row.sel { background:rgba(var(--accent-rgb,212,98,42),.18); }
@@ -3158,10 +3177,6 @@
     .app.dark .memo-att-file-chip { background:#1a2030; border-color:#2a3a50; }
     .app.dark .memo-att-file-name { color:#7ab0ff; }
     .app.dark .modal-att-toast { background:#2d1515; border-color:#4a2020; color:#ff8080; }
-    /* ダークの基本色。選択状態は .modal-day-btn.sel が決めるので、ここでは除外する。
-       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
-       ダークだけ選択状態が表示されなくなる。 */
-    .app.dark .modal-day-btn:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
     .app.dark .cal-today-btn { background:#1e1e21; border-color:#2e2e32; }
     .app.dark .section-head-label { color:#5a5a58; }
     .app.dark .undated-arrow { color:#5a5a58; }
@@ -3195,25 +3210,7 @@
     .app.dark .tag-add-row input { background:#28282c; color:#f0f0ee; border-color:#2e2e32; }
     .app.dark .about-card {  border-color:#2e2e32; }
     .app.dark .modal-backdrop { background:rgba(0,0,0,.6); }
-    .app.dark .modal-sheet { background:#1e1e21; }
-    .app.dark .modal-handle { background:#3a3a3e; }
-    .app.dark .modal-title { color:#f0f0ee; }
-    .app.dark .modal-field label { color:#6a6a68; }
-    .app.dark .modal-field input, .app.dark .modal-field select, .app.dark .modal-field textarea {
-      background:#28282c; color:#f0f0ee; border-color:#2e2e32;
-    }
-    /* ダークの基本色。選択状態は .modal-tag.sel が決めるので、ここでは除外する。
-       :not() を付けないと (0,3,0) がモディファイア (0,2,0) を上回り、
-       ダークだけ選択状態が表示されなくなる。 */
-    .app.dark .modal-tag:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
-    .app.dark .modal-cancel {  border-color:#2e2e32; color:#f0f0ee; }
-    .app.dark .modal-delete { background:#c0392b; }
-    .app.dark .modal-title-delete { color:#6a6a68; }
-    .app.dark .modal-title-delete:hover { background:rgba(255,77,79,.18); color:#ff6b6d; }
     .app.dark .modal-title-delete:active { background:rgba(255,77,79,.28); }
-    .app.dark .confirm-sheet { background:#1e1e21; }
-    .app.dark .confirm-title { color:#f0f0ee; }
-    .app.dark .confirm-actions { border-color:#2e2e32; }
     .app.dark .gacha-modal { background:linear-gradient(160deg,#0e0e1c 0%,#0b1428 55%,#071a38 100%); }
     .app.dark .todo-item.overdue { border-color:#5a1a14; background:#1e1210; }
     .app.dark .todo-item.overdue .todo-title { color:#e57373; }
@@ -3920,6 +3917,7 @@
     .lib-tt h1 { font-size:18px; font-weight:800; color:var(--ink); }
     .lib-tt p { font-size:11.5px; color:var(--ink-mute); font-weight:600; margin-top:2px; }
     .lib-ask-btn {
+      display:inline-flex; align-items:center; gap:5px;
       border:none; border-radius:var(--r-full); flex:none;
       background:var(--accent); color:var(--accent-text);
       font-family:inherit; font-weight:800; font-size:12px; padding:9px 13px;
@@ -4144,7 +4142,12 @@
       justify-content:space-between; box-shadow:0 1px 0 rgba(0,0,0,.05); z-index:20; flex:none;
     }
     .fm-b { font-weight:800; font-size:16px; }
-    .fm-coin { background:var(--fm-soft); border-radius:99px; padding:5px 11px; font-weight:800; font-size:13px; color:var(--fm-accent); }
+    .fm-coin {
+      display:inline-flex; align-items:center; gap:4px; height:30px; padding:0 10px;
+      background:var(--surface); border:1px solid var(--rule); border-radius:var(--r-full);
+      font-weight:700; font-size:13px; color:var(--ink); font-variant-numeric:tabular-nums;
+    }
+    .fm-coin svg { width:14px; height:14px; }
     .fm-main { flex:1; overflow-y:auto; padding:14px 14px 28px; min-height:0; }
 
     .fm-now { background:#fff; border-radius:22px; padding:18px 18px 16px; position:relative; overflow:hidden; box-shadow:0 3px 14px rgba(60,90,130,.10); }
@@ -4181,12 +4184,19 @@
     .fm-intr { margin-top:12px; background:#fff; border-radius:18px; padding:12px; box-shadow:0 1px 4px rgba(60,90,130,.07); }
     .fm-ilabel { font-size:11.5px; font-weight:800; color:var(--fm-sub); margin:0 2px 8px; }
     .fm-irow { display:flex; gap:8px; }
-    .fm-itext { flex:1; border:2px solid #E7EBEF; border-radius:13px; padding:12px 13px; font-family:inherit; font-size:14.5px; font-weight:700; outline:none; color:var(--fm-ink); min-width:0; }
-    .fm-itext:focus { border-color:var(--fm-accent); }
-    .fm-igo { border:none; border-radius:13px; background:#3A3532; color:#fff; font-family:inherit; font-weight:800; font-size:14px; padding:0 18px; cursor:pointer; white-space:nowrap; }
-    .fm-igo:disabled { opacity:.3; }
-    .fm-ichips { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
-    .fm-ichip { font-size:11.5px; font-weight:800; background:#F2F5F9; color:#6B7684; border:none; border-radius:99px; padding:6px 11px; cursor:pointer; font-family:inherit; }
+    .fm-itext {
+      flex:1; min-width:0; height:var(--h-btn); padding:0 12px;
+      border:1px solid var(--rule-strong); border-radius:var(--r-md);
+      background:var(--surface); color:var(--ink);
+      font-family:inherit; font-size:14.5px; font-weight:600; outline:none;
+    }
+    .fm-itext:focus { border-color:var(--accent); }
+    .fm-igo {
+      height:var(--h-btn); padding:0 18px; border:none; border-radius:var(--r-full);
+      background:var(--accent); color:var(--accent-text);
+      font-family:inherit; font-weight:700; font-size:14px; cursor:pointer; white-space:nowrap;
+    }
+    .fm-igo:disabled { opacity:.4; cursor:not-allowed; }
 
     .fm-susp { width:100%; margin-top:10px; background:#FFF3E4; border:2px dashed #F0CFA4; border-radius:16px; padding:11px 13px; display:flex; align-items:center; gap:10px; cursor:pointer; font-family:inherit; text-align:left; }
     .fm-susp-t { flex:1; min-width:0; }
@@ -4220,3 +4230,25 @@
 
     .fm-toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(80px); background:#3A3532; color:#fff; font-size:13px; font-weight:700; border-radius:14px; padding:11px 18px; z-index:1010; transition:transform .34s cubic-bezier(.2,1.3,.4,1); max-width:86%; text-align:center; }
     .fm-toast.on { transform:translateX(-50%) translateY(0); }
+
+    /* 絵文字から線画アイコンへ差し替えた部品の寸法（3.9） */
+    .lib-ask-btn svg { width:14px; height:14px; flex:none; }
+    .gw-focus-btn svg { width:15px; height:15px; flex:none; }
+    .lib-search > svg { flex:none; color:var(--ink-mute); }
+
+    /* 集中モードの割り込み候補。形はチップ（3.4）と同じ */
+    .fm-ichips { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
+    .fm-ichip {
+      display:inline-flex; align-items:center; height:var(--h-chip); padding:0 12px;
+      border:1px solid var(--rule-strong); border-radius:var(--r-full);
+      background:var(--surface); color:var(--ink-soft);
+      font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap;
+    }
+    .fm-ichip:active { background:var(--surface-sunk); }
+    .fm-susp-ico { font-size:13px; letter-spacing:-1px; color:var(--ink-soft); }
+
+    /* 左右に余白を持つ全画面（メモモン画面 18px・ガチャ 20px）では、
+       共通ヘッダーが余白の内側に収まって端まで届かなかった。
+       余白と同じだけ外へ出して、他の全画面と同じく画面幅いっぱいにする。 */
+    .playground-modal > .fs-header { margin:0 -18px; width:calc(100% + 36px); }
+    .gacha-modal > .fs-header      { margin:0 -20px; width:calc(100% + 40px); }

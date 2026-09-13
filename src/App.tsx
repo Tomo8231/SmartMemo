@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.40.9';
+const APP_VERSION = '1.40.10';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -956,7 +956,7 @@ const DOW = ['日','月','火','水','木','金','土'];
 //   今日        → 10:00 ／ 終日
 //   今日以外    → 8/15 10:00 ／ 8/15
 // 「終日」だけは弱い色で出す（呼び出し側で is-empty を見る）。
-function formatTodoTime(t: Todo, todayStr: string): { text: string; muted: boolean } {
+function formatTodoTime(t: { startDate?: string; time?: string }, todayStr: string): { text: string; muted: boolean } {
   const d = t.startDate;
   if (!d) return t.time ? { text: t.time, muted: false } : { text: '終日', muted: true };
   const md = `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}`;
@@ -2330,6 +2330,17 @@ const IcoLink = () => (
     <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
   </svg>
 );
+const IcoTimer = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/>
+  </svg>
+);
+const IcoSearch = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+);
+const IcoClose = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+);
 const IcoHistory = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
@@ -2784,6 +2795,11 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onDuplicate, onClose
   const [tags,        setTags]        = useState<string[]>(todo.tags || []);
   const [recurring,   setRecurring]   = useState<RecurringVal | ''>((todo as any).recurring || '');
   const [recurringDay, setRecurringDay] = useState<number | undefined>((todo as any).recurringDay);
+  // 終了日は既定で閉じる（4.8）。期間を持つタスクは少数で、ほとんどは
+  // 開始日と同じ日付が入っているだけなのに、欄が 2 つ並ぶと「両方
+  // 埋めなければならない」ように見えていた。繰り返しを選んだときは
+  // 展開範囲に効くので自動で開く。
+  const [showEnd, setShowEnd] = useState(!!todo.endDate && todo.endDate !== todo.startDate);
   const [attachments, setAttachments] = useState<Attachment[]>((todo as any).attachments || []);
   const [attToast,    setAttToast]    = useState('');
   const DOW_LABELS = ['日','月','火','水','木','金','土'];
@@ -2795,6 +2811,8 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onDuplicate, onClose
     onSave({ ...todo, title: title.trim(), startDate, endDate, time, tags, recurring: recurring || undefined, recurringDay: recurring ? recurringDay : undefined, attachments: attachments.length ? attachments : undefined });
     onClose();
   }
+
+  const endVisible = showEnd || !!recurring;
 
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -2821,23 +2839,32 @@ function EditModal({ todo, mode = 'edit', onSave, onDelete, onDuplicate, onClose
           <label>タイトル</label>
           <input value={title} onChange={e => setTitle(e.target.value)} placeholder="タスク名" />
         </div>
-        <div className="modal-row">
+        <div className={endVisible ? 'modal-row' : undefined}>
           <div className="modal-field">
-            <label>開始日</label>
+            <label>{endVisible ? '開始日' : '日付'}</label>
             <input type="date" value={startDate} onChange={e => {
               const sd = e.target.value;
               setStartDate(sd);
-              if (endDate && sd > endDate) setEndDate(sd);
+              // 終了日を閉じているあいだは 1 日だけのタスクとして扱い、終了日を
+              // 開始日に追従させる。見えない欄だけが古い日付のまま残ると、
+              // 気づかないうちに期間タスクになってしまう。
+              if (!endVisible) { if (endDate) setEndDate(sd); }
+              else if (endDate && sd > endDate) setEndDate(sd);
             }} />
+            {!endVisible && (
+              <button type="button" className="modal-link" onClick={() => setShowEnd(true)}>期間にする</button>
+            )}
           </div>
-          <div className="modal-field">
-            <label>終了日</label>
-            <input type="date" value={endDate} onChange={e => {
-              const ed = e.target.value;
-              setEndDate(ed);
-              if (startDate && ed < startDate) setStartDate(ed);
-            }} />
-          </div>
+          {endVisible && (
+            <div className="modal-field">
+              <label>終了日</label>
+              <input type="date" value={endDate} onChange={e => {
+                const ed = e.target.value;
+                setEndDate(ed);
+                if (startDate && ed < startDate) setStartDate(ed);
+              }} />
+            </div>
+          )}
         </div>
         <div className="modal-field">
           <label>繰り返し</label>
@@ -3073,6 +3100,7 @@ function ConfirmSheet({
   const [editingTodo, setEditingTodo] = useState<any>(null);
   const [editingIdea, setEditingIdea] = useState<any>(null);
   const total = pending.todos.length + pending.ideas.length;
+  const todayStr = localDateStr(new Date());
 
   return (
     <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
@@ -3088,31 +3116,29 @@ function ConfirmSheet({
           {total === 0 && <div className="todo-empty">追加するアイテムがありません</div>}
 
           {pending.todos.length > 0 && <div className="confirm-section-head">TODO（{pending.todos.length}）</div>}
-          {pending.todos.map(t => (
-            <div key={t.id} className="todo-item">
-              <div className="todo-body" onClick={() => setEditingTodo(t)}>
-                <div className="todo-title">{t.title}</div>
-                <div className="todo-meta">
-                  {t.startDate && (
-                    <span className="todo-date-str">
-                      <IcoCalSm />
-                      {t.startDate}{t.endDate && t.endDate !== t.startDate ? ` — ${t.endDate}` : ''}{t.time ? `  ${t.time}` : ''}
-                    </span>
-                  )}
-                  {(t as any).recurring && (
-                    <span className="tag-pill" style={{ background: '#e8f4fd', color: '#1565c0' }}>
-                      ↻ {(t as any).recurring === 'daily' ? '毎日' : (t as any).recurring === 'weekly' ? '毎週' : (t as any).recurring === 'biweekly' ? '隔週' : '毎月'}
-                    </span>
-                  )}
-                  {(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
-                  {t.coinReward != null && (
-                    <span className="todo-coin-reward">🪙 +{t.coinReward}</span>
-                  )}
+          {/* 抽出結果の行は、にわのタスク行と同じ 56px の型にする（4.2）。
+              ここで ISO 形式の日付を出していると、確認した見た目と
+              追加後の見た目が違って「別物が入った」ように見えていた。 */}
+          {pending.todos.map(t => {
+            const time = formatTodoTime(t, todayStr);
+            const rec = (t as any).recurring;
+            return (
+              <div key={t.id} className="todo-item">
+                <div className="todo-body" onClick={() => setEditingTodo(t)}>
+                  <div className="todo-main">
+                    <span className="todo-title">{t.title}</span>
+                    {rec && (
+                      <span className="tag-pill">↻ {rec === 'daily' ? '毎日' : rec === 'weekly' ? '毎週' : rec === 'biweekly' ? '隔週' : '毎月'}</span>
+                    )}
+                    {(t.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
+                    {t.coinReward != null && <span className="tag-pill todo-coin-reward">+{t.coinReward}</span>}
+                    <span className={`todo-time${time.muted ? ' is-empty' : ''}`}>{time.text}</span>
+                  </div>
                 </div>
+                <button className="todo-del" onClick={() => onDeleteTodo(t.id)} aria-label="除外" title="除外"><IcoClose /></button>
               </div>
-              <button className="todo-del" onClick={() => onDeleteTodo(t.id)}>✕</button>
-            </div>
-          ))}
+            );
+          })}
 
           {pending.ideas.length > 0 && <div className="confirm-section-head">ナレッジ（{pending.ideas.length}）</div>}
           {pending.ideas.map(i => {
@@ -3120,14 +3146,14 @@ function ConfirmSheet({
             return (
               <div key={i.id} className="todo-item">
                 <div className="todo-body" onClick={() => setEditingIdea(i)}>
-                  <div className="todo-title">{i.projectName}</div>
-                  {isExisting && <span className="merge-indicator">既存『{i.projectName}』に追記</span>}
-                  <div className="todo-meta">
-                    {i.summary && <span className="todo-date-str" style={{ color: '#6a6a68' }}>{i.summary}</span>}
+                  <div className="todo-main">
+                    <span className="todo-title">{i.projectName}</span>
+                    {isExisting && <span className="tag-pill">既存に追記</span>}
                     {(i.tags || []).map(tag => <span key={tag} className="tag-pill">{tag}</span>)}
                   </div>
+                  {i.summary && <div className="confirm-idea-summary">{i.summary}</div>}
                 </div>
-                <button className="todo-del" onClick={() => onDeleteIdea(i.id)}>✕</button>
+                <button className="todo-del" onClick={() => onDeleteIdea(i.id)} aria-label="除外" title="除外"><IcoClose /></button>
               </div>
             );
           })}
@@ -3869,7 +3895,7 @@ function TodoSetEditModal({ set, allTodos, onSave, onClose, customTags }: {
           </div>
           <div className="ts-add-btns">
             <button className="ts-add-btn" onClick={addBlank}>＋ タスクを追加</button>
-            <button className="ts-add-btn ts-add-btn-pick" onClick={() => setShowPicker(true)}>📋 既存TODOから選択</button>
+            <button className="ts-add-btn ts-add-btn-pick" onClick={() => setShowPicker(true)}>既存TODOから選択</button>
           </div>
         </div>
         <div className="modal-actions">
@@ -4039,7 +4065,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
       <div className="gw-tree gw-nightdim">
         <div className="gw-leaf gw-l1" /><div className="gw-leaf gw-l2" /><div className="gw-leaf gw-l3" />
         <div className="gw-trunk" />
-        {streak > 0 && <div className="gw-wchip">🔥 {streak}日連続</div>}
+        {streak > 0 && <div className="gw-wchip">{streak}日連続</div>}
       </div>
       {signs.map((t, i) => (
         <div
@@ -4067,7 +4093,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
       })}
       {monLayer}
       {onOpenFocus && (
-        <button className="gw-focus-btn" onClick={onOpenFocus}>⏱ 集中モード</button>
+        <button className="gw-focus-btn" onClick={onOpenFocus}><IcoTimer />集中モード</button>
       )}
       <button
         className="gw-time-btn"
@@ -4748,7 +4774,7 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
           <AttachmentRow attachments={i.attachments || []} />
         </div>
         {!selectMode && <button className="item-copy-btn" onClick={e => { e.stopPropagation(); copyToClipboard(buildIdeaCopyText(i)); }} title="コピー"><IcoCopy /></button>}
-        {!selectMode && <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }}>✕</button>}
+        {!selectMode && <button className="todo-del" onClick={e => { e.stopPropagation(); onDelete(i.id); }} aria-label="削除" title="削除"><IcoClose /></button>}
       </div>
     );
   });
@@ -4812,13 +4838,13 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
       )}
       <div className="lib-head">
         <div className="lib-tt">
-          <h1>📖 メモモンの書庫</h1>
+          <h1>メモモンの書庫</h1>
           <p>メモから育った知識が、本になって並びます</p>
         </div>
         <div className="lib-head-btns">
-          <button className="lib-ask-btn" onClick={() => setShowChat(true)} aria-label="書庫にきく">💬 書庫にきく</button>
+          <button className="lib-ask-btn" onClick={() => setShowChat(true)} aria-label="書庫にきく"><IcoSparkle />書庫にきく</button>
           {searchedIdeas.length > 0 && !selectMode && (
-            <button className="lib-export-btn" onClick={enterSelectMode} aria-label="出力">📤 出力</button>
+            <button className="lib-export-btn" onClick={enterSelectMode} aria-label="出力">出力</button>
           )}
         </div>
       </div>
@@ -4826,14 +4852,14 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
         <div className="ideas-export-bar">
           <button className="ideas-export-all" onClick={toggleSelectAll}>{allSelected ? '全解除' : '全選択'}</button>
           <span className="ideas-export-count">{selectedIds.size} 件選択中</span>
-          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleCopySelected} title="コピー">📋 コピー</button>
-          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleDownloadSelected} title="Markdownで保存">⬇️ .md</button>
+          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleCopySelected} title="コピー">コピー</button>
+          <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleDownloadSelected} title="Markdownで保存">.md で保存</button>
           <button className="ideas-export-cancel" onClick={exitSelectMode} aria-label="やめる">✕</button>
         </div>
       )}
       <div className="lib-search-row">
         <div className="lib-search">
-          <span>🔍</span>
+          <IcoSearch />
           <input value={libQuery} onChange={e => setLibQuery(e.target.value)} placeholder="書庫をさがす" />
         </div>
         <button
@@ -5130,7 +5156,7 @@ function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg;
         <div className="knowchat-messages" ref={scrollRef}>
           {messages.length === 0 && !loading && (
             <div className="knowchat-empty">
-              <div>💡 ナレッジに基づいて質問できます。</div>
+              <div>ナレッジに基づいて質問できます。</div>
               <div className="knowchat-empty-examples">
                 <div>例: 「先月のメモのまとめを教えて」</div>
                 <div>例: 「○○について何かメモあった？」</div>
@@ -5202,7 +5228,7 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
     <div className="zukan-tab tab-pane">
       <div className="zukan-head">
         <div className="zukan-tt">
-          <h1>🥚 メモモンずかん</h1>
+          <h1>メモモンずかん</h1>
           <p>あつめたメモモン {ownedCount} / {MEMOMON_DEFS.length}</p>
         </div>
       </div>
@@ -5702,7 +5728,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
             ))}
           </div>
           <div className="settings-row-sub" style={{ marginTop: 8 }}>
-            🔒 その他のサウンドはガチャで当てると選べるようになります
+            その他のサウンドはガチャで当てると選べるようになります
           </div>
         </div>
       )}
@@ -6171,7 +6197,7 @@ function InsightsModal({ todos, ideas, trash, aiCfg, onClose }: {
       <div className="modal-sheet insights-sheet">
         <div className="modal-handle" />
         <div className="insights-header">
-          <span className="insights-title">🔍 AI 傾向分析</span>
+          <span className="insights-title">AI 傾向分析</span>
           <button className="insights-close" onClick={onClose}>✕</button>
         </div>
         <div className="insights-body">
@@ -6745,7 +6771,7 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                     const hasAny = !!(giftItem && count > 0);
                     return (
                       <div className="playground-gifts">
-                        <div className="playground-gifts-label">🎁 おくりもの</div>
+                        <div className="playground-gifts-label">おくりもの</div>
                         <div className="playground-gifts-slots">
                           {Array.from({ length: SLOTS }).map((_, i) => {
                             if (i === 0 && hasAny) {
@@ -6781,14 +6807,14 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
 
                 <div className="playground-actions">
                   <button className="playground-btn playground-btn-pet" onClick={handlePet}>
-                    ✋ なでる<span className="playground-btn-sub">+2 / +5🪙</span>
+                    なでる<span className="playground-btn-sub">+2 / +5<IcoCoin /></span>
                   </button>
                   <button
                     className="playground-btn playground-btn-feed"
                     onClick={() => setShowFoodPicker(true)}
                     disabled={hun >= 100}
                   >
-                    🍽️ 餌をあげる{hun >= 100 && <span className="playground-btn-sub">お腹いっぱい</span>}
+                    餌をあげる{hun >= 100 && <span className="playground-btn-sub">お腹いっぱい</span>}
                   </button>
                 </div>
                 {(() => {
@@ -6800,8 +6826,8 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                       disabled={isOnScreen}
                     >
                       {isOnScreen
-                        ? '🏠 にわにお出かけ中'
-                        : '🚪 この子を画面に出す'}
+                        ? 'にわにお出かけ中'
+                        : 'この子を画面に出す'}
                     </button>
                   );
                 })()}
@@ -7622,12 +7648,12 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
               </button>
               <button className="fm-bdone" disabled={!curTask} onClick={focusFinish}>完了</button>
             </div>
-            {restOn && <div className="fm-rest">☕ 50分たちました。少し休みませんか</div>}
+            {restOn && <div className="fm-rest">50分たちました。少し休みませんか</div>}
           </section>
 
           {/* 割り込み */}
           <section className="fm-intr">
-            <div className="fm-ilabel">⚡ 割り込みが入ったとき</div>
+            <div className="fm-ilabel">割り込みが入ったとき</div>
             <div className="fm-irow">
               <input
                 className="fm-itext" value={iText} placeholder="やることを入力してすぐ開始" enterKeyHint="go"
@@ -7644,14 +7670,14 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
           {/* 中断中 */}
           {suspTask && !suspTask.done && (
             <button className="fm-susp" onClick={() => focusStart(suspTask.id, true)}>
-              <span style={{ fontSize: 18 }}>⏸</span>
+              <span className="fm-susp-ico">❚❚</span>
               <span className="fm-susp-t"><b>{suspTask.title}</b><span>ここまで {fmtDur(accOf(suspTask.id))}</span></span>
               <span className="fm-susp-go">もどる</span>
             </button>
           )}
 
           {/* 一覧 */}
-          <div className="fm-seclabel">☀️ きょうのタスク {totalMs > 0 && <span className="fm-tot num">合計 {fmtDur(totalMs)}</span>}</div>
+          <div className="fm-seclabel">きょうのタスク {totalMs > 0 && <span className="fm-tot num">合計 {fmtDur(totalMs)}</span>}</div>
           <div className="fm-list">
             {ordered.length === 0 && <div className="fm-empty">きょうのタスクはありません</div>}
             {ordered.map(t => {
@@ -7679,7 +7705,7 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
           </div>
 
           {/* タイムライン */}
-          <div className="fm-seclabel">📊 きょうの内訳</div>
+          <div className="fm-seclabel">きょうの内訳</div>
           <div className="fm-tl">
             <div className="fm-tlbar">
               {totalMs === 0
