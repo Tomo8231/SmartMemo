@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.41.4';
+const APP_VERSION = '1.42.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -7914,94 +7914,99 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
           from="にわ" title="集中モード" onBack={onClose}
           right={<span className="fm-coin"><IcoCoin />{infinite ? '∞' : coins.toLocaleString('ja-JP')}</span>}
         />
+        {/* スマホでは縦に積み、PC（760px 以上）では左に計測、右に一覧の 2 列にする */}
         <main className="fm-main">
-          {/* 進行中 */}
-          <section className={`fm-now ${running ? 'running' : (curTask ? 'paused' : '')}`}>
-            <FocusMon state={running ? 'work' : 'rest'} />
-            <div className="fm-nowhead">
-              <span className="fm-badge"><span className="fm-dot" />{running ? '進行中' : (curTask ? '一時停止中' : '待機中')}</span>
-              {curTask && (curTask.tags || [])[0] && (
-                <span className="fm-nowtag" style={{ background: curColor + '22', color: curColor }}>{(curTask.tags || [])[0]}</span>
-              )}
-            </div>
-            <div className={`fm-nowtitle ${curTask ? '' : 'empty'}`}>{curTask ? curTask.title : '下から選ぶか、割り込みを入力'}</div>
-            <div className="fm-timerow">
-              <div className={`fm-timer num ${curTask ? '' : 'idle'}`}>{fmtDur(elapsedOf(curTask))}</div>
-            </div>
-            <div className="fm-acts">
-              <button className="fm-bpause" disabled={!curTask} onClick={() => running ? focusPause() : focusResume()}>
-                {running ? '一時停止' : '再開'}
+          <div className="fm-col fm-col-now">
+            {/* 進行中 */}
+            <section className={`fm-now ${running ? 'running' : (curTask ? 'paused' : '')}`}>
+              <FocusMon state={running ? 'work' : 'rest'} />
+              <div className="fm-nowhead">
+                <span className="fm-badge"><span className="fm-dot" />{running ? '進行中' : (curTask ? '一時停止中' : '待機中')}</span>
+                {curTask && (curTask.tags || [])[0] && (
+                  <span className="fm-nowtag" style={{ background: curColor + '22', color: curColor }}>{(curTask.tags || [])[0]}</span>
+                )}
+              </div>
+              <div className={`fm-nowtitle ${curTask ? '' : 'empty'}`}>{curTask ? curTask.title : 'タスクを選ぶか、割り込みを入力'}</div>
+              <div className="fm-timerow">
+                <div className={`fm-timer num ${curTask ? '' : 'idle'}`}>{fmtDur(elapsedOf(curTask))}</div>
+              </div>
+              <div className="fm-acts">
+                <button className="fm-bpause" disabled={!curTask} onClick={() => running ? focusPause() : focusResume()}>
+                  {running ? '一時停止' : '再開'}
+                </button>
+                <button className="fm-bdone" disabled={!curTask} onClick={focusFinish}>完了</button>
+              </div>
+              {restOn && <div className="fm-rest">50分たちました。少し休みませんか</div>}
+            </section>
+
+            {/* 割り込み */}
+            <section className="fm-intr">
+              <div className="fm-ilabel">割り込みが入ったとき</div>
+              <div className="fm-irow">
+                <input
+                  className="fm-itext" value={iText} placeholder="やることを入力してすぐ開始" enterKeyHint="go"
+                  onChange={e => setIText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}
+                />
+                <button className="fm-igo" disabled={!iText.trim()} onClick={() => { if (iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}>開始</button>
+              </div>
+              <div className="fm-ichips">
+                {chips.map(l => <button key={l} className="fm-ichip" onClick={() => addInterrupt(l)}>＋ {l}</button>)}
+              </div>
+            </section>
+
+            {/* 中断中 */}
+            {suspTask && !suspTask.done && (
+              <button className="fm-susp" onClick={() => focusStart(suspTask.id, true)}>
+                <span className="fm-susp-ico">❚❚</span>
+                <span className="fm-susp-t"><b>{suspTask.title}</b><span>ここまで {fmtDur(accOf(suspTask.id))}</span></span>
+                <span className="fm-susp-go">もどる</span>
               </button>
-              <button className="fm-bdone" disabled={!curTask} onClick={focusFinish}>完了</button>
-            </div>
-            {restOn && <div className="fm-rest">50分たちました。少し休みませんか</div>}
-          </section>
-
-          {/* 割り込み */}
-          <section className="fm-intr">
-            <div className="fm-ilabel">割り込みが入ったとき</div>
-            <div className="fm-irow">
-              <input
-                className="fm-itext" value={iText} placeholder="やることを入力してすぐ開始" enterKeyHint="go"
-                onChange={e => setIText(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}
-              />
-              <button className="fm-igo" disabled={!iText.trim()} onClick={() => { if (iText.trim()) { addInterrupt(iText.trim()); setIText(''); } }}>開始</button>
-            </div>
-            <div className="fm-ichips">
-              {chips.map(l => <button key={l} className="fm-ichip" onClick={() => addInterrupt(l)}>＋ {l}</button>)}
-            </div>
-          </section>
-
-          {/* 中断中 */}
-          {suspTask && !suspTask.done && (
-            <button className="fm-susp" onClick={() => focusStart(suspTask.id, true)}>
-              <span className="fm-susp-ico">❚❚</span>
-              <span className="fm-susp-t"><b>{suspTask.title}</b><span>ここまで {fmtDur(accOf(suspTask.id))}</span></span>
-              <span className="fm-susp-go">もどる</span>
-            </button>
-          )}
-
-          {/* 一覧 */}
-          <div className="fm-seclabel">きょうのタスク {totalMs > 0 && <span className="fm-tot num">合計 {fmtDur(totalMs)}</span>}</div>
-          <div className="fm-list">
-            {ordered.length === 0 && <div className="fm-empty">きょうのタスクはありません</div>}
-            {ordered.map(t => {
-              const cur = t.id === sess.curId;
-              const el = elapsedOf(t);
-              const tag = (t.tags || [])[0];
-              return (
-                <div key={t.id} className={`fm-task ${cur ? 'cur' : ''} ${t.done ? 'done' : ''}`}>
-                  <button className="fm-play" onClick={() => {
-                    if (t.done) return;
-                    if (cur && sess.startedAt) focusPause();
-                    else if (cur) focusResume();
-                    else focusStart(t.id);
-                  }}>
-                    {t.done ? '✓' : (cur && sess.startedAt ? '❚❚' : '▶')}
-                  </button>
-                  <div className="fm-tbody">
-                    <div className="fm-tt">{t.title}</div>
-                    {tag && <div className="fm-tmeta"><span className="fm-tag u-tag">{tag}</span></div>}
-                  </div>
-                  <span className={`fm-telapsed num ${el ? '' : 'zero'} ${cur && sess.startedAt ? 'live' : ''}`}>{el ? fmtDur(el) : '–:––'}</span>
-                </div>
-              );
-            })}
+            )}
           </div>
 
-          {/* タイムライン */}
-          <div className="fm-seclabel">きょうの内訳</div>
-          <div className="fm-tl">
-            <div className="fm-tlbar">
-              {totalMs === 0
-                ? <i style={{ flex: 1, background: '#EFF3F7' }} />
-                : timelineItems.map(t => <i key={t.id} style={{ flex: elapsedOf(t) / totalMs, background: focusTagColor((t.tags || [])[0]) }} />)}
+          <div className="fm-col fm-col-list">
+            {/* 一覧 */}
+            <div className="fm-seclabel">きょうのタスク {totalMs > 0 && <span className="fm-tot num">合計 {fmtDur(totalMs)}</span>}</div>
+            <div className="fm-list">
+              {ordered.length === 0 && <div className="fm-empty">きょうのタスクはありません</div>}
+              {ordered.map(t => {
+                const cur = t.id === sess.curId;
+                const el = elapsedOf(t);
+                const tag = (t.tags || [])[0];
+                return (
+                  <div key={t.id} className={`fm-task ${cur ? 'cur' : ''} ${t.done ? 'done' : ''}`}>
+                    <button className="fm-play" onClick={() => {
+                      if (t.done) return;
+                      if (cur && sess.startedAt) focusPause();
+                      else if (cur) focusResume();
+                      else focusStart(t.id);
+                    }}>
+                      {t.done ? '✓' : (cur && sess.startedAt ? '❚❚' : '▶')}
+                    </button>
+                    <div className="fm-tbody">
+                      <div className="fm-tt">{t.title}</div>
+                      {tag && <div className="fm-tmeta"><span className="fm-tag u-tag">{tag}</span></div>}
+                    </div>
+                    <span className={`fm-telapsed num ${el ? '' : 'zero'} ${cur && sess.startedAt ? 'live' : ''}`}>{el ? fmtDur(el) : '–:––'}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="fm-tlnote">
-              {totalMs === 0
-                ? 'まだ計測がありません'
-                : <>合計 <b>{fmtDur(totalMs)}</b> ／ いちばん時間を使ったのは「{timelineItems[0].title}」の <b>{fmtDurShort(elapsedOf(timelineItems[0]))}</b></>}
+
+            {/* タイムライン */}
+            <div className="fm-seclabel">きょうの内訳</div>
+            <div className="fm-tl">
+              <div className="fm-tlbar">
+                {totalMs === 0
+                  ? <i style={{ flex: 1, background: '#EFF3F7' }} />
+                  : timelineItems.map(t => <i key={t.id} style={{ flex: elapsedOf(t) / totalMs, background: focusTagColor((t.tags || [])[0]) }} />)}
+              </div>
+              <div className="fm-tlnote">
+                {totalMs === 0
+                  ? 'まだ計測がありません'
+                  : <>合計 <b>{fmtDur(totalMs)}</b> ／ いちばん時間を使ったのは「{timelineItems[0].title}」の <b>{fmtDurShort(elapsedOf(timelineItems[0]))}</b></>}
+              </div>
             </div>
           </div>
         </main>
