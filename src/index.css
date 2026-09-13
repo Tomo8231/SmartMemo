@@ -4243,6 +4243,36 @@
     .fm-ichip:active { background:var(--surface-sunk); }
     .fm-susp-ico { font-size:13px; letter-spacing:-1px; color:var(--ink-soft); }
 
+    /* PC では 460px の縦 1 列のままだと画面の中央に細い帯が残るだけだった。
+       760px 以上は左に計測（進行中・割り込み・中断中）、右に一覧と内訳の 2 列にする。
+       左の列は一覧をスクロールしても見えたままにする。 */
+    @media (min-width:760px) {
+      /* ヘッダーは他の全画面と同じく画面幅いっぱいにし、中身だけを最大 1064px に収める。
+         スクロールバーが画面の端に来るよう、幅は絞らず左右の余白で寄せる。 */
+      .fm-app { max-width:none; }
+      .fm-main {
+        display:grid; grid-template-columns:minmax(0, 1.15fr) minmax(0, 1fr);
+        column-gap:24px; align-items:start;
+        padding:24px max(28px, calc((100% - 1064px) / 2)) 32px;
+      }
+      .fm-col-now { position:sticky; top:0; }
+      .fm-col-list > .fm-seclabel:first-child { margin-top:4px; }
+      .fm-now { padding:26px 28px 22px; }
+      /* 上下に揺れるアニメーションが transform を使うので、拡大は scale で重ねる */
+      .fm-mon { right:24px; top:22px; scale:1.4; transform-origin:top right; }
+      .fm-nowtitle { font-size:22px; min-height:32px; margin-top:12px; padding-right:72px; }
+      .fm-nowtitle.empty { font-size:17px; }
+      .fm-timer { font-size:76px; }
+      .fm-timerow { margin:14px 0 8px; }
+      .fm-acts { margin-top:18px; }
+      .fm-acts button { font-size:16px; padding:16px 8px; }
+      .fm-intr { margin-top:16px; padding:16px; }
+      .fm-susp { margin-top:14px; }
+      .fm-task { padding:12px 14px; }
+      .fm-task:hover:not(.done) { box-shadow:0 2px 8px rgba(60,90,130,.12); }
+      .fm-task.cur:hover { box-shadow:0 0 0 2.5px var(--fm-run) inset; }
+    }
+
     /* 左右に余白を持つ全画面（メモモン画面 18px・ガチャ 20px）では、
        共通ヘッダーが余白の内側に収まって端まで届かなかった。
        余白と同じだけ外へ出して、他の全画面と同じく画面幅いっぱいにする。 */
