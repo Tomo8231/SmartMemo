@@ -87,7 +87,7 @@ async function capture(dark) {
     await page.waitForTimeout(900);
     await dump(name);
   }
-  await page.locator('.nav-center-memo').click(); await page.waitForTimeout(800); await dump('memo');
+  await page.locator('.nav-memo').click(); await page.waitForTimeout(800); await dump('memo');
   await page.locator('.nav-tab:has-text("タスク")').first().click(); await page.waitForTimeout(900);
   await page.locator('.todo-item').first().click(); await page.waitForTimeout(700); await dump('edit');
   await page.keyboard.press('Escape'); await page.waitForTimeout(500);

@@ -90,7 +90,6 @@
       --h-btn:    44px;  /* 通常のボタン・入力欄 */
       --h-btn-lg: 52px;  /* 画面の主 CTA */
       --h-chip:   30px;  /* フィルタ／選択チップ */
-      --h-fab:    52px;  /* 中央の FAB */
 
       /* 影 — 3 段階。浮き上がりの高さを表す */
       --sh-1: 0 1px 4px rgba(0,0,0,.08);
@@ -1443,8 +1442,7 @@
     .bottom-nav-wrapper {
       position:relative; flex:0 0 auto;
       isolation:isolate;
-      /* にわのシート(.gw-sheet z-index:11)より前面に置き、中央メモFABが
-         シート内容に被って切れないようにする */
+      /* にわのシート(.gw-sheet z-index:11)より前面に置く */
       z-index:20;
     }
     /* 5 等分のグリッド。flex:1 だとラベルの文字数（「設定」と「メモモン」）で
@@ -1468,9 +1466,20 @@
     .nav-tab:focus-visible {
       outline:2px solid var(--accent); outline-offset:-3px; border-radius:var(--r-sm);
     }
-    .nav-mic-slot {
-      /* 中央 FAB のぶんの空きマス。グリッドの 1 列を占めるだけでよい。 */
+    /* メモ：ナビの 1 マス。塗りの丸で主役であることを示す。
+       丸は 32px だが上に -8px の負のマージンで配置上は 24px（他のタブの
+       アイコンと同じ）に収める。こうしないと丸のぶんだけ「メモ」の
+       ラベルが隣のタブより下がる。下側まで詰めると丸がラベルに重なるので、
+       ナビ上部の空きへはみ出す向き（上）だけを詰める。 */
+    .nav-memo-ico {
+      width:32px; height:32px; margin:-8px 0 0; flex:none;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:50%;
+      background:var(--accent); color:var(--accent-text);
+      transition:transform .15s;
     }
+    .nav-memo-ico svg { width:16px; height:16px; }
+    .nav-memo:active .nav-memo-ico { transform:scale(.92); }
     .nav-center-mic {
       position:absolute;
       left:50%; transform:translateX(-50%);
@@ -1592,7 +1601,7 @@
       display:grid; grid-template-columns:repeat(5, 1fr);
       gap:6px; flex-shrink:0;
     }
-    .reflect-actions { padding:10px 16px calc(var(--h-fab) - 30px + var(--sp-3)); flex-shrink:0; display:flex; gap:10px; }
+    .reflect-actions { padding:10px 16px var(--sp-4); flex-shrink:0; display:flex; gap:10px; }
     .reflect-actions .reflect-btn { flex:1; }
     .memo-history-sheet {
       background:#fafaf9;
@@ -1852,7 +1861,7 @@
     }
 
     .todo-list-area {
-      padding:16px 16px calc(var(--h-fab) - 30px + var(--sp-4));
+      padding:16px;
       flex:1; min-height:0;
       overflow-y:auto; overflow-x:hidden;
       -webkit-overflow-scrolling:touch;
@@ -3406,7 +3415,7 @@
          外へ出られず、ボトムナビ（z-index:20）の下に潜ってしまっていた。 */
       z-index: -1;
     }
-    /* ボトムナビは中央メモFABがシートに被らないよう最前面のまま維持 */
+    /* ボトムナビはにわのシートより前面のまま維持 */
     .app.glass > .bottom-nav-wrapper {
       position: relative;
       z-index: 20;
@@ -3631,21 +3640,6 @@
     }
     .app.dark .app-header { background:transparent; }
 
-    /* ── ナビ：中央のメモボタン ── */
-    .nav-center-memo {
-      position:absolute; left:50%; transform:translateX(-50%);
-      /* 上に 30px はみ出す（3.2）。FAB 52px なので 52-30=22px がナビに掛かる。 */
-      bottom:calc(100% - 30px);
-      width:var(--h-fab); height:var(--h-fab);
-      border-radius:50%; border:none; cursor:pointer;
-      background:var(--accent); color:var(--accent-text);
-      box-shadow:0 6px 16px var(--accent-light);
-      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-      font-family:inherit; font-weight:700; font-size:11px;
-      z-index:2; transition:transform .15s;
-    }
-    .nav-center-memo svg { width:20px; height:20px; }
-    .nav-center-memo:active { transform:translateX(-50%) scale(.94); }
     .app.dark .bottom-nav { background:var(--surface); }
 
     /* ── にわ（ガーデンワールド） ── */
