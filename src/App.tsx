@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { EVO_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP, EVO_REACTIONS } from './memomonEvo';
 import {
   supabase, isSupabaseConfigured,
   fetchCloud, pushCloud, isDeletedIdsUnsupported, retryDeletedIds,
@@ -79,10 +80,10 @@ type Settings = {
   itemInventory?: Record<string, number>;
 };
 type AnimState = 'sit' | 'walk' | 'happy' | 'dislike' | 'sleep' | 'surprise';
-type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; };
+type MemoMonDef = { id: string; name: string; pixels: string[]; palette: Record<string, string>; rarity: string; desc: string; monW: number; monH: number; imageUrl?: string; spriteFacing?: 'l' | 'r'; sprites?: Partial<Record<AnimState, { frames: string[]; fps: number; loop: boolean }>>; favoriteFoods?: string[]; dislikedFoods?: string[]; evoStage?: 1 | 2 | 3; evolvesTo?: string; lineKey?: string; };
 // 庭のメモモンが出す「おねだり」。応えるとなつき度が上がる。
 type MonRequestKind = 'food' | 'toilet' | 'play';
-type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; request?: MonRequestKind; requestAt?: number; lastRequestDoneAt?: number; mtime?: number; };
+type MemoMonInstance = { uid: string; defId: string; hunger: number; lastFed: number; activity?: 'active' | 'lazy'; affection?: number; lastPetAt?: number; lastSeenAt?: number; request?: MonRequestKind; requestAt?: number; lastRequestDoneAt?: number; evoTasks?: number; mtime?: number; };
 type GachaPrize = {
   type: 'miss' | 'sound' | 'bg' | 'memomon' | 'food';
   label: string; rarity: string; stars: string; color: string;
@@ -127,7 +128,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.44.0';
+const APP_VERSION = '1.45.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1087,16 +1088,6 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'memomon', label: '🤖 パイラーくん', rarity: 'super', stars: '★★★★',  color: '#1976d2', monDefId: 'pylar',        weight: 3, flavor: '【生態】両腕の筋肉は飾りではない。積み上がったTODOを一つずつ片付けていく力がある。「いいね！」ポーズは彼の挨拶であり、励ましであり、存在証明でもある。' },
   { type: 'memomon', label: '🌱 めためたわかるもん', rarity: 'super', stars: '★★★★', color: '#6d9e3f', monDefId: 'matameta', weight: 3, flavor: '【生態】ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。' },
   { type: 'memomon', label: '🦭 ゴマちゃん', rarity: 'super', stars: '★★★★', color: '#a1887f', monDefId: 'gomachan', weight: 3, flavor: '【生態】まんまる体型のゴマフアザラシ。背中のゴマ模様は本人いわく「個性の証」。寝姿が美しいことで有名で、メモアプリ内で最も眠っている時間が長いメモモン。タスクが片付くと嬉しそうにヒレをぱたぱた動かす。' },
-  { type: 'memomon', label: '🦉 ヨフカシ', rarity: 'super', stars: '★★★★', color: '#3b4a7a', monDefId: 'yofukashi', weight: 3, flavor: '【生態】夜が深くなるほど目が冴える夜型のフクロウ。集中モードのタイマーが動いている間はじっと見守り、止まると首をかしげる。首を180°回すのが特技で、昼間はほぼ寝ている。' },
-  { type: 'memomon', label: '🐌 のろのろん', rarity: 'super', stars: '★★★★', color: '#b99a5b', monDefId: 'noronoron', weight: 3, flavor: '【生態】殻がメモ帳柄のカタツムリ。終わらなかったタスクの上をゆっくり這うことから「繰越の守り神」と呼ばれる。遅くても必ず目的地に着き、通ったあとは少しキラキラする。' },
-  { type: 'memomon', label: '🐙 タコアシ', rarity: 'super', stars: '★★★★', color: '#e8594f', monDefId: 'takoashi', weight: 3, flavor: '【生態】8本の足でそれぞれ別のペンを握る。8つのことを同時に進められると言い張るが、実際はどれも中途半端になりがち。割り込みが入ると喜んで墨を吐く。' },
-  { type: 'memomon', label: '📎 とめピン', rarity: 'super', stars: '★★★★', color: '#8d99aa', monDefId: 'tomepin', weight: 3, flavor: '【生態】長く使われなかった書類のクリップに宿った付喪神。散らばったメモ同士をパチンと留めてまとめる几帳面な性格で、タグが付いたタスクを見るとうれしそうに光る。' },
-  { type: 'memomon', label: '🦫 ダムつみ', rarity: 'super', stars: '★★★★', color: '#9c6b3f', monDefId: 'damtsumi', weight: 3, flavor: '【生態】大きな仕事を小枝サイズにかじり分けて、少しずつ積み上げる職人。できあがったダムの高さは、その日の完了数と同じだと言われている。' },
-  { type: 'memomon', label: '🦥 あとまわし', rarity: 'super', stars: '★★★★', color: '#8f9c70', monDefId: 'atomawashi', weight: 3, flavor: '【生態】「あとでやる」が口ぐせで、一日の大半を枝にぶら下がって寝て過ごす。小さなタスクが1つ片付くたびに少しずつ目が開き、3つ片付くと枝から降りてくる。' },
-  { type: 'memomon', label: '🐋 ワスレクジラ', rarity: 'ultra', stars: '★★★★★', color: '#3f5f96', monDefId: 'wasurekujira', weight: 2, flavor: '【生態】消されたメモや忘れられたアイデアを、大きな口で飲み込んで保管している。ふだんは深い海の底で眠っていて、呼ばれると飲み込んだものを潮と一緒に吐き出して返してくれる。' },
-  { type: 'memomon', label: '🐦 フッカツドリ', rarity: 'ultra', stars: '★★★★★', color: '#e2482f', monDefId: 'fukkatsudori', weight: 2, flavor: '【生態】三日坊主で途切れた習慣の灰から生まれる。何度途切れても、そのたびに少し大きく羽ばたく。「やめた日」ではなく「また始めた日」を数える鳥。' },
-  { type: 'memomon', label: '🗿 ハニワン', rarity: 'ultra', stars: '★★★★★', color: '#c98b5c', monDefId: 'haniwan', weight: 2, flavor: '【生態】書庫の奥から発掘された、いにしえの知恵の番人。知識が1つ増えるたびに体の模様が1本増える。しゃべるときは口の穴から声が響く。' },
-  { type: 'memomon', label: '🐰 つきみもち', rarity: 'ultra', stars: '★★★★★', color: '#d9b84a', monDefId: 'tsukimimochi', weight: 2, flavor: '【生態】月の満ち欠けに合わせて暮らす、暦を司るうさぎ。カレンダーの日付をぺったんとついて回り、満月の日だけ体が少し光る。' },
   // ── 餌（消費アイテム）──
   { type: 'food', label: '🍞 パン',           rarity: 'common', stars: '★★',    color: '#a1887f', foodId: 'pan',    weight: 18, flavor: '焼きたてのパン。香ばしくて朝食にもぴったり。誰にでも好かれやすい基本の餌。' },
   { type: 'food', label: '🌿 ハーブ',         rarity: 'common', stars: '★★',    color: '#7cb342', foodId: 'herb',   weight: 16, flavor: 'さわやかな香りの野草。あっさり派のメモモンに好まれがち。' },
@@ -1107,6 +1098,11 @@ const GACHA_ITEMS: (GachaPrize & { weight: number })[] = [
   { type: 'food', label: '🍖 ステーキ',       rarity: 'ultra',  stars: '★★★★★', color: '#bf2922', foodId: 'steak',  weight: 1,  flavor: 'ジューシーで肉厚な極上ステーキ。力強いタイプのメモモンが歓喜する逸品。' },
   { type: 'food', label: '🌟 メモモンフード', rarity: 'ultra',  stars: '★★★★★', color: '#ffd700', foodId: 'feed',   weight: 1,  flavor: '研究の末に開発された秘伝のフード。栄養価満点、誰にでも合うとされる伝説の餌。' },
 ];
+// 進化する系統は 1 段階目だけがガチャに出る。2・3 段階目は進化で出会う
+EVO_LINES.forEach(line => GACHA_ITEMS.push({
+  type: 'memomon', label: `${line.emoji} ${line.stages[0].name}`, rarity: 'rare', stars: '★★★',
+  color: line.color, monDefId: line.stages[0].id, weight: 1, flavor: line.flavor,
+}));
 const BOSS_TODOS = [
   '今日のタスクを3つ完了させよ！',
   'メモを書いてAI解析してみよ！',
@@ -1186,16 +1182,6 @@ const DR_SPRITES = makeSprites('dr');
 const PY_SPRITES = makeSprites('py');
 const MT_SPRITES = makeSprites('mt');
 const GM_SPRITES = makeSprites('gm');
-const YK_SPRITES = makeSprites('yk');
-const NR_SPRITES = makeSprites('nr');
-const TK_SPRITES = makeSprites('tk');
-const TP_SPRITES = makeSprites('tp');
-const DM_SPRITES = makeSprites('dm');
-const AT_SPRITES = makeSprites('at');
-const WK_SPRITES = makeSprites('wk');
-const FK_SPRITES = makeSprites('fk');
-const HN_SPRITES = makeSprites('hn');
-const TM_SPRITES = makeSprites('tm');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -1305,97 +1291,18 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     spriteFacing: 'l',
     sprites: GM_SPRITES,
   },
-  {
-    id: 'yofukashi', name: 'ヨフカシ',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '紺色のまんまるフクロウ。夜が深くなるほど目が冴える夜型で、集中モードのタイマーが動いている間はじっと見守ってくれる。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: YK_SPRITES,
-  },
-  {
-    id: 'noronoron', name: 'のろのろん',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '殻がメモ帳柄のカタツムリ。終わらなかったタスクの上をゆっくり這い、遅くても必ず目的地にたどり着く。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: NR_SPRITES,
-  },
-  {
-    id: 'takoashi', name: 'タコアシ',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '8本の足でそれぞれ別のペンを握る赤いタコ。同時に8つ進められると言い張るが、たいてい全部が中途半端になる。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: TK_SPRITES,
-  },
-  {
-    id: 'tomepin', name: 'とめピン',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '銀色のクリップに宿った付喪神。散らばったメモをパチンと留めてまとめる、几帳面な性格。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: TP_SPRITES,
-  },
-  {
-    id: 'damtsumi', name: 'ダムつみ',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '頭に鉛筆をさしたビーバー。大きな仕事を小枝サイズにかじり分けて、少しずつ積み上げていく職人。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: DM_SPRITES,
-  },
-  {
-    id: 'atomawashi', name: 'あとまわし',
-    pixels: [], palette: {},
-    rarity: 'super',
-    desc: '枝にぶら下がったまま眠るナマケモノ。「あとでやる」が口ぐせだが、小さなタスクが片付くたびに少しずつ目が開く。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: AT_SPRITES,
-  },
-  {
-    id: 'wasurekujira', name: 'ワスレクジラ',
-    pixels: [], palette: {},
-    rarity: 'ultra',
-    desc: '夜空色の小さなクジラ。消されたメモや忘れられたアイデアを大きな口で飲み込み、呼ばれると潮と一緒に返してくれる。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: WK_SPRITES,
-  },
-  {
-    id: 'fukkatsudori', name: 'フッカツドリ',
-    pixels: [], palette: {},
-    rarity: 'ultra',
-    desc: '炎のような羽を持つ小鳥。三日坊主で途切れた習慣の灰から生まれ、何度途切れてもそのたびに大きく羽ばたく。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: FK_SPRITES,
-  },
-  {
-    id: 'haniwan', name: 'ハニワン',
-    pixels: [], palette: {},
-    rarity: 'ultra',
-    desc: '書庫の奥から発掘された、いにしえの知恵の番人。知識が1つ増えるたびに体の模様が1本増えるらしい。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: HN_SPRITES,
-  },
-  {
-    id: 'tsukimimochi', name: 'つきみもち',
-    pixels: [], palette: {},
-    rarity: 'ultra',
-    desc: '白くてもちもちの月のうさぎ。きねでカレンダーの日付をぺったんとついて回り、満月の日だけ体が少し光る。',
-    monW: 65, monH: 70,
-    spriteFacing: 'l',
-    sprites: TM_SPRITES,
-  },
 ];
+// 3 段階で進化する系統。段階が上がるほどレア度も上がる
+const EVO_RARITY: Record<1 | 2 | 3, string> = { 1: 'rare', 2: 'super', 3: 'ultra' };
+EVO_LINES.forEach(line => line.stages.forEach(s => MEMOMON_DEFS.push({
+  id: s.id, name: s.name, pixels: [], palette: {}, rarity: EVO_RARITY[s.stage], desc: s.desc,
+  monW: 65, monH: 70, spriteFacing: 'l', sprites: makeSprites(s.sprite),
+  evoStage: s.stage, evolvesTo: s.evolvesTo, lineKey: line.key,
+})));
+// 進化形から 1 段階目の id を引く。ガチャで同じ系統を重複として扱うのに使う
+const EVO_BASE_ID: Record<string, string> = Object.fromEntries(
+  EVO_LINES.flatMap(line => line.stages.map(s => [s.id, line.stages[0].id])),
+);
 
 // ─────────────────────────────────────────────────────────────
 // Foods & feeding system
@@ -1425,17 +1332,8 @@ const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
   pylar:       { fav: ['apple'],          dis: ['cake'] },
   matameta:    { fav: ['herb', 'apple'],  dis: ['sushi'] },
   gomachan:    { fav: ['sushi', 'cake'],  dis: ['cookie'] },
-  yofukashi:    { fav: ['cookie'],         dis: ['herb'] },
-  noronoron:    { fav: ['herb', 'apple'],  dis: ['cookie'] },
-  takoashi:     { fav: ['cake'],           dis: ['sushi'] },
-  tomepin:      { fav: ['feed'],           dis: ['apple'] },
-  damtsumi:     { fav: ['herb', 'pan'],    dis: ['steak'] },
-  atomawashi:   { fav: ['pan'],            dis: ['steak'] },
-  wasurekujira: { fav: ['feed'],           dis: ['cookie'] },
-  fukkatsudori: { fav: ['apple', 'cake'],  dis: ['sushi'] },
-  haniwan:      { fav: ['feed'],           dis: ['sushi'] },
-  tsukimimochi: { fav: ['cake'],           dis: ['steak'] },
 };
+EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_FOOD_PREFS[s.id] = { fav: line.fav, dis: line.dis }; }));
 
 // Rare collectible items dropped by each memomon at affection MAX.
 // One unique item per memomon. Tapping shows the comment.
@@ -1453,16 +1351,6 @@ const MEMOMON_ITEMS: MemoMonItem[] = [
   { id: 'matameta_sheet',      defId: 'matameta',    name: 'めたしこうしーと',    imageUrl: './items/matameta_sheet.png',      comment: 'めためたが頭の芽の中から取り出した「めたしこうしーと」。何やら深そうな知識が書かれているが、めためた本人もよくわかっていないらしい。' },
   { id: 'gomachan_shell',      defId: 'gomachan',    name: '貝殻',             imageUrl: './items/gomachan_shell.png',      comment: 'ごまちゃんが夢の中で拾ってきた（と本人は言い張る）貝殻。耳に当てると、海の音がする…気がする。' },
   { id: 'magician_wand',       defId: 'magician',    name: 'ステッキ',          imageUrl: './items/magician_wand.png',       comment: 'マジシャンの予備のステッキ。振ると「アブラカタブラ」と微かに聞こえる気がする。本物の魔法は使えないので注意。' },
-  { id: 'yofukashi_lens',       defId: 'yofukashi',    name: '夜目のレンズ',       imageUrl: './items/yofukashi_lens.png',       comment: 'ヨフカシが「夜更かしのお供に」とくれた丸いガラス。のぞくと、暗いところのメモも読める気がする。' },
-  { id: 'noronoron_shell',      defId: 'noronoron',    name: 'らせんの殻',         imageUrl: './items/noronoron_shell.png',      comment: 'のろのろんの抜けた殻。耳に当てると、忘れていた用事がささやかれる…かもしれない。' },
-  { id: 'takoashi_stamp',       defId: 'takoashi',     name: '吸盤スタンプ',       imageUrl: './items/takoashi_stamp.png',       comment: 'タコアシが「ひとつずつ押すのがコツタコ」と渡してくれたスタンプ。押すと小さな丸がきれいに並ぶ。' },
-  { id: 'tomepin_clip',         defId: 'tomepin',      name: '金のクリップ',       imageUrl: './items/tomepin_clip.png',         comment: 'とめピンがとっておきにしていた金色のクリップ。大事なメモを留めておくと、なくさない気がする。' },
-  { id: 'damtsumi_twig',        defId: 'damtsumi',     name: 'かじりかけの枝',     imageUrl: './items/damtsumi_twig.png',        comment: 'ダムつみがちょうどいい長さにかじり揃えた枝。「これで一段積める」と誇らしげにくれた。' },
-  { id: 'atomawashi_branch',    defId: 'atomawashi',   name: 'ぶらさがり枝',       imageUrl: './items/atomawashi_branch.png',    comment: 'あとまわしがいつもぶら下がっている枝の切れはし。手に持つと、なぜか肩の力が抜ける。' },
-  { id: 'wasurekujira_pearl',   defId: 'wasurekujira', name: '記憶の真珠',         imageUrl: './items/wasurekujira_pearl.png',   comment: 'ワスレクジラが海の底から持ってきた真珠。のぞきこむと、昔書いたメモがうっすら浮かぶ。' },
-  { id: 'fukkatsudori_feather', defId: 'fukkatsudori', name: '再生の羽根',         imageUrl: './items/fukkatsudori_feather.png', comment: 'フッカツドリの尾羽。燃えているように見えるのに、手に持つとあたたかいだけ。また始める日のお守り。' },
-  { id: 'haniwan_shard',        defId: 'haniwan',      name: '土器のかけら',       imageUrl: './items/haniwan_shard.png',        comment: 'ハニワンが「いにしえの記録なり」と差し出したかけら。読めない文字が刻まれている。たぶん買い物メモ。' },
-  { id: 'tsukimimochi_dango',   defId: 'tsukimimochi', name: '月見だんご',         imageUrl: './items/tsukimimochi_dango.png',   comment: 'つきみもちがひとつだけ残しておいてくれた月見だんご。もちもちしているが、食べられない。' },
 ];
 const ITEM_BY_DEFID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.defId, i]));
 const ITEM_BY_ID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.id, i]));
@@ -5659,14 +5547,18 @@ function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg;
 const RARITY_STARS: Record<string, string> = { ultra: '★★★★★', super: '★★★★', rare: '★★★', common: '★★' };
 const RARITY_LABEL: Record<string, string> = { ultra: 'ウルトラ', super: 'スーパー', rare: 'レア', common: 'ノーマル' };
 
-function ZukanTab({ memoMons, onOpenPlayground }: {
+function ZukanTab({ memoMons, seenMons, onOpenPlayground }: {
   memoMons: MemoMonInstance[];
+  seenMons: string[];
   onOpenPlayground: (uid?: string) => void;
 }) {
   const [detail, setDetail] = useState<MemoMonDef | null>(null);
   const ownedByDef = new Map<string, MemoMonInstance>();
   memoMons.forEach(m => { if (!ownedByDef.has(m.defId)) ownedByDef.set(m.defId, m); });
-  const ownedCount = MEMOMON_DEFS.filter(d => ownedByDef.has(d.id)).length;
+  // 進化すると前の姿の子は手元からいなくなるので、出会ったことがある姿も図鑑に載せる
+  const seen = new Set(seenMons);
+  const isKnown = (id: string) => ownedByDef.has(id) || seen.has(id);
+  const ownedCount = MEMOMON_DEFS.filter(d => isKnown(d.id)).length;
 
   const detailInst = detail ? ownedByDef.get(detail.id) : undefined;
   const detailFlavor = detail
@@ -5687,13 +5579,13 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
           return (
             <div
               key={def.id}
-              className={`zukan-card${inst ? '' : ' locked'}`}
+              className={`zukan-card${isKnown(def.id) ? '' : ' locked'}`}
               onClick={() => inst ? onOpenPlayground(inst.uid) : setDetail(def)}
             >
               <div className="zukan-sprite-box">
-                <img src={MEMOMON_IMGS[def.id]} alt={inst ? def.name : '？？？'} className="zukan-sprite" />
+                <img src={MEMOMON_IMGS[def.id]} alt={isKnown(def.id) ? def.name : '？？？'} className="zukan-sprite" />
               </div>
-              <div className="zukan-name">{inst ? def.name : '???'}</div>
+              <div className="zukan-name">{isKnown(def.id) ? def.name : '???'}</div>
               <div className="zukan-rarity">{RARITY_STARS[def.rarity] || '★★★'}</div>
               <div className="zukan-sptag">{RARITY_LABEL[def.rarity] || def.rarity}</div>
             </div>
@@ -5706,10 +5598,10 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
           <div className="zukan-detail" onClick={e => e.stopPropagation()}>
             <div className="modal-handle" />
             <button className="gw-pop-close" onClick={() => setDetail(null)}>✕</button>
-            <div className={`zukan-detail-sprite${detailInst ? '' : ' locked'}`}>
+            <div className={`zukan-detail-sprite${isKnown(detail.id) ? '' : ' locked'}`}>
               <img src={MEMOMON_IMGS[detail.id]} alt="" />
             </div>
-            <div className="zukan-detail-name">{detailInst ? detail.name : '？？？'}</div>
+            <div className="zukan-detail-name">{isKnown(detail.id) ? detail.name : '？？？'}</div>
             <div className="zukan-detail-rarity">{RARITY_STARS[detail.rarity] || '★★★'}</div>
             {detailInst ? (
               <>
@@ -5718,6 +5610,10 @@ function ZukanTab({ memoMons, onOpenPlayground }: {
                 ); })()}
                 <p className="zukan-detail-desc">{detailFlavor}</p>
               </>
+            ) : isKnown(detail.id) ? (
+              <p className="zukan-detail-desc">{detailFlavor}（いまは進化して、ちがう姿になっている）</p>
+            ) : detail.evoStage && detail.evoStage > 1 ? (
+              <p className="zukan-detail-desc">まだ出会っていない姿。なかよくなったメモモンが進化すると会えるかも…</p>
             ) : (
               <p className="zukan-detail-desc">まだ出会っていないメモモン。ガチャのたまごから生まれるかも…</p>
             )}
@@ -6739,47 +6635,10 @@ const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
     chat: ['すぴー…', 'ねむい…', 'あと10分…', 'ふあぁ', '起こさないで', 'おふとん最高', '夢の中で泳ぐ', 'ぱたぱた'],
     tip: ['通知設定でリマインドできるよ、たぶん…', '寝る前にTODOを整理しておくと朝が楽だよ'],
   },
-  yofukashi: {
-    chat: ['ホゥ…', '夜はこれからだ', 'まだ起きているのか？', '首が回るのは特技だ', '昼は眠い…', '静かな時間が好きだ'],
-    tip: ['集中モードは50分たつと休憩をすすめてくれるホゥ', '夜更かしの前に、明日のTODOを1つ決めておくといいホゥ'],
-  },
-  noronoron: {
-    chat: ['のろ〜…', '急がば回れ', '着いたら本気出す', 'キラキラの跡、見た？', 'ゆっくりでいいよ〜', 'のろのろ…'],
-    tip: ['終わらなかったタスクも、集中モードの「きょうのタスク」に残ってるよ〜', '期限を入れておくと、のんびり屋でも忘れにくいよ〜'],
-  },
-  takoashi: {
-    chat: ['全部やるタコ！', '足が絡まった…', 'ひとつずつって大事かも', '墨、出ちゃった', 'ペンが足りないタコ', 'タコタコ〜'],
-    tip: ['割り込みは集中モードからすぐ始められるタコ。前のタスクは中断として覚えておくタコ', '同時にやるより、ひとつずつ完了するほうが早いタコ'],
-  },
-  tomepin: {
-    chat: ['パチン！', 'まとめておいたピン', 'バラバラは落ち着かない', '留めるのが生きがい', 'ピカッ', 'きっちりが好き'],
-    tip: ['タグをつけると、あとから探すのがラクになるピン', 'よくやる作業はTODOセットにまとめておけるピン'],
-  },
-  damtsumi: {
-    chat: ['カリカリ…', '小さく分ければ怖くない', '今日も一段積んだ', '鉛筆は落とさない', 'しっぽでペチン', 'いい枝だ'],
-    tip: ['大きなタスクは、小さなTODOに分けて追加するといいよ', 'よくやる作業はTODOセットにしておくと、まとめて追加できるよ'],
-  },
-  atomawashi: {
-    chat: ['あとで…', 'ねむ…', '…ひとつだけ、やってみる？', 'ぶらーん', 'いそがなくていい…', 'すや…'],
-    tip: ['やる気が出ない日は、5分で終わるタスクからでいいんだよ…', '完了すると、コインがもらえるよ…起きたら使お…'],
-  },
-  wasurekujira: {
-    chat: ['ぶおぉ…', '忘れたものは、ぼくが覚えてる', '深いところは静かだよ', '潮、ふいてみる？', 'きらきらの星、背中にあるよ', 'ゆらゆら'],
-    tip: ['消しちゃったTODOはゴミ箱から戻せるよ。すぐ諦めないで', '思いついたことは、とりあえずメモに書いておくといいよ'],
-  },
-  fukkatsudori: {
-    chat: ['ピィッ！', 'また始めればいい', '灰の中から何度でも', '尾羽があったかい', '途切れても大丈夫', 'ピピッ'],
-    tip: ['くり返しを設定すると、毎日のタスクが自動で出てくるよ', '昨日できなくても、今日の1つから数え直せばいい'],
-  },
-  haniwan: {
-    chat: ['ハニ…', 'いにしえより伝わる知恵なり', '土はいいぞ', '両手はずっとこのままだ', '模様がまた増えた', 'ハニハニ'],
-    tip: ['ナレッジに書き残せば、千年後の自分にも届く…かもしれぬ', '書庫にきけば、残した知識から答えを探してくれるぞ'],
-  },
-  tsukimimochi: {
-    chat: ['ぺったん', '今日は何の日？', '月がきれいですね', 'もちもち', 'きねは重いの', 'おだんご食べたい'],
-    tip: ['カレンダーを週表示にすると、1週間の予定が見わたせるよ', '日付を入れたタスクは、カレンダーに並ぶよ'],
-  },
 };
+EVO_LINES.forEach(line => line.stages.forEach(s => {
+  MEMOMON_LINES[s.id] = { chat: line.chat, tip: [...line.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
+}));
 
 function pickMemoMonLine(defId: string): string | null {
   const lines = MEMOMON_LINES[defId];
@@ -6873,67 +6732,8 @@ const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
     feedNormal: ['もぐもぐ…', 'ありがと…', 'ふあぁ…', 'すぴー…', 'ごちそうさま'],
     feedDis:    ['ぐぬ…', '寝る前提でない…', 'ぱた…', 'ふぁ…ダメ', 'うえぇ'],
   },
-  yofukashi: {
-    pet:        ['ホゥ…', '悪くない', 'くすぐったいホゥ', 'もう少し', '首が回るぞ'],
-    feedFav:    ['ホゥッ！', '夜食はこれに限る', 'わかっているな', '目が冴えてきた', '至福ホゥ'],
-    feedNormal: ['ホゥ', 'いただこう', 'まあまあだ', 'ごちそうさま', '腹ごしらえ'],
-    feedDis:    ['ホ…ゥ？', 'これは違う', '夜に食べるものではない', '遠慮する', 'ぐぬ'],
-  },
-  noronoron: {
-    pet:        ['のろ〜♪', 'ゆっくりなでて〜', 'きもちい〜', 'のろのろ', 'もっと〜'],
-    feedFav:    ['のろ〜〜♥', 'おいしい〜', 'しあわせ〜', 'ゆっくり味わう〜', '殻がつやつや〜'],
-    feedNormal: ['のろ', 'いただきま〜す', 'もぐ…もぐ…', 'ごちそうさま〜', 'まあまあ〜'],
-    feedDis:    ['のろっ！？', 'これはちょっと〜', '殻に引っこむ〜', 'うえ〜', 'ゆっくりでも無理〜'],
-  },
-  takoashi: {
-    pet:        ['タコ〜♪', '8本全部でありがとう', 'くすぐったいタコ', 'もっとタコ', 'ぬるっ'],
-    feedFav:    ['タコタコ〜♥', '8本で抱きしめたい味！', '最高タコ！', 'もっとちょうだいタコ', '墨が出るほどうれしい'],
-    feedNormal: ['タコ', 'いただくタコ', 'ごちそうさまタコ', 'もぐもぐ', 'ふつうタコ'],
-    feedDis:    ['タ、タコ…', 'これは仲間かも…', 'ムリタコ！', '墨吐いちゃう', 'うねうね（拒否）'],
-  },
-  tomepin: {
-    pet:        ['パチン♪', 'ピカピカになる', 'ていねいに頼む', 'ありがとピン', 'きっちり'],
-    feedFav:    ['ピカーン！', '最高のメンテナンス', '留め心地が上がった', 'ありがとピン！', 'これぞ純正'],
-    feedNormal: ['ピン', 'いただくピン', 'ごちそうさま', '問題なし', 'まあまあピン'],
-    feedDis:    ['さびる…', 'これはダメピン', 'パチ…ン', '水気は苦手', 'ピ、ピン…'],
-  },
-  damtsumi: {
-    pet:        ['カリッ♪', 'しっぽペチン', 'いい手つきだ', 'もうちょっと', 'ふふん'],
-    feedFav:    ['カリカリカリ！', 'いい歯ごたえ！', '一段積める元気が出た', 'ありがたい', '最高の資材だ'],
-    feedNormal: ['カリ', 'いただこう', 'ごちそうさま', 'ふつうだな', 'もぐもぐ'],
-    feedDis:    ['カリ…？', 'これはかじれない', 'しっぽが下がる', '遠慮する', 'ダムが崩れる…'],
-  },
-  atomawashi: {
-    pet:        ['…すや', 'きもちい…', 'ねむくなる…', 'ぶらーん', 'もっと…'],
-    feedFav:    ['…おいしい…♥', '起きた…', 'これなら食べる…', 'しあわせ…', 'ありがと…'],
-    feedNormal: ['もぐ…', 'あとで食べ…る', 'ごちそうさま…', 'ふつう…', 'すや…'],
-    feedDis:    ['…重い', 'あとまわし…', 'ねむれなくなる…', 'むり…', 'うえ…'],
-  },
-  wasurekujira: {
-    pet:        ['ぶおぉ♪', 'やさしい手だね', '潮がふきそう', 'おぼえておくよ', 'ゆらゆら'],
-    feedFav:    ['ぶおおお♥', 'ずっと覚えておく味', '深海までしあわせ', 'ありがとう', '星が光ってる'],
-    feedNormal: ['ぶお', 'いただきます', 'ごちそうさま', 'ふつうの味', 'ゆらゆら'],
-    feedDis:    ['ぶ…お…', 'これは忘れたい', '潮が止まる…', 'ごめんね', 'しずむ…'],
-  },
-  fukkatsudori: {
-    pet:        ['ピィ♪', '羽があったかくなる', 'もっと！', 'ピピッ', 'うれしい'],
-    feedFav:    ['ピィィッ♥', '燃えてきた！', 'また始められる味！', 'ありがとう！', '尾羽がきらきら'],
-    feedNormal: ['ピィ', 'いただきます', 'ごちそうさま', 'ふつう', 'もぐもぐ'],
-    feedDis:    ['ピ…', '火が小さくなる…', 'これは苦手', 'ごめん', '灰になりそう'],
-  },
-  haniwan: {
-    pet:        ['ハニ…', 'ほこりが落ちる', '良き手つきなり', '土が温まる', 'ハニハニ'],
-    feedFav:    ['ハニーッ！', 'いにしえの供物なり', '模様が増えそうだ', '千年ぶりの味', '感謝する'],
-    feedNormal: ['ハニ', 'いただこう', 'ごちそうさま', 'ふむ', '土に還る味'],
-    feedDis:    ['ハ…ニ…', '湿気る…', 'ひびが入る', '受け取れぬ', 'ぐぬ'],
-  },
-  tsukimimochi: {
-    pet:        ['ぺったん♪', 'もちもち', 'くすぐったい', 'もっと〜', '耳はやさしくね'],
-    feedFav:    ['ぺったーん♥', 'お月見の味！', 'もちもち倍増！', 'しあわせ〜', 'ありがとう！'],
-    feedNormal: ['ぺったん', 'いただきます', 'ごちそうさま', 'ふつう', 'もぐもぐ'],
-    feedDis:    ['ぺ…', 'これは重い…', 'もちが固くなる', 'ごめんね', 'うさ…'],
-  },
 };
+EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_REACTIONS[s.id] = EVO_REACTIONS; }));
 
 function pickReaction(defId: string, kind: ReactionKind): string | null {
   const r = MEMOMON_REACTIONS[defId];
@@ -7308,6 +7108,27 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                   </div>
                   <div className="playground-meter-val">{Math.round(hun)} / 100</div>
                 </div>
+                {selectedDef.evolvesTo && (() => {
+                  // なつき度 MAX の子を にわに出したままタスクを完了すると、進化ゲージがたまる
+                  const need = EVO_TASKS_TO_EVOLVE[selectedDef.evoStage === 2 ? 2 : 1];
+                  const got = Math.min(need, selected.evoTasks ?? 0);
+                  return (
+                    <>
+                      <div className="playground-meter">
+                        <div className="playground-meter-label">進化</div>
+                        <div className="playground-meter-bar">
+                          <div className="playground-meter-fill playground-meter-evo" style={{ width: `${(got / need) * 100}%` }} />
+                        </div>
+                        <div className="playground-meter-val">{got} / {need}</div>
+                      </div>
+                      <div className="playground-evo-hint">
+                        {aff >= 100
+                          ? 'にわに出したままタスクを完了すると、進化ゲージがたまる'
+                          : 'なつき度がMAXになると、タスクの完了で進化ゲージがたまりはじめる'}
+                      </div>
+                    </>
+                  );
+                })()}
 
                 <div className="playground-prefs">
                   <div className="playground-prefs-hint">
@@ -8591,6 +8412,34 @@ function SmartMemoApp() {
     });
   }
 
+  // なつき度 MAX の子を にわに出したままタスクを完了すると、進化ゲージがたまる。
+  // ゲージがいっぱいになったら次の姿に進化し、図鑑にもその姿を記録する。
+  const advanceEvolution = () => {
+    if (settings.memoMonVisible === false) return;
+    const known = memoMons.filter(m => MEMOMON_DEFS.some(d => d.id === m.defId));
+    const target = (settings.activeMonUid && known.find(m => m.uid === settings.activeMonUid)) || known[0];
+    const def = target && MEMOMON_DEFS.find(d => d.id === target.defId);
+    if (!target || !def?.evolvesTo || effectiveAffection(target) < 100) return;
+    const need = EVO_TASKS_TO_EVOLVE[def.evoStage === 2 ? 2 : 1];
+    const got = (target.evoTasks ?? 0) + 1;
+    const now = Date.now();
+    if (got < need) {
+      setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, evoTasks: got, mtime: now } : m));
+      return;
+    }
+    const next = MEMOMON_DEFS.find(d => d.id === def.evolvesTo);
+    if (!next) return;
+    setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, defId: next.id, evoTasks: 0, mtime: now } : m));
+    setSettings(p => {
+      const unlocked = p.gachaUnlocked || { sounds: [], bgs: [], mons: [] };
+      const mons = unlocked.mons || [];
+      const add = [def.id, next.id].filter(id => !mons.includes(id));
+      return add.length ? { ...p, gachaUnlocked: { ...unlocked, mons: [...mons, ...add] } } : p;
+    });
+    showAppToast(`✨ ${def.name} が ${next.name} に進化した！`);
+    cheerMon(`${next.name} に進化した！`);
+  };
+
   const toggle = (id: number | string) => {
     const todo = todos.find(t => t.id === id);
     if (todo && !settings.infiniteCoins) {
@@ -8599,7 +8448,10 @@ function SmartMemoApp() {
       setSettings(p => ({ ...p, coins: Math.max(0, (p.coins || 0) + delta) }));
     }
     // 完了したときだけ、にわのメモモンが喜ぶ（未完了に戻したときは反応しない）
-    if (todo && !todo.done) cheerMon(pickCheerLine());
+    if (todo && !todo.done) {
+      cheerMon(pickCheerLine());
+      advanceEvolution();
+    }
     setTodos(p => p.map(t => {
       if (t.id !== id) return t;
       const next = { ...t, done: !t.done, mtime: Date.now() };
@@ -9051,7 +8903,7 @@ function SmartMemoApp() {
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
         {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} />}
-        {tab === 'zukan'    && <ZukanTab memoMons={memoMons} onOpenPlayground={openPlayground} />}
+        {tab === 'zukan'    && <ZukanTab memoMons={memoMons} seenMons={settings.gachaUnlocked?.mons || []} onOpenPlayground={openPlayground} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
       <div className="bottom-nav-wrapper">
@@ -9097,7 +8949,7 @@ function SmartMemoApp() {
           infinite={settings.infiniteCoins}
           unlockedSounds={(settings.gachaUnlocked || { sounds: [], bgs: [] }).sounds}
           unlockedBgs={(settings.gachaUnlocked || { sounds: [], bgs: [] }).bgs}
-          ownedMons={memoMons.map(m => m.defId)}
+          ownedMons={memoMons.flatMap(m => [m.defId, EVO_BASE_ID[m.defId] ?? m.defId])}
           onClose={() => setShowGacha(false)}
           onResult={(results, totalCost) => {
             results.forEach(({ prize, dup }, i) => {
