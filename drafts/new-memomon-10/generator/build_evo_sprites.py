@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 from memomon_gen import draw_fx, finish, Cv, W, H, GROUND, S, ANIMS
 from extract_base import LINES
+from parts_anim import edit as edit_parts   # 目・口・足をコマごとに描き替える
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CUT = os.path.join(HERE, 'base_cut')
@@ -150,9 +151,11 @@ def main():
     frames = {}
     for key, _, _ in LINES:
         for stage in (1, 2, 3):
-            char = to_logical(Image.open(os.path.join(CUT, f'{key}_{stage}.png')), stage)
+            cut = Image.open(os.path.join(CUT, f'{key}_{stage}.png'))
             for anim in ANIMS:
                 for i in range(6):
+                    # 切り抜きの解像度で目・口・足を描き替えてから、ドットの大きさに縮める
+                    char = to_logical(edit_parts(f'{key}{stage}', cut, anim, i), stage)
                     im, damped = render(char, anim, i)
                     damped_frames += damped > 0
                     if key in ('penguin', 'kani', 'hachi', 'kujira', 'yousei', 'golem') and stage == 2:
