@@ -431,7 +431,7 @@
     .gacha-coin-display { display:flex; align-items:center; gap:4px; font-size:13px; color:rgba(255,255,255,.4); position:relative; z-index:1; margin-top:auto; }
     /* Pull button with shimmer */
     .gacha-pull-btn {
-      width:100%; padding:14px 24px; border:none; border-radius:14px;
+      width:100%; height:var(--h-btn-lg); padding:0 24px; border:none; border-radius:var(--r-full);
       background:var(--accent);
       color:var(--accent-text); font-size:var(--fs-base); font-weight:800; cursor:pointer; font-family:inherit;
       transition:opacity .15s,transform .1s;
@@ -447,7 +447,9 @@
     @keyframes btn-shimmer { from{background-position:200% 0} to{background-position:-200% 0} }
     .gacha-pull-btn:not(:disabled):hover { opacity:.88; }
     .gacha-pull-btn:not(:disabled):active { transform:scale(.97); }
-    .gacha-pull-btn:disabled { opacity:.3; cursor:not-allowed; background:rgba(255,255,255,.14); box-shadow:none; }
+    /* 無効は primary の不透明度 40%（3.3）。別の地（半透明の白）にすると、
+       押せないのか、別の種類のボタンなのかが区別できなかった。 */
+    .gacha-pull-btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
     .gacha-pull-btn:disabled::after { display:none; }
     /* 10-pull grid */
     .gacha-ten-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:100%; position:relative; z-index:1; }
