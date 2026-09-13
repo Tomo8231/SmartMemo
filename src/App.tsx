@@ -127,7 +127,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.43.2';
+const APP_VERSION = '1.44.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -1672,7 +1672,8 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
 }) {
   useDismissable(onClose);
   const [mode, setMode] = useState<GachaMode>('single');
-  const [phase, setPhase] = useState<'idle' | 'spinning' | 'flashing' | 'result'>('idle');
+  // 卵がゆれる → ひびから光がもれる → 殻が割れて生まれる → 結果
+  const [phase, setPhase] = useState<'idle' | 'shaking' | 'cracking' | 'hatching' | 'result'>('idle');
   const [singleResult, setSingleResult] = useState<GachaPrize | null>(null);
   const [singleDup, setSingleDup] = useState(false);
   const [tenResults, setTenResults] = useState<{ prize: GachaPrize; dup: boolean }[]>([]);
@@ -1680,7 +1681,23 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
   const [localCoins, setLocalCoins] = useState(coins);
   const [flashRarity, setFlashRarity] = useState<string | null>(null);
   const [revealCount, setRevealCount] = useState(-1);
-  const [gachaFrame, setGachaFrame] = useState(0);
+  const [crackStage, setCrackStage] = useState(0);
+  // 卵の光の色。引いた時点のいちばん高いレア度で決まる（待機中はコモン）
+  const [eggRarity, setEggRarity] = useState<string>('common');
+  // 結果の反映（コイン・解放）は卵が割れたときに行う。
+  // 先に反映すると、ほかの画面の通知で結果が割れる前に分かってしまう。
+  const pendingRef = useRef<{ results: { prize: GachaPrize; dup: boolean }[]; cost: number; refund: number } | null>(null);
+  const onResultRef = useRef(onResult);
+  useEffect(() => { onResultRef.current = onResult; });
+  const flushPending = () => {
+    const p = pendingRef.current;
+    if (!p) return;
+    pendingRef.current = null;
+    if (p.refund) setLocalCoins(c => c + p.refund);
+    onResultRef.current(p.results, p.cost);
+  };
+  // 演出の途中で閉じても、引いた分を取りこぼさない
+  useEffect(() => () => flushPending(), []);
   const [monAnimFrame, setMonAnimFrame] = useState(0);
 
   useEffect(() => {
@@ -1712,26 +1729,31 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
     }
   }, [phase, mode, revealCount]);
 
+  // 卵の演出を進める。結果は引いた時点で決まっていて、ここでは見せ方だけを進める
   useEffect(() => {
-    if (phase !== 'spinning') return;
-    setGachaFrame(0);
-    const id = setInterval(() => setGachaFrame(f => (f + 1) % 15), 110);
-    return () => clearInterval(id);
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase !== 'flashing') return;
-    setGachaFrame(15);
-    const t1 = setTimeout(() => setGachaFrame(16), 200);
-    const t2 = setTimeout(() => setGachaFrame(17), 400);
-    const t3 = setTimeout(() => setGachaFrame(18), 600);
-    const t4 = setTimeout(() => {
-      setGachaFrame(19);
-      setFlashRarity(null);
-      setPhase('result');
-    }, 800);
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); };
-  }, [phase]);
+    if (phase === 'shaking') {
+      const t = setTimeout(() => setPhase('cracking'), 1400);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'cracking') {
+      setCrackStage(1);
+      const t1 = setTimeout(() => setCrackStage(2), 380);
+      const t2 = setTimeout(() => setCrackStage(3), 760);
+      const t3 = setTimeout(() => {
+        setFlashRarity(eggRarity !== 'common' ? eggRarity : null);
+        setPhase('hatching');
+      }, 1150);
+      return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+    }
+    if (phase === 'hatching') {
+      const t = setTimeout(() => {
+        setFlashRarity(null);
+        flushPending();
+        setPhase('result');
+      }, 650);
+      return () => clearTimeout(t);
+    }
+  }, [phase, eggRarity]);
 
   const cost = mode === 'single' ? GACHA_COST : mode === 'ten' ? GACHA_COST_TEN : GACHA_COST_MON;
   const canAfford = infinite || localCoins >= cost;
@@ -1755,41 +1777,41 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
            (r.type === 'memomon' && !!r.monDefId          && ownedMons.includes(r.monDefId));
   }
 
+  const busy = phase === 'shaking' || phase === 'cracking' || phase === 'hatching';
+  const rarityRank: Record<string, number> = { common: 0, rare: 1, super: 2, ultra: 3 };
+
   function pull() {
-    if (!canAfford || phase === 'spinning') return;
+    if (!canAfford || busy) return;
     if (!infinite) setLocalCoins(c => c - cost);
-    setPhase('spinning');
-    setTimeout(() => {
-      if (mode === 'ten') {
-        const picks = Array.from({ length: 10 }, () => pickGacha());
-        const hasUltra = picks.some(r => r.rarity === 'ultra');
-        if (!hasUltra) picks[picks.length - 1] = pickGachaUltra();
-        const results = picks.map(r => ({ prize: r, dup: isDup(r) }));
-        const refund = results.filter(r => r.dup).length * 10;
-        if (refund && !infinite) setLocalCoins(c => c + refund);
-        setTenResults(results);
-        setRevealCount(0);
-        onResult(results, GACHA_COST_TEN);
-        setFlashRarity(null);
-        setPhase('flashing');
-      } else {
-        const r = mode === 'memomon' ? pickGachaMon() : pickGacha();
-        const dup = isDup(r);
-        setSingleResult(r); setSingleDup(dup);
-        if (dup && !infinite) setLocalCoins(c => c + 10);
-        onResult([{ prize: r, dup }], cost);
-        setFlashRarity(r.rarity !== 'common' ? r.rarity : null);
-        setPhase('flashing');
-      }
-    }, 1600);
+    setCrackStage(0);
+    if (mode === 'ten') {
+      const picks = Array.from({ length: 10 }, () => pickGacha());
+      const hasUltra = picks.some(r => r.rarity === 'ultra');
+      if (!hasUltra) picks[picks.length - 1] = pickGachaUltra();
+      const results = picks.map(r => ({ prize: r, dup: isDup(r) }));
+      const refund = results.filter(r => r.dup).length * 10;
+      setTenResults(results);
+      setRevealCount(0);
+      pendingRef.current = { results, cost: GACHA_COST_TEN, refund: infinite ? 0 : refund };
+      // 10連は、いちばん高いレア度の光で卵を割る
+      setEggRarity(picks.reduce((best, r) => (rarityRank[r.rarity] ?? 0) > (rarityRank[best] ?? 0) ? r.rarity : best, 'common'));
+    } else {
+      const r = mode === 'memomon' ? pickGachaMon() : pickGacha();
+      const dup = isDup(r);
+      setSingleResult(r); setSingleDup(dup);
+      pendingRef.current = { results: [{ prize: r, dup }], cost, refund: dup && !infinite ? 10 : 0 };
+      setEggRarity(r.rarity);
+    }
+    setPhase('shaking');
   }
 
   function again() {
     setPhase('idle'); setSingleResult(null); setSingleDup(false);
-    setTenResults([]); setRevealCount(-1); setFlashRarity(null); setGachaFrame(0);
+    setTenResults([]); setRevealCount(-1); setFlashRarity(null);
+    setCrackStage(0); setEggRarity('common');
     setDetailIdx(null);
   }
-  function switchMode(m: GachaMode) { if (phase !== 'spinning') { setMode(m); again(); } }
+  function switchMode(m: GachaMode) { if (!busy) { setMode(m); again(); } }
 
   const labelParts = singleResult ? singleResult.label.split(' ') : [];
   const singleObtainedMsg = singleResult
@@ -1835,18 +1857,21 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
                   return (
                     <div key={i} className={`gacha-ten-card${revealed ? ' show' : ''}`}
                       onClick={revealed ? () => setDetailIdx(i) : undefined}
-                      style={{
+                      style={revealed ? {
                         background: rarityBg[r.prize.rarity] || rarityBg.common,
                         boxShadow: rarityGlow[r.prize.rarity],
-                        cursor: revealed ? 'pointer' : 'default',
-                      }}>
-                      {monImg ? (
+                        cursor: 'pointer',
+                      } : undefined}>
+                      {/* 開くまでは小さな卵がゆれていて、順番にカードへ変わる */}
+                      {!revealed ? (
+                        <img src="./sprites/gacha_egg_common_0.png" alt="" className="gacha-ten-egg" style={{ animationDelay: `${i * -0.13}s` }} />
+                      ) : monImg ? (
                         <img src={monImg} alt="" className="gacha-ten-card-mon" />
                       ) : (
                         <div style={{ fontSize: 22, lineHeight: 1.4 }}>{r.prize.label.split(' ')[0]}</div>
                       )}
-                      <div style={{ fontSize: 10, color: '#fff', fontWeight: 700, opacity: .85 }}>{r.prize.stars}</div>
-                      {r.dup && <div style={{ fontSize: 9, color: '#ffd700', fontWeight: 700 }}>+10</div>}
+                      {revealed && <div style={{ fontSize: 10, color: '#fff', fontWeight: 700, opacity: .85 }}>{r.prize.stars}</div>}
+                      {revealed && r.dup && <div style={{ fontSize: 9, color: '#ffd700', fontWeight: 700 }}>+10</div>}
                     </div>
                   );
                 })}
@@ -1857,18 +1882,26 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
             </>
           ) : (
             <>
-              <div className="gacha-sprite-wrap">
-                {phase === 'result' && singleResult && (singleResult.rarity === 'ultra' || singleResult.rarity === 'super') && (
-                  <div className={`gacha-beam gacha-beam-${singleResult.rarity}`} />
+              {/* 卵ガチャ: ゆれる → ひびから光がもれる → 上の殻が飛んで生まれる */}
+              <div className={`gacha-egg-stage is-${phase} r-${eggRarity}`}>
+                {(phase === 'hatching' || phase === 'result') && (eggRarity === 'ultra' || eggRarity === 'super') && (
+                  <div className={`gacha-beam gacha-beam-${eggRarity}`} />
                 )}
                 {phase === 'result' && singleResult && singleResult.rarity !== 'common' && (
                   <GachaParticles rarity={singleResult.rarity} />
                 )}
-                <img
-                  className="gacha-sprite-img"
-                  src={`./sprites/gacha_anim_${gachaFrame}.png`}
-                  alt=""
-                />
+                {phase === 'hatching' || phase === 'result' ? (
+                  <>
+                    {phase === 'hatching' && (
+                      <img className="gacha-egg gacha-egg-top" src={`./sprites/gacha_egg_${eggRarity}_top.png`} alt="" />
+                    )}
+                    <img className="gacha-egg gacha-egg-bottom" src={`./sprites/gacha_egg_${eggRarity}_bottom.png`} alt="" />
+                  </>
+                ) : (
+                  <img className="gacha-egg gacha-egg-whole" src={`./sprites/gacha_egg_${eggRarity}_${crackStage}.png`} alt="" />
+                )}
+                <img className="gacha-nest" src="./sprites/gacha_nest.png" alt="" />
+                {phase === 'hatching' && <div className="gacha-hatch-flash" />}
                 {phase === 'result' && singleResult && (() => {
                   const monDef = singleResult.type === 'memomon' && singleResult.monDefId
                     ? MEMOMON_DEFS.find(d => d.id === singleResult.monDefId)
@@ -1904,10 +1937,10 @@ function GachaModal({ coins, infinite, unlockedSounds, unlockedBgs, ownedMons, o
           <button
             className="gacha-pull-btn"
             onClick={phase === 'result' ? again : pull}
-            disabled={phase === 'spinning' || phase === 'flashing' || (phase === 'idle' && !canAfford)}
+            disabled={busy || (phase === 'idle' && !canAfford)}
           >
             {phase === 'result'   ? 'もう一度引く'
-             : phase === 'spinning' || phase === 'flashing' ? 'ガチャ中...'
+             : busy ? (phase === 'shaking' ? 'ゆれてる…！' : phase === 'cracking' ? 'ひびが入った…！' : 'うまれる！')
              : !canAfford         ? 'コインが足りません'
              : mode === 'ten'     ? '10連ガチャ！'
              : mode === 'memomon' ? 'メモモンガチャ！'

@@ -304,13 +304,93 @@
       position:relative; display:flex; align-items:center; justify-content:center;
       width:180px; height:180px; flex-shrink:0; z-index:1;
     }
-    .gacha-sprite-wrap {
+    /* ── 卵ガチャ ──
+       ゆれる → ひびから光がもれる → 上の殻が飛んで生まれる。
+       光の色でレア度を先に予感させる（コモン＝淡いクリーム、レア＝水色、スーパー＝紫、ウルトラ＝金）。 */
+    .gacha-egg-stage {
       position:relative; flex-shrink:0; z-index:1;
-      display:flex; align-items:center; justify-content:center;
+      width:220px; height:250px;
+      --egg-glow:rgba(255,246,200,.85);
     }
-    .gacha-sprite-img {
-      width:200px; height:auto;
-      image-rendering:pixelated;
+    .gacha-egg-stage.r-rare  { --egg-glow:rgba(120,205,255,.95); }
+    .gacha-egg-stage.r-super { --egg-glow:rgba(220,150,255,.95); }
+    .gacha-egg-stage.r-ultra { --egg-glow:rgba(255,214,60,1); }
+    .gacha-egg {
+      position:absolute; left:50%; bottom:26px; width:160px; height:auto; margin-left:-80px;
+      image-rendering:pixelated; transform-origin:50% 92%;
+    }
+    .gacha-nest {
+      position:absolute; left:50%; bottom:6px; width:192px; height:auto; margin-left:-96px;
+      image-rendering:pixelated; pointer-events:none;
+    }
+    .gacha-egg-stage.is-idle .gacha-egg-whole { animation:egg-idle 2.6s ease-in-out infinite; }
+    .gacha-egg-stage.is-shaking .gacha-egg-whole { animation:egg-shake 1.4s ease-in forwards; }
+    .gacha-egg-stage.is-cracking .gacha-egg-whole {
+      animation:egg-tremble .11s linear infinite;
+      filter:drop-shadow(0 0 10px var(--egg-glow)) drop-shadow(0 0 24px var(--egg-glow));
+    }
+    .gacha-egg-top { animation:egg-top-fly .65s cubic-bezier(.2,.7,.3,1) forwards; }
+    .gacha-egg-bottom {
+      animation:egg-bottom-land .45s cubic-bezier(.17,.67,.34,1.4);
+      filter:drop-shadow(0 -6px 14px var(--egg-glow));
+    }
+    .gacha-hatch-flash {
+      position:absolute; left:50%; top:52%; width:260px; height:260px; margin:-130px 0 0 -130px;
+      border-radius:50%; pointer-events:none;
+      background:radial-gradient(circle, #fff 0%, var(--egg-glow) 35%, transparent 70%);
+      animation:hatch-flash .65s ease-out forwards;
+    }
+    /* 生まれた景品は下の殻の縁より上に出す。44% だと殻に半分埋もれて見えた */
+    .gacha-egg-stage .gacha-sprite-overlay { top:30%; z-index:2; }
+    @keyframes egg-idle {
+      0%, 100% { transform:rotate(0deg) scaleY(1); }
+      25%      { transform:rotate(-3deg) scaleY(.99); }
+      50%      { transform:rotate(0deg) scaleY(1.01); }
+      75%      { transform:rotate(3deg) scaleY(.99); }
+    }
+    @keyframes egg-shake {
+      0%   { transform:rotate(0deg); }
+      10%  { transform:rotate(-6deg); }
+      20%  { transform:rotate(6deg); }
+      30%  { transform:rotate(-4deg); }
+      38%  { transform:rotate(0deg) translateY(0); }
+      46%  { transform:translateY(-14px) scale(.96, 1.06); }
+      54%  { transform:translateY(0) scale(1.08, .92); }
+      62%  { transform:rotate(-10deg); }
+      70%  { transform:rotate(10deg); }
+      78%  { transform:rotate(-12deg); }
+      86%  { transform:rotate(12deg); }
+      93%  { transform:rotate(-8deg); }
+      100% { transform:rotate(0deg); }
+    }
+    @keyframes egg-tremble {
+      0%, 100% { transform:translateX(0) rotate(0deg); }
+      25%      { transform:translateX(-2px) rotate(-2deg); }
+      50%      { transform:translateX(0) rotate(0deg); }
+      75%      { transform:translateX(2px) rotate(2deg); }
+    }
+    @keyframes egg-top-fly {
+      0%   { transform:translate(0, 0) rotate(0deg); opacity:1; }
+      60%  { transform:translate(-26px, -110px) rotate(-38deg); opacity:1; }
+      100% { transform:translate(-40px, -70px) rotate(-70deg); opacity:0; }
+    }
+    @keyframes egg-bottom-land {
+      0%   { transform:scale(1.08, .9); }
+      60%  { transform:scale(.96, 1.04); }
+      100% { transform:scale(1, 1); }
+    }
+    @keyframes hatch-flash {
+      0%   { opacity:0; transform:scale(.2); }
+      25%  { opacity:1; transform:scale(1); }
+      100% { opacity:0; transform:scale(1.4); }
+    }
+    .gacha-ten-egg {
+      display:block; margin:0 auto; height:46px; width:auto;
+      image-rendering:pixelated; transform-origin:50% 90%;
+      animation:egg-idle 1.2s ease-in-out infinite;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gacha-egg-stage .gacha-egg, .gacha-ten-egg, .gacha-hatch-flash { animation:none !important; }
     }
     .gacha-sprite-overlay {
       position:absolute; top:50%; left:50%;
@@ -452,7 +532,8 @@
     .gacha-pull-btn:disabled::after { display:none; }
     /* 10-pull grid */
     .gacha-ten-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; width:100%; position:relative; z-index:1; }
-    .gacha-ten-card { border-radius:12px; padding:8px 4px; text-align:center; opacity:0; }
+    /* 開く前は小さな卵を見せるので、カード自体は隠さない（開くときに card-flip で出す） */
+    .gacha-ten-card { border-radius:12px; padding:8px 4px; text-align:center; }
     .gacha-ten-card.show { animation:card-flip .42s cubic-bezier(.17,.67,.34,1.4) forwards; }
     .gacha-ten-card.show:active { transform:scale(.95); transition:transform .08s; }
     .gacha-ten-card-mon {
