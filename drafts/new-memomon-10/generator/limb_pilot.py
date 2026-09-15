@@ -56,7 +56,8 @@ def slice_sheet(path, rows, cols):
     for y0, y1 in rb:
         for x0, x1 in cb:
             box = (max(0, x0 - 16), max(0, y0 - 16), min(img.width, x1 + 17), min(img.height, y1 + 17))
-            out.append(cut(img.crop(box)))
+            # 明るい色の体が白フチと一緒にはがれないよう、ほぼ真っ白なフチだけを削る
+            out.append(cut(img.crop(box), fringe_min=225, fringe_sat=24, fringe_iter=4, bg_erode=4))
     return out
 
 

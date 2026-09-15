@@ -55,25 +55,40 @@ def shift(m, dy, dx):
     return out
 
 
-def cut(cell):
+def cut(cell, fringe_min=150, fringe_sat=255, fringe_iter=8, bg_erode=0):
+    """黒背景から切り抜き、外側の白フチを削る。
+    fringe_min / fringe_sat / fringe_iter は白フチとみなす明るさの下限・色みの上限・はがす回数。
+    Codex が描いたシートでは、ゆるい基準だと輪郭線のすき間から明るい体（よろい・クリーム色の毛）まで
+    はがれたので、ほぼ真っ白なピクセルだけに絞って呼ぶ"""
     a = np.array(cell.convert('RGB')).astype(int)
     h, w = a.shape[:2]
     # シートの背景はほぼ純黒（色の値 0〜1）。60 まで広げると、キャラの濃い輪郭線を伝って
     # パンダの模様やハチの縞まで背景になったので、純黒に近いピクセルだけを背景の候補にする
     dark = a.max(-1) <= 8
-    # 外周の暗いピクセルから始めて、暗いピクセルだけを伝って広げる
+    # 外周の暗いピクセルから始めて、暗いピクセルだけを伝って広げる。
+    # bg_erode > 0 のときは、暗い部分を先に細らせてから広げ、あとで同じ幅だけ太らせる。
+    # 白フチのすき間から黒い輪郭線を伝って、のぞき穴や爪の線など内側の黒まで透明になるのを防ぐ
+    # 画像の外も暗い（背景）とみなして細らせる。外を背景でないとみなすと、画像の端の黒まで削れて
+    # 塗りつぶしの出発点がなくなる
+    passable = np.pad(dark, bg_erode, constant_values=True)
+    for _ in range(bg_erode):
+        passable = passable & shift(passable, 1, 0) & shift(passable, -1, 0) & shift(passable, 0, 1) & shift(passable, 0, -1)
+    if bg_erode:
+        passable = passable[bg_erode:-bg_erode, bg_erode:-bg_erode]
     bg = np.zeros_like(dark)
-    bg[0, :], bg[-1, :], bg[:, 0], bg[:, -1] = dark[0, :], dark[-1, :], dark[:, 0], dark[:, -1]
+    bg[0, :], bg[-1, :], bg[:, 0], bg[:, -1] = passable[0, :], passable[-1, :], passable[:, 0], passable[:, -1]
     while True:
-        grown = (bg | shift(bg, 1, 0) | shift(bg, -1, 0) | shift(bg, 0, 1) | shift(bg, 0, -1)) & dark
+        grown = (bg | shift(bg, 1, 0) | shift(bg, -1, 0) | shift(bg, 0, 1) | shift(bg, 0, -1)) & passable
         if (grown == bg).all():
             break
         bg = grown
+    for _ in range(bg_erode):
+        bg = (bg | shift(bg, 1, 0) | shift(bg, -1, 0) | shift(bg, 0, 1) | shift(bg, 0, -1)) & dark
     fg = ~bg
     # 外側の白いフチを削る
-    for _ in range(8):
+    for _ in range(fringe_iter):
         touch = fg & (shift(bg, 1, 0) | shift(bg, -1, 0) | shift(bg, 0, 1) | shift(bg, 0, -1))
-        light = touch & (a.min(-1) >= 150)
+        light = touch & (a.min(-1) >= fringe_min) & ((a.max(-1) - a.min(-1)) <= fringe_sat)
         if not light.any():
             break
         fg &= ~light

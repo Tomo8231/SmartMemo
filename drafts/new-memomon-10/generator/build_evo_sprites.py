@@ -116,7 +116,8 @@ def fitted_pose(char, motion):
     for damped in range(11):
         t = 1 - damped * 0.1
         im = shape(char, 1 + (sx - 1) * t, sy, rot * t, flip)
-        if im.width <= W:
+        # 左右に 1 マスずつ余白を残す。枠いっぱいだと端で切れた部分が離れた線のように見えた
+        if im.width <= W - 2:
             break
     for k in range(11):
         if GROUND - im.height >= 0:
@@ -124,7 +125,7 @@ def fitted_pose(char, motion):
         im = shape(char, 1 + (sx - 1) * t, 1 + (sy - 1) * (1 - (k + 1) * 0.1), rot * t, flip)
         damped = max(damped, k + 1)
     # 傾けても足元が地面につくように、いちばん下のピクセルを地面にそろえる
-    x = min(max(0, round(W / 2 - im.width / 2) + dx), W - im.width)
+    x = min(max(1, round(W / 2 - im.width / 2) + dx), W - 1 - im.width)
     y = max(0, GROUND - im.height + dy)
     canvas = Image.new('RGBA', (W, H), (0, 0, 0, 0))
     canvas.paste(im, (x, y), im)
