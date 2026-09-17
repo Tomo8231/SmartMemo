@@ -4362,3 +4362,145 @@
        余白と同じだけ外へ出して、他の全画面と同じく画面幅いっぱいにする。 */
     .playground-modal > .fs-header { margin:0 -18px; width:calc(100% + 36px); }
     .gacha-modal > .fs-header      { margin:0 -20px; width:calc(100% + 40px); }
+
+    /* ===== 共有ボックス（SharesModal） ===== */
+    .share-overlay {
+      position:fixed; inset:0; z-index:1000;
+      background:var(--bg); display:flex; justify-content:center;
+      overscroll-behavior:contain;
+    }
+    .share-app {
+      width:100%; max-width:460px; height:100dvh; background:var(--bg);
+      display:flex; flex-direction:column; overflow:hidden; color:var(--ink);
+    }
+    .share-header {
+      flex:none; display:flex; align-items:center; gap:8px;
+      padding:12px 12px; background:var(--surface);
+      box-shadow:0 1px 0 var(--rule);
+    }
+    .share-back {
+      border:none; background:none; font-family:inherit; font-weight:800;
+      font-size:var(--fs-base); color:var(--accent); cursor:pointer; padding:4px 6px;
+    }
+    .share-title { flex:1; text-align:center; font-weight:800; font-size:var(--fs-lg); }
+    .share-reload {
+      border:none; background:var(--surface-sunk); color:var(--ink-soft);
+      width:34px; height:34px; border-radius:50%; cursor:pointer; font-size:16px;
+    }
+    .share-reload:disabled { opacity:.4; cursor:default; }
+    .share-main { flex:1; overflow-y:auto; padding:14px 14px 28px; min-height:0; }
+
+    .share-error, .share-notice {
+      border-radius:12px; padding:10px 12px; font-size:var(--fs-sm);
+      font-weight:700; line-height:1.6; margin-bottom:12px; white-space:pre-wrap;
+    }
+    .share-error  { background:var(--danger-bg);  color:var(--danger); }
+    .share-notice { background:var(--success-bg); color:var(--success); }
+
+    .share-card {
+      background:var(--surface); border-radius:16px; padding:13px 14px;
+      margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .share-card-title { font-size:var(--fs-sm); font-weight:800; color:var(--ink-soft); margin-bottom:8px; }
+    .share-create { box-shadow:0 0 0 2px var(--accent) inset; }
+    .share-create-sub { font-size:var(--fs-xs); color:var(--ink-mute); font-weight:700; margin-top:6px; line-height:1.6; }
+    .share-row { display:flex; gap:8px; align-items:center; }
+    .share-input {
+      flex:1; min-width:0; border:2px solid var(--rule-strong); border-radius:12px;
+      padding:10px 12px; font-family:inherit; font-size:var(--fs-base);
+      font-weight:700; outline:none; color:var(--ink); background:var(--surface);
+    }
+    .share-input:focus { border-color:var(--accent); }
+    .share-code-input { letter-spacing:2px; text-transform:uppercase; }
+    .share-code-display {
+      flex:1; font-family:ui-monospace, monospace; font-size:20px; font-weight:800;
+      letter-spacing:4px; color:var(--accent); background:var(--surface-sunk);
+      border-radius:12px; padding:10px 12px; text-align:center;
+    }
+    .share-primary {
+      border:none; border-radius:12px; background:var(--accent); color:var(--accent-text);
+      font-family:inherit; font-weight:800; font-size:var(--fs-base);
+      padding:11px 16px; cursor:pointer; white-space:nowrap;
+    }
+    .share-primary.wide { flex:1; }
+    .share-primary:disabled { opacity:.4; cursor:default; }
+    .share-secondary {
+      border:2px solid var(--rule-strong); background:var(--surface); color:var(--ink-soft);
+      border-radius:12px; font-family:inherit; font-weight:800; font-size:var(--fs-sm);
+      padding:9px 14px; cursor:pointer; white-space:nowrap;
+    }
+    .share-danger {
+      border:2px solid var(--danger); background:var(--surface); color:var(--danger);
+      border-radius:12px; font-family:inherit; font-weight:800; font-size:var(--fs-sm);
+      padding:11px 14px; cursor:pointer; white-space:nowrap;
+    }
+    .share-danger:disabled, .share-secondary:disabled { opacity:.4; cursor:default; }
+
+    .share-seclabel {
+      display:flex; align-items:center; gap:8px;
+      font-size:var(--fs-sm); font-weight:800; color:var(--ink-soft); margin:18px 4px 8px;
+    }
+    .share-add {
+      margin-left:auto; border:none; background:var(--accent-light); color:var(--accent);
+      border-radius:999px; font-family:inherit; font-weight:800; font-size:var(--fs-xs);
+      padding:6px 11px; cursor:pointer; white-space:nowrap;
+    }
+    .share-add:disabled { opacity:.4; cursor:default; }
+    .share-empty { color:var(--ink-mute); font-size:var(--fs-sm); font-weight:700; padding:10px 4px; line-height:1.7; }
+
+    .share-item {
+      width:100%; display:flex; align-items:center; gap:10px; text-align:left;
+      background:var(--surface); border:none; border-radius:14px; padding:12px 14px;
+      margin-bottom:8px; cursor:pointer; font-family:inherit;
+      box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .share-item-body { flex:1; min-width:0; }
+    .share-item-title { font-size:var(--fs-base); font-weight:800; color:var(--ink); }
+    .share-item-meta {
+      display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+      font-size:var(--fs-xs); color:var(--ink-mute); font-weight:700; margin-top:4px;
+    }
+    .share-item-code {
+      font-family:ui-monospace, monospace; letter-spacing:1px;
+      background:var(--surface-sunk); color:var(--ink-soft);
+      border-radius:999px; padding:2px 8px;
+    }
+    .share-item-go { color:var(--ink-faint); font-size:18px; flex:none; }
+
+    .share-row-item {
+      display:flex; align-items:center; gap:10px;
+      background:var(--surface); border-radius:14px; padding:10px 12px; margin-bottom:8px;
+      box-shadow:0 1px 3px rgba(0,0,0,.06);
+    }
+    .share-row-item.done { opacity:.6; }
+    .share-row-item.done .share-row-title { text-decoration:line-through; color:var(--ink-mute); }
+    .share-check {
+      flex:none; width:26px; height:26px; border-radius:50%;
+      border:2px solid var(--rule-strong); background:var(--surface);
+      cursor:pointer; font-weight:900; font-size:14px; color:var(--accent-text);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .share-check.checked, .share-row-item.done .share-check { background:var(--accent); border-color:var(--accent); }
+    .share-row-body { flex:1; min-width:0; }
+    .share-row-title { font-size:var(--fs-base); font-weight:700; line-height:1.45; }
+    .share-row-meta {
+      display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+      font-size:var(--fs-xs); color:var(--ink-mute); font-weight:700; margin-top:3px;
+    }
+    .share-tag { background:var(--accent-light); color:var(--accent); border-radius:999px; padding:2px 8px; }
+    .share-remove {
+      flex:none; border:none; background:none; color:var(--ink-faint);
+      font-size:15px; cursor:pointer; padding:4px 6px;
+    }
+    .share-remove:hover { color:var(--danger); }
+
+    .share-actions { display:flex; gap:8px; margin-top:20px; }
+    .share-foot { font-size:var(--fs-xs); color:var(--ink-mute); font-weight:700; margin-top:12px; line-height:1.7; }
+
+    /* 選択バーの「共有」だけ主役として塗る */
+    .ideas-export-act.share { background:var(--accent); color:var(--accent-text); }
+
+    /* TODO の共有選択モード */
+    .todo-item.select-mode { cursor:pointer; }
+    .todo-item.select-mode.selected { box-shadow:0 0 0 2px var(--accent) inset; }
+    .todo-select-check { pointer-events:none; }
