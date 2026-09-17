@@ -20,6 +20,11 @@ import {
 import {
   LS_SETTINGS, exportAllData, importAllData, loadStored, saveStored, stripSecretSettings,
 } from './lib/storage';
+import {
+  listShares, createShare, joinShare, fetchShare, saveShareItems,
+  leaveShare, deleteShare, countMembers, describeShareError,
+  type ShareRow, type ShareItems,
+} from './lib/shares';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -139,7 +144,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.45.10';
+const APP_VERSION = '1.46.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -2975,7 +2980,7 @@ const SPARK_POS = [
   { dx: 21, dy: 21, bg: 'var(--accent)' },
 ];
 
-function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', overdue, todayStr }: {
+function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', overdue, todayStr, selectMode, selected, onSelectToggle }: {
   todo: Todo;
   onToggle: (id: number | string) => void;
   onEdit: (t: Todo) => void;
@@ -2983,6 +2988,10 @@ function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', 
   soundType?: string;
   overdue?: boolean;
   todayStr: string;
+  // 共有する項目を選ぶモード。ONのあいだは完了も編集もせず、選択だけする
+  selectMode?: boolean;
+  selected?: boolean;
+  onSelectToggle?: (id: number | string) => void;
 }) {
   const [animating, setAnimating] = useState(false);
   const [sparkling, setSparkling] = useState(false);
@@ -3000,7 +3009,10 @@ function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', 
     onToggle(todo.id);
   }
   return (
-    <div className={`todo-item${todo.done ? ' done' : ''}${animating ? ' animate-fade' : ''}${justAdded ? ' just-added' : ''}${overdue ? ' overdue' : ''}`}>
+    <div
+      className={`todo-item${todo.done ? ' done' : ''}${animating ? ' animate-fade' : ''}${justAdded ? ' just-added' : ''}${overdue ? ' overdue' : ''}${selectMode ? ' select-mode' : ''}${selectMode && selected ? ' selected' : ''}`}
+      onClick={selectMode ? () => onSelectToggle?.(todo.id) : undefined}
+    >
       {sparkling && (
         <div className="todo-sparkle">
           {SPARK_POS.map(({ dx, dy, bg }, i) => (
@@ -3008,14 +3020,20 @@ function TodoItem({ todo, onToggle, onEdit, soundEnabled, soundType = 'doremi', 
           ))}
         </div>
       )}
-      <div className={`todo-check${todo.done ? ' checked' : ''}${animating ? ' animate-pop' : ''}`} onClick={handleToggle}>
-        {todo.done && <IcoCheck />}
-      </div>
+      {selectMode ? (
+        <div className={`todo-check todo-select-check${selected ? ' checked' : ''}`}>
+          {selected && <IcoCheck />}
+        </div>
+      ) : (
+        <div className={`todo-check${todo.done ? ' checked' : ''}${animating ? ' animate-pop' : ''}`} onClick={handleToggle}>
+          {todo.done && <IcoCheck />}
+        </div>
+      )}
       {/* 1 行 1 目的（1 節）。主情報はタイトルで、タグと時刻は補助。
           複製と削除は常時表示せず、行を開いた編集シートに置く。
           24px のアイコンが 2 つ並んでいたころは、チェックを押したつもりで
           削除に触れる事故が起きやすかった。 */}
-      <div className="todo-body" onClick={() => onEdit(todo)}>
+      <div className="todo-body" onClick={selectMode ? undefined : () => onEdit(todo)}>
         <div className="todo-main">
           <span className="todo-title">{todo.title}</span>
           {(todo.tags || []).map(t => <span key={t} className="tag-pill">{t}</span>)}
@@ -4061,7 +4079,7 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer, onOpenFocus }: {
+function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer, onOpenFocus, onShare }: {
   todos: Todo[];
   boss?: { id: string; title: string; spawnedAt: number } | null;
   onBossComplete?: () => void;
@@ -4083,6 +4101,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
   holidayConfig?: HolidayConfig;
   monLayer?: React.ReactNode;
   onOpenFocus?: () => void;
+  onShare?: (selected: Todo[]) => void;
 }) {
   const [sel,          setSel]        = useState<string>(todayStr);
   const [editPicking,  setEditPicking] = useState<Todo | null>(null);
@@ -4136,6 +4155,19 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
       setEditing({ todo, scope: 'single' });
     }
   }
+
+  // ── 共有する項目を選ぶモード ──
+  const [shareSelect, setShareSelect] = useState(false);
+  const [shareSel, setShareSel] = useState<Set<number | string>>(new Set());
+  // いま画面に見えているタスク（期限切れ・その日・日付未定）が選択の対象
+  const selectableTodos = [...overdueTodos, ...sortedDateTodos, ...sortedUndated];
+  const toggleShareSel = (id: number | string) =>
+    setShareSel(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allShareSelected = selectableTodos.length > 0 && selectableTodos.every(t => shareSel.has(t.id));
+  const exitShareSelect = () => { setShareSelect(false); setShareSel(new Set()); };
+  const shareItemProps = (t: Todo) => shareSelect
+    ? { selectMode: true, selected: shareSel.has(t.id), onSelectToggle: toggleShareSel }
+    : {};
 
   const gardenSigns   = [...overdueTodos, ...sortedDateTodos].filter(t => !t.done);
   const gardenFlowers = dateTodos.filter(t => t.done);
@@ -4363,18 +4395,32 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
       </div>
       <div className="todo-pane-right">
         <div className="todo-list-area">
+          {shareSelect && (
+            <div className="ideas-export-bar">
+              <button className="ideas-export-all" onClick={() => setShareSel(allShareSelected ? new Set() : new Set(selectableTodos.map(t => t.id)))}>
+                {allShareSelected ? '全解除' : '全選択'}
+              </button>
+              <span className="ideas-export-count">{shareSel.size} 件選択中</span>
+              <button
+                className="ideas-export-act share"
+                disabled={!shareSel.size}
+                onClick={() => { onShare?.(selectableTodos.filter(t => shareSel.has(t.id))); exitShareSelect(); }}
+              >共有</button>
+              <button className="ideas-export-cancel" onClick={exitShareSelect} aria-label="やめる">✕</button>
+            </div>
+          )}
           {boss && <BossItem boss={boss} onComplete={onBossComplete || (() => {})} onDismiss={onBossDismiss || (() => {})} />}
           {overdueTodos.length > 0 && <>
             <div className="overdue-head">
               <span className="section-head-label">期限切れ</span>
               <span className="section-count">{overdueTodos.length}</span>
             </div>
-            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} overdue />)}
+            {overdueTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} overdue {...shareItemProps(t)} />)}
             <div className="divider"/>
           </>}
           {sortedDateTodos.length === 0
             ? <div className="todo-empty">この日のタスクはありません</div>
-            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)
+            : sortedDateTodos.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} {...shareItemProps(t)} />)
           }
           {sortedUndated.length > 0 && <>
             <div className="divider"/>
@@ -4384,7 +4430,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
               <span className="undated-arrow">{undatedOpen ? <IcoChevronUp /> : <IcoChevronDown />}</span>
             </div>
             <div className={`undated-body${undatedOpen ? '' : ' closed'}`}>
-              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} />)}
+              {sortedUndated.map(t => <TodoItem key={t.id} todo={t} onToggle={onToggle} onEdit={handleEditStart} soundEnabled={soundEnabled} soundType={soundType} todayStr={todayStr} {...shareItemProps(t)} />)}
             </div>
           </>}
           {/* 最下段は 1 行にまとめる（4.1）。以前は同じ見た目のテキストリンクが
@@ -4398,6 +4444,11 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
             <button className="u-btn u-btn--ghost todo-set-open-btn" onClick={() => setShowSets(true)}>
               <IcoList /> セット{todoSets.length > 0 && <span className="todo-set-count">{todoSets.length}</span>}
             </button>
+            {onShare && !shareSelect && selectableTodos.length > 0 && (
+              <button className="u-btn u-btn--ghost todo-share-btn" onClick={() => { setShareSelect(true); setShareSel(new Set()); }}>
+                共有
+              </button>
+            )}
             <button className="u-btn u-btn--icon trash-open-btn" onClick={() => setShowTrash(true)} title="ゴミ箱" aria-label="ゴミ箱">
               <IcoTrash />{trash.length > 0 && <span className="trash-count">{trash.length}</span>}
             </button>
@@ -4436,7 +4487,7 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
 // ─────────────────────────────────────────────────────────────
 // Ideas Tab
 // ─────────────────────────────────────────────────────────────
-function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs, onGoMemo }: {
+function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTags, ideaTabs = [], onUpdateIdeaTabs, onGoMemo, onShare }: {
   ideas: Idea[];
   aiCfg: AiCfg;
   onUpdate: (i: Idea) => void;
@@ -4447,6 +4498,7 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
   ideaTabs?: string[];
   onUpdateIdeaTabs?: (tabs: string[]) => void;
   onGoMemo: () => void;
+  onShare?: (selected: Idea[]) => void;
 }) {
   const [editing,        setEditing]        = useState<Idea | null>(null);
   const [addingIdea,     setAddingIdea]     = useState(false);
@@ -4796,6 +4848,9 @@ function IdeasTab({ ideas, aiCfg, onUpdate, onDelete, onAdd, onReorder, customTa
           <span className="ideas-export-count">{selectedIds.size} 件選択中</span>
           <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleCopySelected} title="コピー">コピー</button>
           <button className="ideas-export-act" disabled={!selectedIds.size} onClick={handleDownloadSelected} title="Markdownで保存">.md で保存</button>
+          {onShare && (
+            <button className="ideas-export-act share" disabled={!selectedIds.size} onClick={() => { onShare(selectedIdeas); exitSelectMode(); }} title="他のユーザーと共有">共有</button>
+          )}
           <button className="ideas-export-cancel" onClick={exitSelectMode} aria-label="やめる">✕</button>
         </div>
       )}
@@ -5249,7 +5304,7 @@ const IcoSetGift = () => (<svg {...SET_ICO}><path d="M20 12v9H4v-9M2 7h20v5H2zM1
 const IcoSetData = () => (<svg {...SET_ICO}><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>);
 const IcoSetInfo = () => (<svg {...SET_ICO}><circle cx="12" cy="12" r="9"/><path d="M12 16v-5M12 8h.01"/></svg>);
 
-function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, syncNotice, lastSyncAt, onOpenAccount, onPushNow, onPullNow }: {
+function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncStatus, syncError, syncNotice, lastSyncAt, onOpenAccount, onOpenShares, onPushNow, onPullNow }: {
   settings: Settings;
   onChange: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   memoMons: MemoMonInstance[];
@@ -5260,6 +5315,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
   syncNotice?: string | null;
   lastSyncAt: string | null;
   onOpenAccount: () => void;
+  onOpenShares: () => void;
   onPushNow: () => void;
   onPullNow: () => void;
 }) {
@@ -5400,6 +5456,13 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
                   </div>
                 </div>
                 <button className="font-size-opt" onClick={onOpenAccount}>管理</button>
+              </div>
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row-label">共有</div>
+                  <div className="settings-row-sub">TODO やナレッジを他のユーザーと共有します</div>
+                </div>
+                <button className="font-size-opt" onClick={onOpenShares}>開く</button>
               </div>
               <div className="settings-row">
                 <div>
@@ -7706,6 +7769,307 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
 }
 
 // ─────────────────────────────────────────────────────────────
+// 共有ボックス
+// TODO / ナレッジをまとめて他のユーザーと共有する画面。
+// 参加は共有コード方式。メンバーは中身を見て、完了の切り替えや
+// 共有からの取り外し、自分のリストへの取り込みができる。
+// ─────────────────────────────────────────────────────────────
+function SharesModal({ draft, todos, ideas, onImport, onClose }: {
+  // 選択モードから渡された「これから共有したいもの」。null なら一覧から開始
+  draft: { todos: Todo[]; ideas: Idea[] } | null;
+  todos: Todo[];
+  ideas: Idea[];
+  onImport: (todos: Todo[], ideas: Idea[]) => void;
+  onClose: () => void;
+}) {
+  const [shares,   setShares]   = useState<ShareRow[]>([]);
+  const [current,  setCurrent]  = useState<ShareRow | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [busy,     setBusy]     = useState(false);
+  const [error,    setError]    = useState<string | null>(null);
+  const [notice,   setNotice]   = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState('');
+  const [newTitle, setNewTitle] = useState('');
+  const [memberCount, setMemberCount] = useState<number | null>(null);
+  // 作成済みかどうか。これが無いと作成フォームが残り、
+  // 続けて押すと同じ内容の共有が二重にできてしまう。
+  const [draftUsed, setDraftUsed] = useState(false);
+
+  const draftCount = (draft?.todos.length || 0) + (draft?.ideas.length || 0);
+
+  const say = (msg: string) => { setNotice(msg); setTimeout(() => setNotice(null), 2600); };
+  const fail = (e: unknown) => { console.error('[share]', e); setError(describeShareError(e)); };
+
+  async function reload() {
+    setLoading(true); setError(null);
+    try { setShares(await listShares()); } catch (e) { fail(e); } finally { setLoading(false); }
+  }
+  useEffect(() => { reload(); }, []);
+
+  // 詳細を開いたら人数も取る
+  useEffect(() => {
+    if (!current) { setMemberCount(null); return; }
+    let alive = true;
+    countMembers(current.id).then(n => { if (alive) setMemberCount(n); }).catch(() => {});
+    return () => { alive = false; };
+  }, [current?.id]);
+
+  async function openShare(id: string) {
+    setBusy(true); setError(null);
+    try {
+      const row = await fetchShare(id);
+      if (!row) { setError('共有が見つかりません（削除された可能性があります）'); await reload(); return; }
+      setCurrent(row);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  async function handleCreate() {
+    if (!draft) return;
+    setBusy(true); setError(null);
+    try {
+      const stamp = Date.now();
+      const items: ShareItems = {
+        // 共有した時点の内容を写して持つ。mtime はマージの勝ち負けに使う
+        todos: draft.todos.map(t => ({ ...t, mtime: stamp })),
+        ideas: draft.ideas.map(i => ({ ...i, mtime: stamp })),
+        deleted_ids: {},
+      };
+      const row = await createShare(newTitle, items);
+      setShares(prev => [row, ...prev]);
+      setCurrent(row);
+      setDraftUsed(true);
+      say(`共有をつくりました（コード ${row.code}）`);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  async function handleJoin() {
+    const code = joinCode.trim();
+    if (!code) return;
+    setBusy(true); setError(null);
+    try {
+      const id = await joinShare(code);
+      setJoinCode('');
+      await reload();
+      await openShare(id);
+      say('共有に参加しました');
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  // 中身を書き換えて保存する（競合したらマージして再送される）
+  async function mutate(fn: (items: ShareItems) => ShareItems, msg?: string) {
+    if (!current) return;
+    setBusy(true); setError(null);
+    try {
+      const next = fn(current.items);
+      const row = await saveShareItems(current.id, next, current.updated_at);
+      setCurrent(row);
+      setShares(prev => prev.map(s => s.id === row.id ? row : s));
+      if (msg) say(msg);
+    } catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  const toggleDone = (id: string | number) => mutate(items => ({
+    ...items,
+    todos: items.todos.map(t => t.id === id
+      ? { ...t, done: !t.done, completedAt: !t.done ? todayStr : undefined, mtime: Date.now() }
+      : t),
+  }));
+
+  const removeItem = (kind: 'todos' | 'ideas', id: string | number) => mutate(items => ({
+    ...items,
+    [kind]: (items[kind] as any[]).filter(x => x.id !== id),
+    // 墓標を立てないと、まだ古い内容を持っている人とマージしたときに復活する
+    deleted_ids: { ...items.deleted_ids, [String(id)]: Date.now() },
+  }), '共有から外しました');
+
+  // いま自分が持っていて、まだ共有に入っていないものを足す
+  async function addMine(kind: 'todos' | 'ideas') {
+    if (!current) return;
+    const pool: any[] = kind === 'todos' ? todos.filter(t => !t.done) : ideas;
+    const have = new Set(current.items[kind].map((x: any) => String(x.id)));
+    const add = pool.filter(x => !have.has(String(x.id)));
+    if (!add.length) { say('追加できるものがありません'); return; }
+    const stamp = Date.now();
+    await mutate(items => ({
+      ...items,
+      [kind]: [...items[kind], ...add.map(x => ({ ...x, mtime: stamp }))],
+    }), `${add.length}件を共有に追加しました`);
+  }
+
+  function handleImport() {
+    if (!current) return;
+    const t = current.items.todos as Todo[];
+    const i = current.items.ideas as Idea[];
+    onImport(t, i);
+    say(`自分のリストに取り込みました（TODO ${t.length}件 / ナレッジ ${i.length}件）`);
+  }
+
+  async function handleLeave() {
+    if (!current) return;
+    if (!window.confirm('この共有から抜けます。よろしいですか？')) return;
+    setBusy(true);
+    try { await leaveShare(current.id); setCurrent(null); await reload(); say('共有から抜けました'); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  async function handleDelete() {
+    if (!current) return;
+    if (!window.confirm('この共有を削除します。参加している全員から見えなくなります。よろしいですか？')) return;
+    setBusy(true);
+    try { await deleteShare(current.id); setCurrent(null); await reload(); say('共有を削除しました'); }
+    catch (e) { fail(e); } finally { setBusy(false); }
+  }
+
+  const isOwner = !!(current && authUserIdRef.current && current.owner_id === authUserIdRef.current);
+
+  return (
+    <div className="share-overlay">
+      <div className="share-app">
+        <header className="share-header">
+          {current
+            ? <button className="share-back" onClick={() => setCurrent(null)}>‹ 一覧</button>
+            : <button className="share-back" onClick={onClose}>‹ 閉じる</button>}
+          <div className="share-title">{current ? current.title : '共有'}</div>
+          <button className="share-reload" onClick={() => current ? openShare(current.id) : reload()} disabled={busy} aria-label="更新">⟳</button>
+        </header>
+
+        <main className="share-main">
+          {error && <div className="share-error">{error}</div>}
+          {notice && <div className="share-notice">{notice}</div>}
+
+          {!current ? (
+            <>
+              {draft && draftCount > 0 && !draftUsed && (
+                <section className="share-card share-create">
+                  <div className="share-card-title">選んだ {draftCount} 件を共有する</div>
+                  <div className="share-create-sub">
+                    TODO {draft.todos.length} 件 / ナレッジ {draft.ideas.length} 件
+                  </div>
+                  <div className="share-row">
+                    <input
+                      className="share-input"
+                      value={newTitle}
+                      onChange={e => setNewTitle(e.target.value)}
+                      placeholder="共有の名前（例: 旅行の準備）"
+                      maxLength={40}
+                    />
+                    <button className="share-primary" onClick={handleCreate} disabled={busy}>つくる</button>
+                  </div>
+                </section>
+              )}
+
+              <section className="share-card">
+                <div className="share-card-title">共有コードで参加</div>
+                <div className="share-row">
+                  <input
+                    className="share-input share-code-input"
+                    value={joinCode}
+                    onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="コード（例: A1B2C3）"
+                    maxLength={12}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                  />
+                  <button className="share-primary" onClick={handleJoin} disabled={busy || !joinCode.trim()}>参加</button>
+                </div>
+              </section>
+
+              <div className="share-seclabel">参加している共有</div>
+              {loading ? (
+                <div className="share-empty">読み込み中…</div>
+              ) : shares.length === 0 ? (
+                <div className="share-empty">
+                  まだ共有はありません。<br />
+                  にわのタスクや書庫のナレッジを選んで「共有」すると作れます。
+                </div>
+              ) : (
+                shares.map(s => (
+                  <button key={s.id} className="share-item" onClick={() => openShare(s.id)}>
+                    <div className="share-item-body">
+                      <div className="share-item-title">{s.title}</div>
+                      <div className="share-item-meta">
+                        TODO {s.items.todos.length} / ナレッジ {s.items.ideas.length}
+                        <span className="share-item-code">{s.code}</span>
+                      </div>
+                    </div>
+                    <span className="share-item-go">›</span>
+                  </button>
+                ))
+              )}
+            </>
+          ) : (
+            <>
+              <section className="share-card">
+                <div className="share-card-title">共有コード</div>
+                <div className="share-row">
+                  <div className="share-code-display">{current.code}</div>
+                  <button className="share-secondary" onClick={() => { copyToClipboard(current.code); }}>コピー</button>
+                </div>
+                <div className="share-create-sub">
+                  このコードを相手に伝えると参加できます{memberCount != null ? `（現在 ${memberCount} 人）` : ''}
+                </div>
+              </section>
+
+              <div className="share-seclabel">
+                TODO（{current.items.todos.length}）
+                <button className="share-add" onClick={() => addMine('todos')} disabled={busy}>＋ 自分の未完了を追加</button>
+              </div>
+              {current.items.todos.length === 0
+                ? <div className="share-empty">まだありません</div>
+                : (current.items.todos as Todo[]).map(t => (
+                  <div key={t.id} className={`share-row-item${t.done ? ' done' : ''}`}>
+                    <button className="share-check" onClick={() => toggleDone(t.id)} disabled={busy} aria-label="完了を切り替え">
+                      {t.done ? '✓' : ''}
+                    </button>
+                    <div className="share-row-body">
+                      <div className="share-row-title">{t.title}</div>
+                      <div className="share-row-meta">
+                        {t.startDate && <span>{t.startDate}</span>}
+                        {(t.tags || []).map(tag => <span key={tag} className="share-tag">{tag}</span>)}
+                      </div>
+                    </div>
+                    <button className="share-remove" onClick={() => removeItem('todos', t.id)} disabled={busy} aria-label="共有から外す">✕</button>
+                  </div>
+                ))}
+
+              <div className="share-seclabel">
+                ナレッジ（{current.items.ideas.length}）
+                <button className="share-add" onClick={() => addMine('ideas')} disabled={busy}>＋ 自分のものを追加</button>
+              </div>
+              {current.items.ideas.length === 0
+                ? <div className="share-empty">まだありません</div>
+                : (current.items.ideas as Idea[]).map(i => (
+                  <div key={i.id} className="share-row-item">
+                    <div className="share-row-body">
+                      <div className="share-row-title">{i.projectName || '(無題)'}</div>
+                      {i.summary && <div className="share-row-meta">{i.summary}</div>}
+                    </div>
+                    <button className="share-remove" onClick={() => removeItem('ideas', i.id)} disabled={busy} aria-label="共有から外す">✕</button>
+                  </div>
+                ))}
+
+              <div className="share-actions">
+                <button className="share-primary wide" onClick={handleImport} disabled={busy}>自分のリストに取り込む</button>
+                {isOwner
+                  ? <button className="share-danger" onClick={handleDelete} disabled={busy}>共有を削除</button>
+                  : <button className="share-danger" onClick={handleLeave} disabled={busy}>共有から抜ける</button>}
+              </div>
+              <div className="share-foot">
+                変更は参加者全員に反映されます。相手の画面では「⟳」で最新になります。
+              </div>
+            </>
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+// SharesModal から現在のログインユーザー id を参照するための置き場。
+// props を増やさずに済ませるため、App 側で毎レンダー書き込む。
+const authUserIdRef = { current: null as string | null };
+
+// ─────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
@@ -7725,7 +8089,16 @@ function SmartMemoApp() {
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
   const openPlayground = (uid?: string) => { setPlaygroundInitUid(uid ?? null); setShowPlayground(true); };
   const [showAccount, setShowAccount] = useState(false);
+  // 共有ボックス。draft は選択モードから渡された「これから共有するもの」
+  const [showShares, setShowShares] = useState(false);
+  const [shareDraft, setShareDraft] = useState<{ todos: Todo[]; ideas: Idea[] } | null>(null);
+  const openShares = (draft: { todos: Todo[]; ideas: Idea[] } | null = null) => {
+    setShareDraft(draft);
+    setShowShares(true);
+  };
   const [authUser, setAuthUser] = useState<User | null>(null);
+  // SharesModal がオーナー判定に使う（props を増やさずに済ませる）
+  authUserIdRef.current = authUser?.id ?? null;
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
   // エラーではないが伝えたい状態（機能が一部縮退しているなど）
@@ -8506,10 +8879,10 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
-        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} />}
+        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} onShare={(sel) => openShares({ todos: sel, ideas: [] })} />}
+        {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} onShare={(sel) => openShares({ todos: [], ideas: sel })} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} seenMons={settings.gachaUnlocked?.mons || []} onOpenPlayground={openPlayground} />}
-        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
+        {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onOpenShares={() => openShares()} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
       </div>
       <div className="bottom-nav-wrapper">
         <div className="bottom-nav" role="tablist" aria-label="画面の切り替え">
@@ -8602,6 +8975,33 @@ function SmartMemoApp() {
       )}
       {showAccount && (
         <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
+      )}
+      {showShares && (
+        <SharesModal
+          draft={shareDraft}
+          todos={todos}
+          ideas={ideas}
+          onImport={(sharedTodos, sharedIdeas) => {
+            // id を保ったまま取り込む。同じものを二度取り込んでも増えず、
+            // 既に持っていれば新しい方（mtime）で置き換わる。
+            const stamp = Date.now();
+            if (sharedTodos.length) {
+              setTodos(prev => {
+                const map = new Map(prev.map(t => [String(t.id), t]));
+                sharedTodos.forEach(t => map.set(String(t.id), { ...t, mtime: stamp }));
+                return Array.from(map.values());
+              });
+            }
+            if (sharedIdeas.length) {
+              setIdeas(prev => {
+                const map = new Map(prev.map(i => [String(i.id), i]));
+                sharedIdeas.forEach(i => map.set(String(i.id), { ...i, mtime: stamp }));
+                return Array.from(map.values());
+              });
+            }
+          }}
+          onClose={() => { setShowShares(false); setShareDraft(null); }}
+        />
       )}
       {feedRequestUid && (
         <FoodPickerSheet
