@@ -7,6 +7,19 @@ import {
   signUpWithEmail, signInWithEmail, signInWithGoogle, signOut,
   type CloudSnapshot,
 } from './lib/supabase';
+import {
+  AI_LABEL, ANTHROPIC_TEXT_MODEL, GEMINI_MODEL, OPENAI_TEXT_MODEL,
+  aiAudio, aiAudioSupported, aiCfgFromSettings, aiConfigured, aiJson, aiText, aiVision,
+  type AiCfg, type AiProvider,
+} from './lib/ai';
+import {
+  MAX_ATTACHMENTS, attFileIco, canPreview, dataUrlToObjectUrl, downloadFile,
+  filesToAttachments, getLinkLabel, makeLinkAttachment, openExternalUrl, openOrPreview,
+  type Attachment,
+} from './lib/attachments';
+import {
+  LS_SETTINGS, exportAllData, importAllData, loadStored, saveStored, stripSecretSettings,
+} from './lib/storage';
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -116,9 +129,7 @@ type IdeaDraft = {
 };
 type ParseResult = { todos: TodoDraft[]; ideas: IdeaDraft[] };
 type Pending = { todos: (TodoDraft & { id: string; done: false })[]; ideas: (IdeaDraft & { id: string })[] };
-type GeminiPart = { text?: string; inline_data?: { mime_type: string; data: string } };
 type Tab = 'memo' | 'todo' | 'idea' | 'zukan' | 'settings';
-type Attachment = { id: string; name: string; mime: string; data: string };
 type MemoHistoryItem = { id: number; text: string; savedAt: number; attachments?: Attachment[] };
 type TodoSetItem = { title: string; tags: string[]; coinReward?: number; };
 type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: number; mtime?: number; };
@@ -128,14 +139,13 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.45.9';
+const APP_VERSION = '1.45.10';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
 // ─────────────────────────────────────────────────────────────
 const LS_TODOS    = 'smartmemo:todos';
 const LS_IDEAS    = 'smartmemo:ideas';
-const LS_SETTINGS = 'smartmemo:settings';
 const LS_TRASH    = 'smartmemo:trash';
 const LS_DELETIONS = 'smartmemo:deletions';
 // サーバに deleted_ids 列が無いときの案内。
@@ -159,363 +169,6 @@ function pruneTombstones(t: Record<string, number>): Record<string, number> {
   return out;
 }
 const LS_TODO_SETS = 'smartmemo:todosets';
-
-// AI プロバイダの API キーは端末ローカルにだけ置く。クラウドへ送ると
-// user_data.settings の jsonb 列に平文で残り、DB のバックアップやダッシュボード
-// にも露出してしまう。送信前・受信後の両方でこのキーを落とす。
-const SECRET_SETTING_KEYS = ['geminiApiKey', 'openaiApiKey', 'anthropicApiKey'] as const;
-function stripSecretSettings(s: unknown): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...((s as Record<string, unknown>) || {}) };
-  for (const k of SECRET_SETTING_KEYS) delete out[k];
-  return out;
-}
-
-function loadStored<T>(key: string, fallback: T): T {
-  try {
-    const v = localStorage.getItem(key);
-    return v ? (JSON.parse(v) as T) : fallback;
-  } catch { return fallback; }
-}
-// 保存失敗のトーストは連発しがち（複数キーが同時にあふれる）なので間引く
-let lastSaveFailAt = 0;
-function saveStored<T>(key: string, value: T): void {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {
-    console.error('[SmartMemo] save failed for', key, e);
-    // 黙って握りつぶすと、画面上は保存できたように見えて再読み込みで消える。
-    // 原因のほとんどは容量超過なので、何をすれば直るかまで伝える。
-    const now = Date.now();
-    if (now - lastSaveFailAt > 10_000) {
-      lastSaveFailAt = now;
-      window.dispatchEvent(new CustomEvent('app-toast', {
-        detail: '保存できませんでした。端末の空き容量が足りません。メモ履歴の削除や添付ファイルの削減をお試しください',
-      }));
-    }
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-// Backup: export / import all SmartMemo data
-// ─────────────────────────────────────────────────────────────
-const SMARTMEMO_PREFIX = 'smartmemo:';
-const BACKUP_VERSION = 1;
-
-function collectSmartmemoKeys(): string[] {
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.startsWith(SMARTMEMO_PREFIX)) keys.push(k);
-  }
-  return keys;
-}
-
-function exportAllData(): void {
-  const data: Record<string, unknown> = {};
-  for (const key of collectSmartmemoKeys()) {
-    const raw = localStorage.getItem(key);
-    if (raw == null) continue;
-    try { data[key] = JSON.parse(raw); }
-    catch { data[key] = raw; }
-  }
-  const payload = {
-    app: 'SmartMemo',
-    version: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    data,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `smartmemo-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-async function importAllData(file: File): Promise<{ ok: boolean; msg: string }> {
-  let parsed: any;
-  try {
-    parsed = JSON.parse(await file.text());
-  } catch {
-    return { ok: false, msg: 'JSON として読み込めませんでした' };
-  }
-  if (!parsed || parsed.app !== 'SmartMemo' || typeof parsed.data !== 'object' || parsed.data === null) {
-    return { ok: false, msg: 'SmartMemo のバックアップファイルではありません' };
-  }
-  const entries = Object.entries(parsed.data).filter(([k]) => k.startsWith(SMARTMEMO_PREFIX));
-  if (entries.length === 0) {
-    return { ok: false, msg: 'インポートできるデータが見つかりませんでした' };
-  }
-  // Snapshot current data so a write failure can be rolled back.
-  const snapshot: Record<string, string> = {};
-  for (const key of collectSmartmemoKeys()) {
-    const raw = localStorage.getItem(key);
-    if (raw != null) snapshot[key] = raw;
-  }
-  try {
-    Object.keys(snapshot).forEach(k => localStorage.removeItem(k));
-    for (const [k, v] of entries) {
-      localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
-    }
-  } catch (e: any) {
-    // Roll back to the snapshot on quota/other failure.
-    collectSmartmemoKeys().forEach(k => localStorage.removeItem(k));
-    Object.entries(snapshot).forEach(([k, v]) => { try { localStorage.setItem(k, v); } catch {} });
-    return { ok: false, msg: '保存に失敗しました（容量不足の可能性）。データは元のままです' };
-  }
-  return { ok: true, msg: 'インポートしました。再読み込みします…' };
-}
-
-// ─────────────────────────────────────────────────────────────
-// Gemini API integration
-// ─────────────────────────────────────────────────────────────
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_URL = (key: string) =>
-  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-
-// json=true では「JSON モード」で呼ぶ。自由文のまま返させると前置きや
-// コードブロックが混ざって抽出に失敗し、精度の低いローカル解析へ落ちる。
-async function callGemini(apiKey: string, parts: GeminiPart[], json = false): Promise<string> {
-  if (!apiKey) throw new Error('no_api_key');
-  const res = await fetch(GEMINI_URL(apiKey), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      ...(json ? { generationConfig: { temperature: 0, responseMimeType: 'application/json', maxOutputTokens: 8192 } } : {}),
-    }),
-  });
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json())?.error?.message || ''; } catch {}
-    throw new Error(`Gemini ${res.status}${detail ? ': ' + detail : ''}`);
-  }
-  const data = await res.json();
-  // 思考するモデルは parts が複数に割れることがあるので全部つなぐ
-  return ((data.candidates?.[0]?.content?.parts || []) as GeminiPart[])
-    .map(p => p?.text || '').join('') || '';
-}
-const callGeminiText = (key: string, text: string) =>
-  callGemini(key, [{ text }]);
-const callGeminiVision = (key: string, prompt: string, base64: string, mime: string) =>
-  callGemini(key, [{ text: prompt }, { inline_data: { mime_type: mime, data: base64 } }]);
-const callGeminiAudio = (key: string, base64: string, mime: string) =>
-  callGemini(key, [
-    { text: '以下の音声を日本語で文字起こししてください。テキストのみを返してください。' },
-    { inline_data: { mime_type: mime, data: base64 } },
-  ]);
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(((r.result as string) || '').split(',')[1] || '');
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────
-// Unified AI layer — Gemini / OpenAI(GPT) / Anthropic(Claude)
-// ─────────────────────────────────────────────────────────────
-type AiProvider = 'gemini' | 'openai' | 'anthropic';
-type AiCfg = {
-  provider: AiProvider;
-  geminiKey: string;
-  openaiKey: string;
-  anthropicKey: string;
-  anthropicModel: string;
-};
-
-const OPENAI_TEXT_MODEL = 'gpt-4o-mini';
-// Claude はモデルを設定画面でテキスト指定できる。未指定時はこれをデフォルトに使う。
-const ANTHROPIC_TEXT_MODEL = 'claude-haiku-4-5';
-const OPENAI_AUDIO_MODEL = 'whisper-1';
-
-const AI_LABEL: Record<AiProvider, string> = { gemini: 'Gemini', openai: 'GPT (OpenAI)', anthropic: 'Claude (Anthropic)' };
-
-function aiCfgFromSettings(s: { aiProvider?: AiProvider; geminiApiKey?: string; openaiApiKey?: string; anthropicApiKey?: string; anthropicModel?: string }): AiCfg {
-  return {
-    provider: s.aiProvider || 'gemini',
-    geminiKey: s.geminiApiKey || '',
-    openaiKey: s.openaiApiKey || '',
-    anthropicKey: s.anthropicApiKey || '',
-    anthropicModel: (s.anthropicModel || '').trim() || ANTHROPIC_TEXT_MODEL,
-  };
-}
-function aiActiveKey(cfg: AiCfg): string {
-  return cfg.provider === 'openai' ? cfg.openaiKey : cfg.provider === 'anthropic' ? cfg.anthropicKey : cfg.geminiKey;
-}
-function aiConfigured(cfg: AiCfg): boolean {
-  return !!aiActiveKey(cfg);
-}
-// 音声の直接文字起こしに対応するのは Gemini / OpenAI(Whisper) のみ。
-function aiAudioSupported(cfg: AiCfg): boolean {
-  return (cfg.provider === 'gemini' && !!cfg.geminiKey) || (cfg.provider === 'openai' && !!cfg.openaiKey);
-}
-
-// ── OpenAI (GPT) ──
-async function callOpenAIChat(key: string, content: any, json = false): Promise<string> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      model: OPENAI_TEXT_MODEL,
-      messages: [{ role: 'user', content }],
-      // 解析は毎回同じ答えが欲しいので温度 0。JSON モードで前置きを封じる。
-      ...(json ? { temperature: 0, response_format: { type: 'json_object' } } : {}),
-    }),
-  });
-  if (!res.ok) {
-    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
-    throw new Error(`OpenAI ${res.status}${d ? ': ' + d : ''}`);
-  }
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content || '';
-}
-async function callOpenAIAudio(key: string, blob: Blob, mime: string): Promise<string> {
-  const ext = mime.includes('mp4') || mime.includes('aac') ? 'mp4' : mime.includes('ogg') ? 'ogg' : mime.includes('wav') ? 'wav' : 'webm';
-  const form = new FormData();
-  form.append('file', blob, `audio.${ext}`);
-  form.append('model', OPENAI_AUDIO_MODEL);
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${key}` },
-    body: form,
-  });
-  if (!res.ok) {
-    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
-    throw new Error(`OpenAI(Whisper) ${res.status}${d ? ': ' + d : ''}`);
-  }
-  const data = await res.json();
-  return data.text || '';
-}
-
-// ── Anthropic (Claude) ──
-async function callAnthropicMessages(key: string, content: any, model?: string, json = false): Promise<string> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    // メモ全体を1回で解析するため出力が長くなりうる。JSON が途中で切れると
-    // 解析に失敗してローカル解析へ落ちてしまうので上限に余裕を持たせる。
-    body: JSON.stringify({
-      model: (model || '').trim() || ANTHROPIC_TEXT_MODEL,
-      max_tokens: 8192,
-      // json のときは "{" を先に書かせて（prefill）前置きを物理的に不可能にする
-      messages: json
-        ? [{ role: 'user', content }, { role: 'assistant', content: '{' }]
-        : [{ role: 'user', content }],
-      ...(json ? { temperature: 0 } : {}),
-    }),
-  });
-  if (!res.ok) {
-    let d = ''; try { d = (await res.json())?.error?.message || ''; } catch {}
-    throw new Error(`Anthropic ${res.status}${d ? ': ' + d : ''}`);
-  }
-  const data = await res.json();
-  const text = (Array.isArray(data.content) ? data.content.map((c: any) => c?.text || '').join('') : '') || '';
-  return json ? `{${text}` : text;   // prefill した "{" を戻す
-}
-
-// ── Unified entry points ──
-async function aiText(cfg: AiCfg, prompt: string): Promise<string> {
-  const key = aiActiveKey(cfg);
-  if (!key) throw new Error('no_api_key');
-  if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt);
-  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }], cfg.anthropicModel);
-  return callGeminiText(key, prompt);
-}
-// JSON を返させる用の入口。プロバイダごとの JSON モードを必ず通す。
-async function aiJson(cfg: AiCfg, prompt: string): Promise<string> {
-  const key = aiActiveKey(cfg);
-  if (!key) throw new Error('no_api_key');
-  if (cfg.provider === 'openai')    return callOpenAIChat(key, prompt, true);
-  if (cfg.provider === 'anthropic') return callAnthropicMessages(key, [{ type: 'text', text: prompt }], cfg.anthropicModel, true);
-  return callGemini(key, [{ text: prompt }], true);
-}
-async function aiVision(cfg: AiCfg, prompt: string, base64: string, mime: string): Promise<string> {
-  const key = aiActiveKey(cfg);
-  if (!key) throw new Error('no_api_key');
-  if (cfg.provider === 'openai') {
-    return callOpenAIChat(key, [
-      { type: 'text', text: prompt },
-      { type: 'image_url', image_url: { url: `data:${mime};base64,${base64}` } },
-    ]);
-  }
-  if (cfg.provider === 'anthropic') {
-    return callAnthropicMessages(key, [
-      { type: 'text', text: prompt },
-      { type: 'image', source: { type: 'base64', media_type: mime, data: base64 } },
-    ], cfg.anthropicModel);
-  }
-  return callGeminiVision(key, prompt, base64, mime);
-}
-async function aiAudio(cfg: AiCfg, blob: Blob, mime: string): Promise<string> {
-  if (cfg.provider === 'openai') {
-    if (!cfg.openaiKey) throw new Error('no_api_key');
-    return callOpenAIAudio(cfg.openaiKey, blob, mime);
-  }
-  if (cfg.provider === 'gemini') {
-    if (!cfg.geminiKey) throw new Error('no_api_key');
-    const base64 = await blobToBase64(blob);
-    return callGeminiAudio(cfg.geminiKey, base64, mime);
-  }
-  throw new Error('audio_unsupported');
-}
-
-const MAX_ATTACHMENTS = 5;
-const MAX_FILE_BYTES  = 3 * 1024 * 1024; // 3 MB for non-image files
-// 画像は compressImage で縮小するので上限は緩めでよいが、無制限だと
-// 縮小前の data URL 化（元サイズの約 1.33 倍の文字列）でタブが落ちる。
-const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-
-function compressImage(dataUrl: string, maxW = 1400): Promise<string> {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const scale = Math.min(1, maxW / img.width);
-      const w = Math.round(img.width * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      (canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.78));
-    };
-    img.onerror = () => resolve(dataUrl);
-    img.src = dataUrl;
-  });
-}
-
-async function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result as string);
-    r.onerror = reject;
-    r.readAsDataURL(file);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────
-// Attachment preview helpers
-// ─────────────────────────────────────────────────────────────
-function dataUrlToObjectUrl(dataUrl: string, mime: string): string {
-  const b64 = dataUrl.split(',')[1] || '';
-  const bytes = atob(b64);
-  const arr = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-  return URL.createObjectURL(new Blob([arr], { type: mime }));
-}
-
-function getLinkLabel(url: string): string {
-  try { return new URL(url).hostname.replace(/^www\./, ''); }
-  catch { return url.length > 28 ? url.slice(0, 28) + '…' : url; }
-}
-
 // ─────────────────────────────────────────────────────────────
 // Unified Attachment Lightbox (image / PDF / text)
 // ─────────────────────────────────────────────────────────────
@@ -559,33 +212,9 @@ function AttachmentLightbox({ attachment, onClose }: { attachment: Attachment; o
   );
 }
 
-function downloadFile(a: Attachment) {
-  const el = document.createElement('a');
-  el.href = a.data; el.download = a.name;
-  document.body.appendChild(el); el.click(); document.body.removeChild(el);
-}
-
 // ─────────────────────────────────────────────────────────────
 // Attachment Section (reusable in modals)
 // ─────────────────────────────────────────────────────────────
-function canPreview(mime: string) {
-  return mime.startsWith('image/') || mime === 'application/pdf' || mime === 'text/plain' || mime === 'text/csv';
-}
-
-function openOrPreview(a: Attachment, setLightbox: (a: Attachment) => void) {
-  if (a.mime === 'text/x-url') { window.open(a.data, '_blank'); return; }
-  if (canPreview(a.mime)) { setLightbox(a); return; }
-  downloadFile(a);
-}
-
-function attFileIco(mime: string): string {
-  if (mime === 'application/pdf') return '📕';
-  if (mime === 'text/csv') return '📊';
-  if (mime.includes('sheet') || mime.includes('excel')) return '📊';
-  if (mime.includes('word') || mime.includes('document')) return '📝';
-  return '📄';
-}
-
 function AttachmentSection({ attachments, onChange, toast }: {
   attachments: Attachment[];
   onChange: (a: Attachment[]) => void;
@@ -600,28 +229,15 @@ function AttachmentSection({ attachments, onChange, toast }: {
   async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    const remaining = MAX_ATTACHMENTS - attachments.length;
-    if (remaining <= 0) { toast?.('添付ファイルは最大5件です'); return; }
-    const toAdd: Attachment[] = [];
-    for (const file of files.slice(0, remaining)) {
-      const isImage = file.type.startsWith('image/');
-      const limit   = isImage ? MAX_IMAGE_BYTES : MAX_FILE_BYTES;
-      if (file.size > limit) {
-        toast?.(`${file.name} はサイズが大きすぎます（最大${isImage ? '20' : '3'}MB）`); continue;
-      }
-      const raw = await readFileAsDataUrl(file);
-      const data = isImage ? await compressImage(raw) : raw;
-      toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
-    }
+    const toAdd = await filesToAttachments(files, MAX_ATTACHMENTS - attachments.length, toast);
     if (toAdd.length) onChange([...attachments, ...toAdd]);
   }
 
   function addLink() {
-    const raw = linkUrl.trim();
-    if (!raw) return;
-    const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
-    const label = getLinkLabel(url);
-    onChange([...attachments, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: label, mime: 'text/x-url', data: url }]);
+    if (!linkUrl.trim()) return;
+    const link = makeLinkAttachment(linkUrl);
+    if (!link) { toast?.('URL の形式が正しくありません'); return; }
+    onChange([...attachments, link]);
     setLinkUrl(''); setShowLinkInput(false);
   }
 
@@ -638,7 +254,7 @@ function AttachmentSection({ attachments, onChange, toast }: {
               ? <img src={a.data} className="attachment-thumb" onClick={() => openOrPreview(a, setLightbox)} alt={a.name} />
               : a.mime === 'text/x-url'
               ? (
-                <div className="attachment-link-chip" onClick={() => window.open(a.data, '_blank')}>
+                <div className="attachment-link-chip" onClick={() => openExternalUrl(a.data)}>
                   <span className="attachment-file-ico">🔗</span>
                   <span className="attachment-file-label">{a.name || getLinkLabel(a.data)}</span>
                 </div>
@@ -709,7 +325,7 @@ function AttachmentRow({ attachments }: { attachments: Attachment[] }) {
         </span>
       ))}
       {links.slice(0, 2).map(a => (
-        <span key={a.id} className="attachment-row-link" onClick={e => { e.stopPropagation(); window.open(a.data, '_blank'); }}>
+        <span key={a.id} className="attachment-row-link" onClick={e => { e.stopPropagation(); openExternalUrl(a.data); }}>
           🔗 {a.name || getLinkLabel(a.data)}
         </span>
       ))}
@@ -3609,6 +3225,14 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
     tRef.current = window.setTimeout(() => setToast(null), 2700);
   }
 
+  function addMemoLink() {
+    if (!memoLinkUrl.trim()) return;
+    const link = makeLinkAttachment(memoLinkUrl);
+    if (!link) { showToast('URL の形式が正しくありません'); return; }
+    setMemoAttachments(p => [...p, link]);
+    setMemoLinkUrl(''); setMemoShowLink(false);
+  }
+
   async function toggleRec() {
     if (recording) {
       try {
@@ -3923,7 +3547,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
                 {a.mime.startsWith('image/')
                   ? <img src={a.data} className="memo-att-thumb" alt={a.name} onClick={() => setMemoAttLightbox(a)} />
                   : a.mime === 'text/x-url'
-                  ? <div className="memo-att-file-chip" onClick={() => window.open(a.data, '_blank')}><span>🔗</span><span className="memo-att-file-name">{a.name || getLinkLabel(a.data)}</span></div>
+                  ? <div className="memo-att-file-chip" onClick={() => openExternalUrl(a.data)}><span>🔗</span><span className="memo-att-file-name">{a.name || getLinkLabel(a.data)}</span></div>
                   : <div className="memo-att-file-chip" onClick={() => openOrPreview(a, setMemoAttLightbox)}><span>{attFileIco(a.mime)}</span><span className="memo-att-file-name">{a.name}</span></div>
                 }
                 <button className="memo-att-remove" onClick={() => setMemoAttachments(p => p.filter(x => x.id !== a.id))}>✕</button>
@@ -3936,25 +3560,13 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
             <input type="url" className="attachment-link-url" placeholder="https://..."
               value={memoLinkUrl} onChange={e => setMemoLinkUrl(e.target.value)}
               onKeyDown={(e: React.KeyboardEvent) => {
-                if (e.key === 'Enter') {
-                  const raw = memoLinkUrl.trim();
-                  if (!raw) return;
-                  const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
-                  setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
-                  setMemoLinkUrl(''); setMemoShowLink(false);
-                }
+                if (e.key === 'Enter') addMemoLink();
                 // 外側のモーダルまで閉じないよう伝播を止める
                 if (e.key === 'Escape') { e.stopPropagation(); setMemoShowLink(false); setMemoLinkUrl(''); }
               }}
               autoFocus
             />
-            <button className="attachment-link-confirm" onClick={() => {
-              const raw = memoLinkUrl.trim();
-              if (!raw) return;
-              const url = /^https?:\/\//i.test(raw) ? raw : 'https://' + raw;
-              setMemoAttachments(p => [...p, { id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: getLinkLabel(url), mime: 'text/x-url', data: url }]);
-              setMemoLinkUrl(''); setMemoShowLink(false);
-            }}>追加</button>
+            <button className="attachment-link-confirm" onClick={addMemoLink}>追加</button>
             <button className="attachment-link-cancel" onClick={() => { setMemoShowLink(false); setMemoLinkUrl(''); }}>✕</button>
           </div>
         )}
@@ -3974,14 +3586,7 @@ function MemoTab({ existingProjects, existingIdeaBriefs = [], customTags, aiCfg,
           <input ref={memoAttRef} type="file" multiple accept="image/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx" style={{ display: 'none' }} onChange={async e => {
             const files = Array.from(e.target.files || []);
             e.target.value = '';
-            const remaining = MAX_ATTACHMENTS - memoAttachments.length;
-            const toAdd: Attachment[] = [];
-            for (const file of files.slice(0, remaining)) {
-              if (!file.type.startsWith('image/') && file.size > MAX_FILE_BYTES) { showToast(`${file.name} はサイズが大きすぎます（最大3MB）`); continue; }
-              const raw = await readFileAsDataUrl(file);
-              const data = file.type.startsWith('image/') ? await compressImage(raw) : raw;
-              toAdd.push({ id: `att_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: file.name, mime: file.type, data });
-            }
+            const toAdd = await filesToAttachments(files, MAX_ATTACHMENTS - memoAttachments.length, showToast);
             if (toAdd.length) setMemoAttachments(p => [...p, ...toAdd]);
           }} />
           <button className="action-btn" onClick={() => {
@@ -6316,7 +5921,7 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
       <div className="api-row">
         <div className="settings-row-label">バックアップ</div>
         <div className="settings-row-sub">
-          すべてのデータ（TODO・アイデア・設定・メモモンなど）を JSON ファイルに書き出し／読み込みできます。端末の変更やデータ消失に備えてバックアップを取れます。
+          すべてのデータ（TODO・アイデア・設定・メモモンなど）を JSON ファイルに書き出し／読み込みできます。端末の変更やデータ消失に備えてバックアップを取れます。AI の API キーはファイルに含まれません。
         </div>
         <div className="backup-btn-row">
           <button className="backup-btn" onClick={exportAllData}>エクスポート</button>
