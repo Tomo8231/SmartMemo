@@ -1,7 +1,7 @@
 {
   "name": "smartmemo",
   "private": true,
-  "version": "1.45.10",
+  "version": "1.45.11",
   "type": "module",
   "description": "AI でタスクを自動整理するメモ・TODO 管理 PWA",
   "scripts": {
@@ -11,7 +11,8 @@
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
     "visual:snap": "node scripts/visual-snapshot.mjs .visual",
-    "visual:diff": "node scripts/visual-diff.mjs .visual"
+    "visual:diff": "node scripts/visual-diff.mjs .visual",
+    "gen:memomon-doc": "node scripts/gen-memomon-doc.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
