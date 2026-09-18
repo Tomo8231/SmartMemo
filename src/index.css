@@ -4362,3 +4362,10 @@
        余白と同じだけ外へ出して、他の全画面と同じく画面幅いっぱいにする。 */
     .playground-modal > .fs-header { margin:0 -18px; width:calc(100% + 36px); }
     .gacha-modal > .fs-header      { margin:0 -20px; width:calc(100% + 40px); }
+
+    /* 進化系のおくりものは画像を持たないので emoji で見せる */
+    .gift-emoji {
+      display:flex; align-items:center; justify-content:center;
+      width:100%; height:100%; font-size:28px; line-height:1;
+    }
+    .gift-reveal-stage .gift-emoji, .playground-item-stage .gift-emoji { font-size:64px; }
