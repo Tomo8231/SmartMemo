@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { EVO_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP, EVO_REACTIONS } from './memomonEvo';
+import { EVO_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP } from './memomonEvo';
 import {
   supabase, isSupabaseConfigured,
   fetchCloud, pushCloud, isDeletedIdsUnsupported, retryDeletedIds,
@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.45.10';
+const APP_VERSION = '1.49.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -953,7 +953,8 @@ EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_FOOD_PREFS[s.id] = 
 
 // Rare collectible items dropped by each memomon at affection MAX.
 // One unique item per memomon. Tapping shows the comment.
-type MemoMonItem = { id: string; defId: string; name: string; imageUrl: string; comment: string };
+// 基本メモモンのおくりものは画像、進化系は emoji で見せる（画像が無いため）
+type MemoMonItem = { id: string; defId: string; name: string; imageUrl?: string; emoji?: string; comment: string };
 const MEMOMON_ITEMS: MemoMonItem[] = [
   { id: 'kuroneko_hairball',   defId: 'kuroneko',    name: '毛玉',             imageUrl: './items/kuroneko_hairball.png',   comment: 'クロネコがふと吐き出した毛玉。「持っていけ」と無造作にくれた。触ると意外と温かく、なぜか落ち着く。' },
   { id: 'slime_liquid',        defId: 'slime',       name: '謎の液体',          imageUrl: './items/slime_liquid.png',        comment: 'スライムが「すきー！」と言いながらくれた小瓶。きれいな色だが、何で出来ているかは本人にも分かっていない。' },
@@ -968,6 +969,10 @@ const MEMOMON_ITEMS: MemoMonItem[] = [
   { id: 'gomachan_shell',      defId: 'gomachan',    name: '貝殻',             imageUrl: './items/gomachan_shell.png',      comment: 'ごまちゃんが夢の中で拾ってきた（と本人は言い張る）貝殻。耳に当てると、海の音がする…気がする。' },
   { id: 'magician_wand',       defId: 'magician',    name: 'ステッキ',          imageUrl: './items/magician_wand.png',       comment: 'マジシャンの予備のステッキ。振ると「アブラカタブラ」と微かに聞こえる気がする。本物の魔法は使えないので注意。' },
 ];
+// 進化系のおくりものを、個体ごとの定義から流し込む
+EVO_LINES.forEach(line => line.stages.forEach(s => {
+  MEMOMON_ITEMS.push({ id: `${s.id}_gift`, defId: s.id, name: s.gift.name, emoji: s.gift.emoji, comment: s.gift.comment });
+}));
 const ITEM_BY_DEFID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.defId, i]));
 const ITEM_BY_ID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.id, i]));
 
@@ -6242,7 +6247,7 @@ const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
   },
 };
 EVO_LINES.forEach(line => line.stages.forEach(s => {
-  MEMOMON_LINES[s.id] = { chat: line.chat, tip: [...line.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
+  MEMOMON_LINES[s.id] = { chat: s.chat, tip: [...s.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
 }));
 
 function pickMemoMonLine(defId: string): string | null {
@@ -6338,7 +6343,7 @@ const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
     feedDis:    ['ぐぬ…', '寝る前提でない…', 'ぱた…', 'ふぁ…ダメ', 'うえぇ'],
   },
 };
-EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_REACTIONS[s.id] = EVO_REACTIONS; }));
+EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_REACTIONS[s.id] = s.reactions; }));
 
 function pickReaction(defId: string, kind: ReactionKind): string | null {
   const r = MEMOMON_REACTIONS[defId];
@@ -6758,7 +6763,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                                   aria-label={giftItem!.name}
                                   title={giftItem!.name}
                                 >
-                                  <img src={giftItem!.imageUrl} alt={giftItem!.name} />
+                                  {giftItem!.imageUrl
+                                    ? <img src={giftItem!.imageUrl} alt={giftItem!.name} />
+                                    : <span className="gift-emoji">{giftItem!.emoji}</span>}
                                   {count > 1 && <span className="playground-gift-slot-count">×{count}</span>}
                                 </button>
                               );
@@ -6872,7 +6879,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
                 <div className="gift-reveal-banner">✨ おくりもの GET! ✨</div>
                 <div className="gift-reveal-mon">{giftReveal.monName} から</div>
                 <div className="gift-reveal-stage">
-                  <img src={item.imageUrl} alt={item.name} />
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.name} />
+                    : <span className="gift-emoji">{item.emoji}</span>}
                 </div>
                 <div className="gift-reveal-name">{item.name}</div>
                 <button className="gift-reveal-close" onClick={() => setGiftReveal(null)}>OK</button>
@@ -6890,7 +6899,9 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
               <div className="playground-item-sheet" onClick={e => e.stopPropagation()}>
                 <button className="gacha-close-btn" onClick={() => setInspectItemId(null)} aria-label="閉じる">✕</button>
                 <div className="playground-item-stage">
-                  <img src={item.imageUrl} alt={item.name} />
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.name} />
+                    : <span className="gift-emoji">{item.emoji}</span>}
                 </div>
                 <div className="playground-item-name">{item.name}</div>
                 <div className="playground-item-giver">{giver?.name ?? ''}からの贈り物</div>
