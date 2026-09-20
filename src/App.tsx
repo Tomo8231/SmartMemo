@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.53.0';
+const APP_VERSION = '1.54.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6159,58 +6159,70 @@ type LiveMon = MemoMonInstance & {
   speech?: { text: string; until: number };
 };
 
-const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
+const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[]; done: string[] }> = {
   kuroneko: {
-    chat: ['…にゃ', '夜は静かでよい', 'ふぅ…', '誰かに見られている気がする', 'あくび…', '見るな', '今宵は良い夜だ'],
+    chat: ['…にゃ', '夜は静かでよい', 'ふぅ…', '誰かに見られている気がする', 'あくび…', '…見るなよ（ちらっ）', '今宵は良い夜だ'],
     tip: ['完了したものは整理してこそ意味があるぞ', 'ナレッジに残せば、未来の自分が助かる'],
+    done: ['…やるじゃないか', 'ふん、見ていたぞ', '夜が明ける前に終わったな'],
   },
   skullon: {
     chat: ['カラカラ…', '我は永遠なり', 'おばけ、どこ行った？', 'ホネは細部に宿る', 'メメント・モリ', 'もう体は無いが、未練はある'],
     tip: ['削除したメモはゴミ箱から復元できる', '整理整頓、それもまた供養'],
+    done: ['カラカラ…（骨の拍手）', '生者の時間は有限だ、よく使った', '我が骨に刻んでおこう'],
   },
   slime: {
     chat: ['ぷるん', 'ぷにぷに', '今日も湿度ばっちり', 'メモにくっついちゃった', 'むにゅ〜ん', 'ふにゃっ'],
     tip: ['TODOに期限を入れると忘れにくくなるよ', 'タグで分類するとあとから探しやすいよ'],
+    done: ['ぷるん！（よろこび）', 'べたっとくっついて祝う', 'ぷにぷに、おめでとう'],
   },
   hiyoko: {
     chat: ['ぴよっ！', 'ぴよぴよぴよ〜', 'ぴよ！(やる気MAX)', 'ぴよぴよ…(疲れた)', 'ちっちゃくても頑張るピヨ', 'ぴよっ！？'],
     tip: ['メモは音声入力もできるピヨ！', '繰り返し設定で習慣化できるピヨ'],
+    done: ['ぴよーっ！！', 'ぴよぴよ！(拍手)', 'ちっちゃくても嬉しいピヨ'],
   },
   obake: {
     chat: ['ふぁ〜…', 'ぼくみえてる？', 'ドクロンと遊んでた', '驚かしちゃおっと', 'ふらふら…', 'ぼくの正体は秘密'],
     tip: ['ナレッジタブにメモした知識が貯まるよ〜', '夜更かしせず、明日のTODOを軽くして寝るのもアリ'],
+    done: ['わっ！…おめでとう', 'ぼくもびっくりした', 'ふわ〜、すごいね'],
   },
   yukigitsune: {
     chat: ['ふっ、運気上昇のしるしだ', '九尾を見たな', '雪のような気品を', '今日は良い日になるぞ', '尾を数えると不思議が起きる', '選ばれし者よ'],
     tip: ['完了したTODOは履歴に残り、知の糧となる', '焦らずとも、続けることが運を呼ぶ'],
+    done: ['やはり選ばれし者よ', '運気が上向いたぞ', '九尾が揺れておる'],
   },
   shibainu: {
     chat: ['わんわん！', 'わんわんわん！', '走り回るぞ！', 'あなた最高！', '尻尾ぶんぶん', '今日も全力疾走！', 'もっと撫でて〜'],
     tip: ['TODOにタグを付けると分類しやすいワン！', '完了するとコインがもらえるワン！'],
+    done: ['わんわんわん！！', 'すごいすごい！走り回るぞ！', '尻尾が止まらないっ'],
   },
   magician: {
     chat: ['じゃじゃーん！', '魔法の時間だ', 'アブラカタブラ', '袖の中、空っぽに見える？', '拍手をくれ、拍手を', '種も仕掛けもあるんだ'],
     tip: ['メモを書いてAI解析するとタスクが自動で生まれるぞ', 'ガチャは確率の魔法、引きすぎ注意'],
+    done: ['じゃじゃーん！大成功！', 'お見事、拍手をくれ', '種も仕掛けもない実力だね'],
   },
   dragon: {
     chat: ['我は黒龍なり', '汝のタスク、整えん', '…', '古より見守る', '忠誠を誓う', '縮んでも龍は龍'],
     tip: ['繰り返し設定は「毎日」「毎週」など選べる', '完了したナレッジは知の宝として残る'],
+    done: ['見事である', '汝の働き、覚えておこう', '…よくやった'],
   },
   pylar: {
     chat: ['いいねっ！', 'うっす！', '君ならできる！', '今日も腕を立てよう！', '筋肉は裏切らない', '応援してるぞ！', 'グッド！'],
     tip: ['TODOを完了するとコインがもらえるぜ！', '1日1タスクでも前進だ！'],
+    done: ['いいねっ！最高だ！', 'ナイスファイト！', '筋肉も喜んでるぞ！'],
   },
   matameta: {
     chat: ['めためたわかる！', 'ふむふむ、めためたわかる', 'なるほど〜', '頭の芽が育ってきた', 'もう一度教えて？', 'わかったふりは得意'],
     tip: ['ナレッジを集めると芽が伸びる気がする', 'メモを残せば後で見返せるんだって、めためたわかる'],
+    done: ['めためたすごい！', 'ふむふむ、めためた立派', '頭の芽が伸びた気がする'],
   },
   gomachan: {
     chat: ['すぴー…', 'ねむい…', 'あと10分…', 'ふあぁ', '起こさないで', 'おふとん最高', '夢の中で泳ぐ', 'ぱたぱた'],
     tip: ['通知設定でリマインドできるよ、たぶん…', '寝る前にTODOを整理しておくと朝が楽だよ'],
+    done: ['ぱたぱた！（ヒレで拍手）', 'ふあぁ…えらいねぇ', '起きた甲斐があった'],
   },
 };
 EVO_LINES.forEach(line => line.stages.forEach(s => {
-  MEMOMON_LINES[s.id] = { chat: s.chat, tip: [...s.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
+  MEMOMON_LINES[s.id] = { chat: s.chat, tip: [...s.tip, ...(s.evolvesTo ? [EVO_TIP] : [])], done: s.done };
 }));
 
 function pickMemoMonLine(defId: string): string | null {
@@ -6223,9 +6235,18 @@ function pickMemoMonLine(defId: string): string | null {
 }
 
 // タスク完了時など、メモモン別の台詞が用意されていない場面で使う汎用の喜び台詞
+// 誰が にわ に出ているか分からないときの言葉（本来はキャラごとのセリフが出る）
 const CHEER_LINES_TASK = ['やったね！', 'すごい！', 'えらい！', 'がんばったね', 'その調子！', 'おつかれさま！'];
 function pickCheerLine(): string {
   return CHEER_LINES_TASK[Math.floor(Math.random() * CHEER_LINES_TASK.length)];
+}
+
+// タスクを達成したときのセリフ。にわに出ている子の性格に合わせて変える。
+// 知らない defId（データが古いなど）のときだけ、当たりさわりのない言葉に戻す。
+function pickDoneLine(defId?: string): string {
+  const pool = defId ? MEMOMON_LINES[defId]?.done : undefined;
+  if (!pool || pool.length === 0) return pickCheerLine();
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -6234,10 +6255,10 @@ function pickCheerLine(): string {
 type ReactionKind = 'pet' | 'feedFav' | 'feedNormal' | 'feedDis';
 const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
   kuroneko: {
-    pet:        ['…にゃ', 'ふぅ…', 'まあいい', '見るな', 'もうちょっと'],
+    pet:        ['…にゃ', 'ふぅ…', 'まあいい', '…にゃ（されるがまま）', 'もうちょっと'],
     feedFav:    ['これだ…！', '思い出すにゃ', 'お主、わかっておるな', '至福…', '夜のごちそうだ'],
     feedNormal: ['ふむ', '悪くない', 'まあ食ってやろう', 'にゃ', 'ごちそうさま'],
-    feedDis:    ['…これは', '勘弁してくれ', 'にゃっ！？', 'これは違う', 'ぐぬぬ'],
+    feedDis:    ['…これは', '…これは勘弁にゃ', 'にゃっ！？', 'これは違う', 'ぐぬぬ'],
   },
   skullon: {
     pet:        ['カラカラ…', '我に触れたな', 'ホネに沁みる', 'もぞ', '気は確かか？'],
@@ -8123,10 +8144,16 @@ function SmartMemoApp() {
 
   // なつき度 MAX の子を にわに出したままタスクを完了すると、進化ゲージがたまる。
   // ゲージがいっぱいになったら次の姿に進化し、図鑑にもその姿を記録する。
+  // にわに出ている（＝吹き出しを出す）メモモン。進化も、達成したときのセリフも、
+  // この子が受け持つ。にわの表示と同じ選び方でないと、別の子のセリフが出てしまう。
+  const gardenMon = (() => {
+    const known = memoMons.filter(m => MEMOMON_DEFS.some(d => d.id === m.defId));
+    return (settings.activeMonUid && known.find(m => m.uid === settings.activeMonUid)) || known[0];
+  })();
+
   const advanceEvolution = () => {
     if (settings.memoMonVisible === false) return;
-    const known = memoMons.filter(m => MEMOMON_DEFS.some(d => d.id === m.defId));
-    const target = (settings.activeMonUid && known.find(m => m.uid === settings.activeMonUid)) || known[0];
+    const target = gardenMon;
     const def = target && MEMOMON_DEFS.find(d => d.id === target.defId);
     if (!target || !def?.evolvesTo || effectiveAffection(target) < 100) return;
     const need = EVO_TASKS_TO_EVOLVE[def.evoStage === 2 ? 2 : 1];
@@ -8177,7 +8204,7 @@ function SmartMemoApp() {
     }
     // 完了したときだけ、にわのメモモンが喜ぶ（未完了に戻したときは反応しない）
     if (todo && !todo.done) {
-      cheerMon(pickCheerLine());
+      cheerMon(pickDoneLine(gardenMon?.defId));
       advanceEvolution();
     }
     setTodos(p => p.map(t => {
@@ -8256,11 +8283,8 @@ function SmartMemoApp() {
   // メモモンは庭（ガーデンワールド）の中でだけ歩く
   const monLayer = (() => {
     if (settings.memoMonVisible === false) return null;
-    // 表示できるのは MEMOMON_DEFS に定義がある個体だけ（未知 defId を除外）。
-    const known = memoMons.filter(m => MEMOMON_DEFS.some(d => d.id === m.defId));
     // Only one memomon is on screen at a time. Default to the first owned one.
-    const activeUid = settings.activeMonUid;
-    const active = (activeUid && known.find(m => m.uid === activeUid)) || known[0];
+    const active = gardenMon;
     if (!active) return null;
     const monScale = ({ small: 0.75, medium: 1, large: 1.5 } as const)[settings.memoMonSize || 'medium'] ?? 1;
     return (
