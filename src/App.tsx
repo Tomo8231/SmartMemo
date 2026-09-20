@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.53.0';
+const APP_VERSION = '1.53.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -5120,6 +5120,18 @@ function KnowledgeChat({ ideas, aiCfg, onClose }: { ideas: Idea[]; aiCfg: AiCfg;
 const RARITY_STARS: Record<string, string> = { ultra: '★★★★★', super: '★★★★', rare: '★★★', common: '★★' };
 const RARITY_LABEL: Record<string, string> = { ultra: 'ウルトラ', super: 'スーパー', rare: 'レア', common: 'ノーマル' };
 
+// 進化後の姿を持っているなら、その前の段階には必ず出会っている。
+// ガチャから出るのは各系統の1段階目だけなので、途中から始まることはない。
+// 「出会った」記録が欠けていても、ここから補って ??? に戻らないようにする。
+const EARLIER_STAGES: Record<string, string[]> = {};
+MEMOMON_DEFS.forEach(d => {
+  if (!d.lineKey || !d.evoStage) return;
+  const before = MEMOMON_DEFS
+    .filter(x => x.lineKey === d.lineKey && (x.evoStage ?? 1) < d.evoStage!)
+    .map(x => x.id);
+  if (before.length) EARLIER_STAGES[d.id] = before;
+});
+
 function ZukanTab({ memoMons, seenMons, onOpenPlayground }: {
   memoMons: MemoMonInstance[];
   seenMons: string[];
@@ -5130,6 +5142,8 @@ function ZukanTab({ memoMons, seenMons, onOpenPlayground }: {
   memoMons.forEach(m => { if (!ownedByDef.has(m.defId)) ownedByDef.set(m.defId, m); });
   // 進化すると前の姿の子は手元からいなくなるので、出会ったことがある姿も図鑑に載せる
   const seen = new Set(seenMons);
+  // 記録が欠けていても、持っている姿から前の段階を補う
+  memoMons.forEach(m => (EARLIER_STAGES[m.defId] || []).forEach(id => seen.add(id)));
   const isKnown = (id: string) => ownedByDef.has(id) || seen.has(id);
   const ownedCount = MEMOMON_DEFS.filter(d => isKnown(d.id)).length;
 
@@ -8404,6 +8418,9 @@ function SmartMemoApp() {
     merged.gachaUnlocked = {
       sounds: uniq(remote?.gachaUnlocked?.sounds, local?.gachaUnlocked?.sounds),
       bgs:    uniq(remote?.gachaUnlocked?.bgs, local?.gachaUnlocked?.bgs),
+      // mons を書き忘れていたため、同期のたびに「出会った姿」の記録が全部消えて
+      // いた。進化して手元からいなくなった姿が ずかん で ??? に戻ってしまう。
+      mons:   uniq(remote?.gachaUnlocked?.mons, local?.gachaUnlocked?.mons),
     };
     merged.foodInventory = mergeCounts(remote?.foodInventory, local?.foodInventory);
     merged.itemInventory = mergeCounts(remote?.itemInventory, local?.itemInventory);
