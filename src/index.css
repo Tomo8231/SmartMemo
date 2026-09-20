@@ -3315,42 +3315,6 @@
        ダークだけ選択状態が表示されなくなる。 */
     .app.dark .font-size-opt:not(.sel) { background:#1e1e21; border-color:#2e2e32; color:#b0b0ac; }
 
-    /* Boss TODO */
-    .boss-item {
-      background:linear-gradient(135deg, #fffde7 0%, #fff8e1 100%);
-      border:2px solid #ffd700; border-radius:12px;
-      padding:12px 14px; margin-bottom:10px;
-      display:flex; align-items:center; gap:10px;
-      animation:boss-pulse 2.5s ease-in-out infinite;
-    }
-    @keyframes boss-pulse {
-      0%, 100% { box-shadow:0 0 0 0 rgba(255,215,0,.5); }
-      50%       { box-shadow:0 0 0 10px rgba(255,215,0,0); }
-    }
-    .boss-crown { font-size:26px; flex-shrink:0; }
-    .boss-body { flex:1; min-width:0; }
-    .boss-title { font-size:13px; font-weight:700; color:#7a5200; line-height:1.45; }
-    .boss-reward { font-size:11px; color:#c8860a; margin-top:3px; font-weight:600; }
-    .boss-actions { display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0; }
-    .boss-complete-btn {
-      background:linear-gradient(135deg, #ffd700, #ff9500); color:#4a2800;
-      border:none; border-radius:8px; padding:7px 12px;
-      font-size:12px; font-weight:800; cursor:pointer; font-family:inherit;
-      box-shadow:0 2px 8px rgba(255,200,0,.4); white-space:nowrap;
-      transition:transform .12s, box-shadow .12s;
-    }
-    .boss-complete-btn:active { transform:scale(.95); }
-    .boss-dismiss-btn {
-      width:20px; height:20px; border:1px solid #e8d066; background:transparent;
-      border-radius:50%; cursor:pointer; font-size:9px; color:#b09030;
-      display:flex; align-items:center; justify-content:center; transition:background .12s;
-    }
-    .boss-dismiss-btn:hover { background:rgba(255,215,0,.2); }
-    .app.dark .boss-item { background:linear-gradient(135deg, #2a2000 0%, #1e1800 100%); border-color:#6b5500; }
-    .app.dark .boss-title { color:#ffd700; }
-    .app.dark .boss-reward { color:#c8a000; }
-    .app.dark .boss-dismiss-btn { border-color:#4a3800; color:#8a6a00; }
-
     /* Sparkle burst overlay (memo→items reflection) */
     .sparkle-burst {
       position:absolute; pointer-events:none; z-index:250;
@@ -3563,13 +3527,6 @@
     .app.glass .overdue-head,
     .app.glass .undated-head { background: transparent; }
     .app.glass .reflect-btn { box-shadow: 0 4px 16px rgba(212,98,42,.25); }
-    .app.glass .boss-item {
-      background: linear-gradient(135deg, rgba(255,253,231,.55) 0%, rgba(255,248,225,.45) 100%);
-      backdrop-filter: blur(16px) saturate(150%);
-      -webkit-backdrop-filter: blur(16px) saturate(150%);
-      border-color: rgba(255,215,0,.65);
-      box-shadow: 0 6px 20px rgba(255,215,0,.20), inset 0 1px 0 rgba(255,255,255,.55);
-    }
     .app.glass .ideas-subtab.active { background: transparent; }
 
     .app.glass .gacha-modal { background: linear-gradient(160deg, rgba(255,255,255,.35), rgba(255,255,255,.25)); }
@@ -3653,10 +3610,6 @@
     .app.dark.glass .memo-actions { border-top-color: rgba(255,255,255,.08); }
     .app.dark.glass .cal-cell:hover { background: rgba(255,255,255,.08); }
     .app.dark.glass .cal-cell.selected { background: var(--accent-light); }
-    .app.dark.glass .boss-item {
-      background: linear-gradient(135deg, rgba(58,40,0,.55), rgba(40,30,0,.45));
-      border-color: rgba(255,215,0,.40);
-    }
 
     .app.dark.glass .modal-field input,
     .app.dark.glass .modal-field select,
