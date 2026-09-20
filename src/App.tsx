@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.50.2';
+const APP_VERSION = '1.53.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -719,16 +719,6 @@ EVO_LINES.forEach(line => GACHA_ITEMS.push({
   type: 'memomon', label: `${line.emoji} ${line.stages[0].name}`, rarity: 'rare', stars: '★★★',
   color: line.color, monDefId: line.stages[0].id, weight: 1, flavor: line.flavor,
 }));
-const BOSS_TODOS = [
-  '今日のタスクを3つ完了させよ！',
-  'メモを書いてAI解析してみよ！',
-  'ナレッジを新しく1つ追加せよ！',
-  'ガチャを1回引け！',
-  'タスクを新しく追加してみよ！',
-  '週表示でカレンダーを確認せよ！',
-  '設定のサウンドを変えてみよ！',
-];
-
 // ─────────────────────────────────────────────────────────────
 // MemoMon System
 // ─────────────────────────────────────────────────────────────
@@ -2468,29 +2458,6 @@ function downloadTextFile(filename: string, text: string, mime = 'text/markdown;
 }
 
 // ─────────────────────────────────────────────────────────────
-// Boss Item
-// ─────────────────────────────────────────────────────────────
-function BossItem({ boss, onComplete, onDismiss }: {
-  boss: { id: string; title: string; spawnedAt: number };
-  onComplete: () => void;
-  onDismiss: () => void;
-}) {
-  return (
-    <div className="boss-item">
-      <div className="boss-crown">👑</div>
-      <div className="boss-body">
-        <div className="boss-title">ボスミッション: {boss.title}</div>
-        <div className="boss-reward">達成で 🪙 +50コイン！</div>
-      </div>
-      <div className="boss-actions">
-        <button className="boss-complete-btn" onClick={onComplete}>達成！</button>
-        <button className="boss-dismiss-btn" onClick={onDismiss} title="後で">✕</button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 // Calendar
 // ─────────────────────────────────────────────────────────────
 function Calendar({ todos, selectedDate, onSelect, mode = 'month', onModeChange, holidayConfig }: { todos: Todo[]; selectedDate: string; onSelect: (d: string) => void; mode?: 'month' | 'week'; onModeChange?: (m: 'month' | 'week') => void; holidayConfig?: HolidayConfig }) {
@@ -4066,11 +4033,8 @@ function GardenWorld({ signTodos, flowerTodos, streak, onComplete, onEdit, monLa
   );
 }
 
-function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer, onOpenFocus }: {
+function TodoTab({ todos, onToggle, onDelete, onUpdate, onAdd, trash, onTrashRestore, onTrashDelete, onTrashEmpty, soundEnabled, soundType = 'doremi', customTags, todoSets, onSaveTodoSet, onDeleteTodoSet, holidayConfig, monLayer, onOpenFocus }: {
   todos: Todo[];
-  boss?: { id: string; title: string; spawnedAt: number } | null;
-  onBossComplete?: () => void;
-  onBossDismiss?: () => void;
   onToggle: (id: number | string) => void;
   onDelete: (id: number | string) => void;
   onUpdate: (t: Todo) => void;
@@ -4368,7 +4332,6 @@ function TodoTab({ todos, boss, onBossComplete, onBossDismiss, onToggle, onDelet
       </div>
       <div className="todo-pane-right">
         <div className="todo-list-area">
-          {boss && <BossItem boss={boss} onComplete={onBossComplete || (() => {})} onDismiss={onBossDismiss || (() => {})} />}
           {overdueTodos.length > 0 && <>
             <div className="overdue-head">
               <span className="section-head-label">期限切れ</span>
@@ -7897,7 +7860,6 @@ function SmartMemoApp() {
   });
   const [appToast, setAppToast] = useState<string | null>(null);
   const appToastRef = useRef<number | undefined>(undefined);
-  const [boss, setBoss] = usePersistedState<{ id: string; title: string; spawnedAt: number } | null>('smartmemo:boss', null);
   const [todos, setTodos] = usePersistedState<Todo[]>(LS_TODOS, [
     { id: 1, title: 'プレゼン資料の作成', startDate: todayStr, endDate: '', time: '10:00', tags: ['仕事'],   done: false },
     { id: 2, title: '牛乳を購入する',     startDate: todayStr, endDate: '', time: '',      tags: ['買い物'], done: false },
@@ -8075,22 +8037,14 @@ function SmartMemoApp() {
     };
   }, []);
 
+  // 廃止したボスミッションの保存データを片付ける。バックアップは smartmemo: で
+  // 始まるキーを丸ごと集めるので、残したままだと出力にいつまでも載ってしまう。
   useEffect(() => {
-    if (boss !== null) return;
-    const lastDate = loadStored<string>('smartmemo:boss:date', '');
-    if (lastDate === todayStr) return;
-    saveStored('smartmemo:boss:date', todayStr);
-    if (Math.random() < 0.30) {
-      const idx = Math.floor(Math.random() * BOSS_TODOS.length);
-      setBoss({ id: `boss-${Date.now()}`, title: BOSS_TODOS[idx], spawnedAt: Date.now() });
-    }
+    try {
+      localStorage.removeItem('smartmemo:boss');
+      localStorage.removeItem('smartmemo:boss:date');
+    } catch { /* localStorage が使えない環境では何もしない */ }
   }, []);
-
-  function handleBossComplete() {
-    setBoss(null);
-    setSettings(p => ({ ...p, coins: (p.coins || 0) + 50 }));
-    showAppToast('👑 ボスミッション達成！ 🪙 +50コイン！');
-  }
 
   useNotificationScheduler(todos, settings);
 
@@ -8675,7 +8629,7 @@ function SmartMemoApp() {
       </div>
       <div className="tab-content">
         {tab === 'memo'     && <MemoTab existingProjects={existingProjects} existingIdeaBriefs={existingIdeaBriefs} customTags={settings.customTags || []} aiCfg={aiCfg} ideaTabs={settings.ideaTabs || []} micTrigger={micTrigger} splitReflectButtons={settings.splitReflectButtons !== false} onCommit={commit} />}
-        {tab === 'todo'     && <TodoTab todos={todos} boss={boss} onBossComplete={handleBossComplete} onBossDismiss={() => setBoss(null)} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
+        {tab === 'todo'     && <TodoTab todos={todos} onToggle={toggle} onDelete={remove} onUpdate={update} onAdd={addTodo} trash={trash} onTrashRestore={trashRestore} onTrashDelete={trashDelete} onTrashEmpty={trashEmpty} soundEnabled={settings.completeSound !== false} soundType={settings.soundType || 'doremi'} customTags={settings.customTags || []} todoSets={todoSets} onSaveTodoSet={saveTodoSet} onDeleteTodoSet={deleteTodoSet} holidayConfig={{ weekends: settings.holidayWeekends !== false, jpHolidays: settings.holidayJpHolidays !== false, custom: settings.customHolidays || [] }} monLayer={monLayer} onOpenFocus={() => setShowFocus(true)} />}
         {tab === 'idea'     && <IdeasTab ideas={ideas} aiCfg={aiCfg} onUpdate={updateIdea} onDelete={removeIdea} onAdd={addIdea} onReorder={reorderIdea} customTags={settings.customTags || []} ideaTabs={settings.ideaTabs || []} onUpdateIdeaTabs={tabs => setSetting('ideaTabs', tabs)} onGoMemo={() => setTab('memo')} />}
         {tab === 'zukan'    && <ZukanTab memoMons={memoMons} seenMons={settings.gachaUnlocked?.mons || []} onOpenPlayground={openPlayground} />}
         {tab === 'settings' && <SettingsTab settings={settings} onChange={setSetting} memoMons={memoMons} onInsights={() => setShowInsights(true)} authUser={authUser} syncStatus={syncStatus} syncError={syncError} syncNotice={syncNotice} lastSyncAt={lastSyncAt} onOpenAccount={() => setShowAccount(true)} onPushNow={() => { retryDeletedIds(); pushSnapshot(); }} onPullNow={() => { retryDeletedIds(); pullSnapshot(); }} />}
