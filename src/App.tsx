@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.53.0';
+const APP_VERSION = '1.53.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6161,7 +6161,7 @@ type LiveMon = MemoMonInstance & {
 
 const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
   kuroneko: {
-    chat: ['…にゃ', '夜は静かでよい', 'ふぅ…', '誰かに見られている気がする', 'あくび…', '見るな', '今宵は良い夜だ'],
+    chat: ['…にゃ', '夜は静かでよい', 'ふぅ…', '誰かに見られている気がする', 'あくび…', '…見るなよ（ちらっ）', '今宵は良い夜だ'],
     tip: ['完了したものは整理してこそ意味があるぞ', 'ナレッジに残せば、未来の自分が助かる'],
   },
   skullon: {
@@ -6234,10 +6234,10 @@ function pickCheerLine(): string {
 type ReactionKind = 'pet' | 'feedFav' | 'feedNormal' | 'feedDis';
 const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
   kuroneko: {
-    pet:        ['…にゃ', 'ふぅ…', 'まあいい', '見るな', 'もうちょっと'],
+    pet:        ['…にゃ', 'ふぅ…', 'まあいい', '…にゃ（されるがまま）', 'もうちょっと'],
     feedFav:    ['これだ…！', '思い出すにゃ', 'お主、わかっておるな', '至福…', '夜のごちそうだ'],
     feedNormal: ['ふむ', '悪くない', 'まあ食ってやろう', 'にゃ', 'ごちそうさま'],
-    feedDis:    ['…これは', '勘弁してくれ', 'にゃっ！？', 'これは違う', 'ぐぬぬ'],
+    feedDis:    ['…これは', '…これは勘弁にゃ', 'にゃっ！？', 'これは違う', 'ぐぬぬ'],
   },
   skullon: {
     pet:        ['カラカラ…', '我に触れたな', 'ホネに沁みる', 'もぞ', '気は確かか？'],
