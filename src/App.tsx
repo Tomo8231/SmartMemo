@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.49.0';
+const APP_VERSION = '1.50.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -7717,6 +7717,114 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
 }
 
 // ─────────────────────────────────────────────────────────────
+// 進化演出
+// 「おや…？ ◯◯の ようすが…！？ → 白いシルエットが交互に入れ替わりながら加速
+//   → 閃光 → 新しい姿」。
+// 演出はスキップでき、進化そのものも途中でキャンセルできる。
+// ─────────────────────────────────────────────────────────────
+type EvoPhase = 'intro' | 'morph' | 'flash' | 'done' | 'cancelled';
+
+function EvolutionModal({ from, to, onDone, onCancel }: {
+  from: MemoMonDef;
+  to: MemoMonDef;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  // 動きを減らす設定の人には演出を流さず、進化するか やめるかだけを選んでもらう
+  const reduceMotion = typeof window !== 'undefined'
+    && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const [phase, setPhase] = useState<EvoPhase>('intro');
+  // シルエットの入れ替え。true のあいだは次の姿を出す
+  const [showNext, setShowNext] = useState(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = []; };
+  const later = (fn: () => void, ms: number) => { timers.current.push(setTimeout(fn, ms)); };
+
+  // 途中で止めて結果だけ出す（進化はする）
+  const skip = () => { clearTimers(); setShowNext(true); setPhase('done'); };
+  // 進化そのものをやめる
+  const cancel = () => { clearTimers(); setShowNext(false); setPhase('cancelled'); };
+  // 結果が出るまでは引き返せる
+  const cancellable = phase !== 'done' && phase !== 'cancelled';
+
+  // Esc でも引き返せるようにする
+  useEffect(() => {
+    if (!cancellable) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); cancel(); } };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [cancellable]);
+
+  useEffect(() => {
+    // 動きを減らす設定のときは自動で進めず、intro のまま選んでもらう
+    if (phase !== 'intro' || reduceMotion) return;
+    later(() => setPhase('morph'), 1600);
+    return clearTimers;
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'morph') return;
+    // 入れ替えの間隔をだんだん詰めて、切り替わりが近づく感じを出す
+    let n = 0;
+    const tick = () => {
+      setShowNext(v => !v);
+      n++;
+      if (n >= 14) { setPhase('flash'); return; }
+      later(tick, Math.max(70, 380 - n * 26));
+    };
+    later(tick, 260);
+    return clearTimers;
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'flash') return;
+    setShowNext(true);
+    later(() => setPhase('done'), 620);
+    return clearTimers;
+  }, [phase]);
+
+  useEffect(() => clearTimers, []);
+
+  // やめたときは元の姿のまま見せる
+  const shown = phase === 'cancelled' ? from : (showNext ? to : from);
+  // morph / flash のあいだは白いシルエットにする
+  const silhouette = phase === 'morph' || phase === 'flash';
+
+  return (
+    <div className="evo-overlay" role="dialog" aria-label="進化">
+      {phase === 'flash' && <div className="evo-flash" />}
+
+      <div className={`evo-stage evo-${phase}`}>
+        <img
+          className={`evo-sprite${silhouette ? ' silhouette' : ''}`}
+          src={MEMOMON_IMGS[shown.id]}
+          alt={phase === 'done' ? to.name : ''}
+          draggable={false}
+        />
+      </div>
+
+      <div className="evo-text" aria-live="polite">
+        {phase === 'done'      ? <>おめでとう！ <b>{from.name}</b> は <b>{to.name}</b> に 進化した！</>
+         : phase === 'cancelled' ? <>あれ…？ <b>{from.name}</b> の ようすが…？</>
+         : <>おや…？ <b>{from.name}</b> の ようすが…！？</>}
+      </div>
+      {phase === 'cancelled' && <div className="evo-sub">ゲージがまたたまったら、もう一度たずねるね</div>}
+
+      {cancellable ? (
+        <div className="evo-actions">
+          {/* 動きを減らす設定では演出が流れないので、とばす先ではなく「進化する」になる */}
+          <button className="evo-skip" onClick={skip}>{reduceMotion ? '進化する' : 'スキップ'}</button>
+          <button className="evo-cancel" onClick={cancel}>キャンセル</button>
+        </div>
+      ) : (
+        <button className="evo-btn" onClick={phase === 'done' ? onDone : onCancel} autoFocus>とじる</button>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Root
 // ─────────────────────────────────────────────────────────────
 function SmartMemoApp() {
@@ -7736,6 +7844,10 @@ function SmartMemoApp() {
   const [playgroundInitUid, setPlaygroundInitUid] = useState<string | null>(null);
   const openPlayground = (uid?: string) => { setPlaygroundInitUid(uid ?? null); setShowPlayground(true); };
   const [showAccount, setShowAccount] = useState(false);
+  // 進化演出。途中でキャンセルできるので、姿の入れ替えは「とじる」まで確定させない。
+  // そのあいだゲージは満タンのまま保持されるため、閉じずにアプリを落としても
+  // 次のタスク完了でもう一度たずねられる。
+  const [evolving, setEvolving] = useState<{ uid: string; from: MemoMonDef; to: MemoMonDef } | null>(null);
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -8045,15 +8157,34 @@ function SmartMemoApp() {
     }
     const next = MEMOMON_DEFS.find(d => d.id === def.evolvesTo);
     if (!next) return;
-    setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, defId: next.id, evoTasks: 0, mtime: now } : m));
+    // ゲージを満タンで止めて「進化待ち」にし、進化するかどうかは演出のあとで決める
+    setMemoMons(prev => prev.map(m => m.uid === target.uid ? { ...m, evoTasks: need, mtime: now } : m));
+    setEvolving({ uid: target.uid, from: def, to: next });
+  };
+
+  // 演出を見届けたら進化を確定する
+  const confirmEvolution = () => {
+    if (!evolving) return;
+    const { uid, from, to } = evolving;
+    setMemoMons(prev => prev.map(m => m.uid === uid ? { ...m, defId: to.id, evoTasks: 0, mtime: Date.now() } : m));
     setSettings(p => {
       const unlocked = p.gachaUnlocked || { sounds: [], bgs: [], mons: [] };
       const mons = unlocked.mons || [];
-      const add = [def.id, next.id].filter(id => !mons.includes(id));
+      const add = [from.id, to.id].filter(id => !mons.includes(id));
       return add.length ? { ...p, gachaUnlocked: { ...unlocked, mons: [...mons, ...add] } } : p;
     });
-    showAppToast(`✨ ${def.name} が ${next.name} に進化した！`);
-    cheerMon(`${next.name} に進化した！`);
+    setEvolving(null);
+    // 演出のあいだ にわは隠れているので、閉じてから喜ばせる
+    cheerMon(`${to.name} に進化した！`);
+  };
+
+  // やめたときは姿も図鑑もそのまま。ゲージだけ戻して、またたまったら たずね直す
+  const cancelEvolution = () => {
+    if (!evolving) return;
+    const { uid, from } = evolving;
+    setMemoMons(prev => prev.map(m => m.uid === uid ? { ...m, evoTasks: 0, mtime: Date.now() } : m));
+    setEvolving(null);
+    cheerMon(`${from.name} のままでいる！`);
   };
 
   const toggle = (id: number | string) => {
@@ -8613,6 +8744,14 @@ function SmartMemoApp() {
       )}
       {showAccount && (
         <AccountModal authUser={authUser} onClose={() => setShowAccount(false)} />
+      )}
+      {evolving && (
+        <EvolutionModal
+          from={evolving.from}
+          to={evolving.to}
+          onDone={confirmEvolution}
+          onCancel={cancelEvolution}
+        />
       )}
       {feedRequestUid && (
         <FoodPickerSheet
