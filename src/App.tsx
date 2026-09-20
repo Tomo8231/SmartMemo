@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.50.0';
+const APP_VERSION = '1.50.2';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6964,7 +6964,34 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, cheer, onTapRewar
     const now = Date.now();
     const { W, H } = boundsOf();
     mons.forEach(m => {
-      if (!liveRef.current[m.uid]) {
+      // 進化しても uid は変わらず defId だけが変わる。ここで姿を追いかけないと、
+      // 歩いている子は前の姿のまま（タップしたときのセリフも前の子のもの）になる。
+      const live = liveRef.current[m.uid];
+      if (live) {
+        if (live.defId !== m.defId) {
+          const def = MEMOMON_DEFS.find(d => d.id === m.defId);
+          if (def) {
+            const sc = scaleRef.current;
+            const mw = Math.round(def.monW * sc);
+            live.defId = m.defId;
+            // 新しい姿に無いアニメだと絵が出ないので、素直な状態に戻す
+            live.animState = def.sprites
+              ? (def.sprites[live.animState] ? live.animState : (live.state === 'walk' ? 'walk' : 'sit'))
+              : 'sit';
+            live.frame = 0;
+            live.frameTime = 0;
+            // 大きさが変わるので、はみ出さない位置へ寄せ直す
+            const gy = groundY(H, Math.round(def.monH * sc));
+            live.x = Math.min(Math.max(0, live.x), Math.max(0, W - mw));
+            live.y = Math.min(Math.max(live.y, gy.yMin), gy.yMax);
+            // コマ番号が同じだと RAF が描き替えないので、ここで差し替える
+            const imgEl = imgRefs.current[m.uid];
+            if (imgEl) imgEl.src = def.sprites?.[live.animState]?.frames[0] ?? MEMOMON_IMGS[def.id];
+          }
+        }
+        return;
+      }
+      {
         // 未知の defId（旧バージョン・クラウド同期・データ破損由来）でも
         // クラッシュしないようにスキップする。
         const def = MEMOMON_DEFS.find(d => d.id === m.defId);
