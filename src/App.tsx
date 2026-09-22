@@ -139,7 +139,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.53.0';
+const APP_VERSION = '1.53.3';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -795,7 +795,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '真夜中のメモ画面に突如現れる謎の黒猫。足音はなく、影すら落とさない。タップされると一瞬だけ目を細めるが、それ以上しつこくすると全力で逃げる。どこから来てどこへ去るのか、いまだ解明されていない。',
-    monW: 56, monH: 60,
+    monW: 67, monH: 67,
     spriteFacing: 'l',
     sprites: KN_SPRITES,
   },
@@ -804,7 +804,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: 'メモのすみっこに住む神出鬼没なドクロモンスター。タップすると逃げ出す。',
-    monW: 66, monH: 60,
+    monW: 71, monH: 71,
     spriteFacing: 'l',
     sprites: SK_SPRITES,
   },
@@ -813,7 +813,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
-    monW: 60, monH: 50,
+    monW: 61, monH: 61,
     spriteFacing: 'l',
     sprites: SL_SPRITES,
   },
@@ -822,7 +822,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'ちっちゃくてふわふわのひよこ。ぴよぴよ鳴く。',
-    monW: 65, monH: 60,
+    monW: 71, monH: 71,
     spriteFacing: 'l',
     sprites: HY_SPRITES,
   },
@@ -831,7 +831,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: 'ふわふわ漂う謎のおばけ。ドクロンとは友達らしい。',
-    monW: 65, monH: 60,
+    monW: 71, monH: 71,
     spriteFacing: 'l',
     sprites: OB_SPRITES,
   },
@@ -840,7 +840,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '雪のように白い神秘の狐。現れると幸運が訪れるとか。',
-    monW: 65, monH: 65,
+    monW: 80, monH: 80,
     spriteFacing: 'l',
     sprites: YF_SPRITES,
   },
@@ -849,7 +849,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '元気いっぱいのしば犬。メモが増えるほど喜んでくれる。',
-    monW: 65, monH: 60,
+    monW: 74, monH: 74,
     spriteFacing: 'l',
     sprites: SB_SPRITES,
   },
@@ -858,7 +858,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '青いとんがり帽子をかぶった謎のマジシャン。手品でメモをサプライズしてくれる。',
-    monW: 65, monH: 65,
+    monW: 76, monH: 76,
     spriteFacing: 'l',
     sprites: MJ_SPRITES,
   },
@@ -867,7 +867,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '漆黒のドラゴン。めったに姿を現さないが、一度懐くと絶対的な忠誠を誓う。',
-    monW: 65, monH: 65,
+    monW: 76, monH: 76,
     spriteFacing: 'l',
     sprites: DR_SPRITES,
   },
@@ -876,7 +876,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: '青いボディのがっちり系マスコット。指を立てて「いいね！」をしてくれる頼れるやつ。',
-    monW: 65, monH: 70,
+    monW: 81, monH: 81,
     sprites: PY_SPRITES,
   },
   {
@@ -884,7 +884,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'ころんと丸い黄色いからだに、頭のてっぺんから3本の緑の芽が生えている。「めためたわかる」が口癖で、何でも知ってそうな顔をしているが、実はよくわかっていないことも多い。知識をため込むほど芽がぐんぐん育つという噂がある。',
-    monW: 65, monH: 70,
+    monW: 82, monH: 82,
     spriteFacing: 'l',
     sprites: MT_SPRITES,
   },
@@ -893,7 +893,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'ゴマ模様がチャームポイントのまんまるアザラシ。眠るのが大好きで、メモ画面でうとうとしているところをよく目撃される。',
-    monW: 65, monH: 60,
+    monW: 71, monH: 71,
     spriteFacing: 'l',
     sprites: GM_SPRITES,
   },
@@ -902,7 +902,7 @@ const MEMOMON_DEFS: MemoMonDef[] = [
 const EVO_RARITY: Record<1 | 2 | 3, string> = { 1: 'rare', 2: 'super', 3: 'ultra' };
 EVO_LINES.forEach(line => line.stages.forEach(s => MEMOMON_DEFS.push({
   id: s.id, name: s.name, pixels: [], palette: {}, rarity: EVO_RARITY[s.stage], desc: s.desc,
-  monW: 65, monH: 70, spriteFacing: 'l', sprites: makeSprites(s.sprite),
+  monW: 86, monH: 86, spriteFacing: 'l', sprites: makeSprites(s.sprite),
   evoStage: s.stage, evolvesTo: s.evolvesTo, lineKey: line.key,
 })));
 // 進化形から 1 段階目の id を引く。ガチャで同じ系統を重複として扱うのに使う

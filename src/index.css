@@ -494,7 +494,7 @@
     }
     .gacha-result-label { font-size:30px; line-height:1; animation:result-pop .5s cubic-bezier(.17,.67,.34,1.6) both; }
     .gacha-result-mon-anim {
-      width:110px; height:auto; image-rendering:pixelated;
+      width:135px; height:auto; image-rendering:pixelated;
       animation:result-pop .45s cubic-bezier(.17,.67,.34,1.5) both;
       filter:drop-shadow(0 0 12px rgba(255,255,200,.7));
     }
@@ -537,7 +537,7 @@
     .gacha-ten-card.show { animation:card-flip .42s cubic-bezier(.17,.67,.34,1.4) forwards; }
     .gacha-ten-card.show:active { transform:scale(.95); transition:transform .08s; }
     .gacha-ten-card-mon {
-      display:block; margin:0 auto; height:38px; width:auto; max-width:100%;
+      display:block; margin:0 auto; height:47px; width:auto; max-width:100%;
       object-fit:contain; image-rendering:pixelated;
     }
     @keyframes card-flip { from{opacity:0;transform:rotateY(90deg) scale(.7)} to{opacity:1;transform:rotateY(0deg) scale(1)} }
@@ -568,7 +568,7 @@
       display:flex; align-items:center; justify-content:center;
     }
     .gacha-detail-img-wrap {
-      width:96px; height:96px;
+      width:118px; height:118px;
       display:flex; align-items:center; justify-content:center;
     }
     .gacha-detail-mon-img {
@@ -922,7 +922,7 @@
       box-shadow: 0 4px 12px var(--accent-light);
     }
     .playground-mon-card img {
-      width: 48px; height: 48px; object-fit: contain;
+      width: 59px; height: 59px; object-fit: contain;
       image-rendering: pixelated;
     }
     .playground-mon-card-name {
@@ -1186,7 +1186,9 @@
     }
     .app.dark .playground-stage-bubble::after { border-top-color: #5a5a58; }
     .playground-stage-img {
-      max-width: 100%; max-height: 100%;
+      /* 画像は 128x128 の中に 96x104。max-* だけだと画像本来の大きさ止まりで
+         絵が小さくなるので、余白ぶんを見込んだ大きさを明示する。 */
+      width: 160px; height: 160px;
       object-fit: contain;
       image-rendering: pixelated;
       animation: monBob 0.8s ease-in-out infinite;
@@ -4090,8 +4092,10 @@
       transition:transform .12s;
     }
     .zukan-card:active { transform:scale(.95); }
-    .zukan-sprite-box { height:64px; display:flex; align-items:flex-end; justify-content:center; }
-    .zukan-sprite { max-height:60px; max-width:70px; image-rendering:pixelated; }
+    /* スプライトは 128x128 の中に 96x104 で入っている（ドット格子を整数倍に保つため）。
+       枠はその余白ぶん 128/104 倍してあり、画面での絵の大きさは従来どおり。 */
+    .zukan-sprite-box { height:79px; display:flex; align-items:flex-end; justify-content:center; }
+    .zukan-sprite { max-height:74px; max-width:86px; image-rendering:pixelated; }
     .zukan-card.locked .zukan-sprite { filter:brightness(0) opacity(.35); }
     .zukan-name { font-size:12px; font-weight:700; margin-top:8px; color:var(--ink); }
     .zukan-card.locked .zukan-name { color:var(--ink-mute); }
@@ -4113,8 +4117,8 @@
       width:100%; padding:12px var(--sp-4) 32px;
       text-align:center; animation:sheetUp .25s ease;
     }
-    .zukan-detail-sprite { display:flex; justify-content:center; align-items:flex-end; height:96px; }
-    .zukan-detail-sprite img { max-height:92px; max-width:120px; image-rendering:pixelated; }
+    .zukan-detail-sprite { display:flex; justify-content:center; align-items:flex-end; height:118px; }
+    .zukan-detail-sprite img { max-height:113px; max-width:148px; image-rendering:pixelated; }
     .zukan-detail-sprite.locked img { filter:brightness(0) opacity(.35); }
     .zukan-detail-name { font-size:17px; font-weight:800; margin-top:10px; color:var(--gw-ink); }
     .zukan-detail-rarity { font-size:12px; color:#E0A62E; letter-spacing:2px; margin-top:2px; }
@@ -4333,7 +4337,7 @@
     @keyframes evo-fade-in { from { opacity:0; } to { opacity:1; } }
 
     .evo-stage {
-      position:relative; width:180px; height:180px;
+      position:relative; width:222px; height:222px;
       display:flex; align-items:center; justify-content:center;
     }
     .evo-sprite {
