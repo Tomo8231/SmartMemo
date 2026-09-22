@@ -9,7 +9,7 @@
 //
 // 基本メモモン 12 体はドット格子を持たず、コマごとに切り抜きの大きさが違う。
 // 表示側は昔から「コマごとに枠へ収める」挙動なので、それをそのまま保つために
-// コマ単位で高さ 104 に揃えて中央に置く（面積平均で縮小する）。
+// コマ単位で高さ 104 に揃えて中央に置く（最近傍で縮小する）。
 //
 // ガチャの卵・演出（gacha_*）はキャラではないので触らない。
 
@@ -68,7 +68,7 @@ function convertEvo(src, file) {
 // 平均で縮小すると輪郭に半透明の中間色ができる。表示側は
 // image-rendering:pixelated（＝最近傍）なので、その中間色がそのまま拾われて
 // 輪郭がぼやける。描画まで通して最近傍で揃えたほうが、変換前の見え方に近い。
-function convertBasic(src, file) {
+function convertBasic(src) {
   const s = Math.min(SIZE / src.width, ART_H / src.height);
   const w = Math.max(1, Math.round(src.width * s));
   const h = Math.max(1, Math.round(src.height * s));
@@ -92,7 +92,7 @@ for (const file of files) {
   const src = PNG.sync.read(fs.readFileSync(full));
   if (src.width === SIZE && src.height === SIZE) { skipped++; continue; }
   try {
-    const { png } = file.startsWith('ev_') ? convertEvo(src, file) : convertBasic(src, file);
+    const { png } = file.startsWith('ev_') ? convertEvo(src, file) : convertBasic(src);
     if (!check) fs.writeFileSync(full, PNG.sync.write(png));
     if (file.startsWith('ev_')) evo++; else basic++;
   } catch (e) {
