@@ -4,10 +4,13 @@
 set -u
 WORKERS=${1:-3}
 BATCH=${2:-5}
-D="C:/WorkSpace/05_ToDoList/ToDoList/drafts/new-memomon-10"
-SCR="C:/Users/tomoy/AppData/Local/Temp/claude/c--WorkSpace-05-ToDoList-ToDoList/758e16c2-a2ed-4ee6-a24d-395198487e7c/scratchpad"
-LOGS="$SCR/limb_logs"
-BIN=$(find /c/Users/tomoy/.vscode/extensions/openai.chatgpt-26.908.40401-win32-x64 -iname codex.exe | head -1)
+# スクリプトの置き場所から drafts/new-memomon-10 を割り出す（環境ごとの絶対パスを持たない）
+D=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# ログの置き場所。LIMB_LOGS で差し替えられる
+LOGS=${LIMB_LOGS:-"${TMPDIR:-/tmp}/limb_logs"}
+# Codex CLI。拡張のバージョンは変わるので、入っているうちで一番新しいものを使う
+BIN=$(ls -d /c/Users/tomoy/.vscode/extensions/openai.chatgpt-*/bin/windows-x86_64/codex.exe 2>/dev/null | sort -V | tail -1)
+[ -x "$BIN" ] || { echo "codex.exe が見つかりません" >&2; exit 1; }
 mkdir -p "$LOGS" "$D/limb_frames"
 export PYTHONIOENCODING=utf-8
 
