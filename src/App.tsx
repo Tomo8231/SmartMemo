@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { EVO_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP } from './memomonEvo';
 import {
+  getAudioCtx, playChipMorphTick, playChipSe, startChipBgm, stopChipBgm,
+} from './lib/chiptune';
+import {
   supabase, isSupabaseConfigured,
   fetchCloud, pushCloud, isDeletedIdsUnsupported, retryDeletedIds,
   signUpWithEmail, signInWithEmail, signInWithGoogle, signOut,
@@ -81,6 +84,7 @@ type Settings = {
   activeMonUid?: string;
   memoMonSize?: 'small' | 'medium' | 'large';
   memoMonSpeech?: boolean;
+  memoMonSound?: boolean;
   usedGiftCodes?: string[];
   notifAdvanceMin?: number;  // minutes before task time (0/15/30/60)
   notifDailyTime?: string;   // "HH:MM" for todos without a time
@@ -364,13 +368,6 @@ const SOUND_TYPES = [
 ];
 // 最初から選べるサウンド。これ以外はガチャで当ててから選択可能になる。
 const DEFAULT_SOUNDS = ['doremi'];
-let _audioCtx: AudioContext | undefined;
-function _getAudioCtx(): AudioContext {
-  const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
-  if (!_audioCtx) _audioCtx = new Ctx();
-  if (_audioCtx.state === 'suspended') _audioCtx.resume();
-  return _audioCtx;
-}
 // Cache <audio> elements per file sound to avoid re-fetching.
 const _audioCache: Record<string, HTMLAudioElement> = {};
 function playSound(type: string) {
@@ -389,7 +386,9 @@ function playSound(type: string) {
     return;
   }
   try {
-    const ctx = _getAudioCtx();
+    // AudioContext はメモモンの 8bit サウンドと共有する（ブラウザごとの同時生成数に上限があるため）
+    const ctx = getAudioCtx();
+    if (!ctx) return;
     const now = ctx.currentTime;
     if (type === 'pop') {
       const osc = ctx.createOscillator(); const gain = ctx.createGain();
@@ -5855,6 +5854,16 @@ function SettingsTab({ settings, onChange, memoMons, onInsights, authUser, syncS
               onClick={() => onChange('memoMonSpeech', settings.memoMonSpeech === false ? true : false)}
             />
           </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row-label">8bit サウンド</div>
+              <div className="settings-row-sub">タップの効果音と、進化演出の BGM・効果音</div>
+            </div>
+            <button
+              className={`toggle${settings.memoMonSound === false ? ' off' : ' on'}`}
+              onClick={() => onChange('memoMonSound', settings.memoMonSound === false ? true : false)}
+            />
+          </div>
         </>}
       </div>
     </>}
@@ -6891,11 +6900,14 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   );
 }
 
-function MemoMonLayer({ mons, scale, initSleep, speechEnabled, cheer, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; cheer?: { n: number; text?: string }; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
+function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, cheer, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; soundEnabled: boolean; cheer?: { n: number; text?: string }; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
   const speechEnabledRef = useRef(speechEnabled);
   speechEnabledRef.current = speechEnabled;
+  // RAF ループやイベントハンドラからは props を直接見られないので鏡を持つ
+  const soundEnabledRef = useRef(soundEnabled);
+  soundEnabledRef.current = soundEnabled;
   // おねだり中かどうかを RAF ループから参照するための鏡
   const requestsRef = useRef<Record<string, MonRequestKind | undefined>>({});
   requestsRef.current = Object.fromEntries(mons.map(m => [m.uid, m.request]));
@@ -7258,15 +7270,18 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, cheer, onTapRewar
 
     // スプライトの無いレガシー個体：逃げずにコインだけ
     if (!def.sprites) {
+      if (soundEnabledRef.current) playChipSe('tap');
       if (rewardable) onTapReward();
       return;
     }
 
     if (m.animState === 'sleep') {
       // 寝てる子を起こす → 驚く
+      if (soundEnabledRef.current) playChipSe('tapWake');
       m.animState = 'surprise'; m.frameTime = 0; m.frame = 0;
     } else {
       // 起きてる子 → 喜ぶ（4回目以降も逃げない）
+      if (soundEnabledRef.current) playChipSe('tap');
       m.animState = 'happy'; m.frameTime = 0; m.frame = 0;
       m.vx = 0; m.vy = 0; m.state = 'idle';
       if (speechEnabledRef.current) {
@@ -7714,9 +7729,10 @@ function FocusMode({ todos, coins, infinite, onComplete, onAddInterrupt, onClose
 // ─────────────────────────────────────────────────────────────
 type EvoPhase = 'intro' | 'morph' | 'flash' | 'done' | 'cancelled';
 
-function EvolutionModal({ from, to, onDone, onCancel }: {
+function EvolutionModal({ from, to, soundEnabled, onDone, onCancel }: {
   from: MemoMonDef;
   to: MemoMonDef;
+  soundEnabled: boolean;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -7746,6 +7762,29 @@ function EvolutionModal({ from, to, onDone, onCancel }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [cancellable]);
 
+  // 8bit の BGM と効果音。演出の段階に合わせて鳴らし分ける。
+  // BGM は「おや…？」から閃光の直前まで。結果が出たらファンファーレに譲る。
+  useEffect(() => {
+    if (!soundEnabled) return;
+    if (phase === 'intro') {
+      playChipSe('evoStart');
+      startChipBgm('evolution');
+    } else if (phase === 'flash') {
+      stopChipBgm();
+      playChipSe('evoFlash');
+    } else if (phase === 'done') {
+      // スキップされると flash を飛ばしてここへ来るので、ここでも BGM を止める
+      stopChipBgm();
+      playChipSe('evoFanfare');
+    } else if (phase === 'cancelled') {
+      stopChipBgm();
+      playChipSe('evoCancel');
+    }
+  }, [phase, soundEnabled]);
+
+  // 閉じかたに関わらず（進化・キャンセル・アンマウント）BGM は必ず止める
+  useEffect(() => stopChipBgm, []);
+
   useEffect(() => {
     // 動きを減らす設定のときは自動で進めず、intro のまま選んでもらう
     if (phase !== 'intro' || reduceMotion) return;
@@ -7760,6 +7799,8 @@ function EvolutionModal({ from, to, onDone, onCancel }: {
     const tick = () => {
       setShowNext(v => !v);
       n++;
+      // 入れ替わりが速くなるほど音程も上がって、いよいよという感じを出す
+      if (soundEnabled) playChipMorphTick(n / 14);
       if (n >= 14) { setPhase('flash'); return; }
       later(tick, Math.max(70, 380 - n * 26));
     };
@@ -8269,6 +8310,7 @@ function SmartMemoApp() {
         scale={monScale}
         initSleep={monInitSleep}
         speechEnabled={settings.memoMonSpeech !== false}
+        soundEnabled={settings.memoMonSound !== false}
         cheer={monCheer}
         onTapReward={() => setSettings(p => ({ ...p, coins: (p.coins || 0) + 10 }))}
         onFulfillRequest={fulfillMonRequest}
@@ -8730,6 +8772,7 @@ function SmartMemoApp() {
         <EvolutionModal
           from={evolving.from}
           to={evolving.to}
+          soundEnabled={settings.memoMonSound !== false}
           onDone={confirmEvolution}
           onCancel={cancelEvolution}
         />
