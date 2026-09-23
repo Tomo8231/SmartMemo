@@ -143,7 +143,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.54.1';
+const APP_VERSION = '1.55.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
