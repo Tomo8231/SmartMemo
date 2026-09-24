@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { EVO_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP } from './memomonEvo';
+import { EVO_LINES, EVO_BASIC_LINES, EVO_TASKS_TO_EVOLVE, EVO_TIP } from './memomonEvo';
 import {
   getAudioCtx, playChipMorphTick, playChipSe, startChipBgm, stopChipBgm,
 } from './lib/chiptune';
@@ -143,7 +143,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.55.0';
+const APP_VERSION = '1.56.0';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -749,24 +749,6 @@ const SKULLON_PIXELS = [
   '.BBB.BB.BB.BBB..',
   '..BBBBBBBBBBB...',
 ];
-const KN_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
-const KN_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
-  KN_ANIMS.map(a => [a, {
-    frames: Array.from({length:6}, (_, i) => `./sprites/kn_${a}_${i}.png`),
-    fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
-    loop:   a === 'walk' || a === 'sit' || a === 'sleep',
-  }])
-) as NonNullable<MemoMonDef['sprites']>;
-
-const SL_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
-const SL_SPRITES: NonNullable<MemoMonDef['sprites']> = Object.fromEntries(
-  SL_ANIMS.map(a => [a, {
-    frames: Array.from({length:6}, (_, i) => `./sprites/sl_${a}_${i}.png`),
-    fps:    a === 'walk' ? 8 : a === 'surprise' ? 7 : a === 'dislike' ? 6 : a === 'happy' ? 6 : 2,
-    loop:   a === 'walk' || a === 'sit' || a === 'sleep',
-  }])
-) as NonNullable<MemoMonDef['sprites']>;
-
 const MON_ANIMS = ['sit','walk','happy','dislike','sleep','surprise'] as const;
 function makeSprites(prefix: string): NonNullable<MemoMonDef['sprites']> {
   return Object.fromEntries(
@@ -778,15 +760,9 @@ function makeSprites(prefix: string): NonNullable<MemoMonDef['sprites']> {
   ) as NonNullable<MemoMonDef['sprites']>;
 }
 const SK_SPRITES = makeSprites('sk');
-const HY_SPRITES = makeSprites('hy');
-const OB_SPRITES = makeSprites('ob');
-const YF_SPRITES = makeSprites('yf');
-const SB_SPRITES = makeSprites('sb');
 const MJ_SPRITES = makeSprites('mj');
-const DR_SPRITES = makeSprites('dr');
 const PY_SPRITES = makeSprites('py');
 const MT_SPRITES = makeSprites('mt');
-const GM_SPRITES = makeSprites('gm');
 
 const MEMOMON_DEFS: MemoMonDef[] = [
   {
@@ -794,9 +770,9 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '真夜中のメモ画面に突如現れる謎の黒猫。足音はなく、影すら落とさない。タップされると一瞬だけ目を細めるが、それ以上しつこくすると全力で逃げる。どこから来てどこへ去るのか、いまだ解明されていない。',
-    monW: 67, monH: 67,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: KN_SPRITES,
+    sprites: makeSprites('ev_kuroneko1'),
   },
   {
     id: 'skullon', name: 'ドクロン',
@@ -812,45 +788,45 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'まるくてかわいいスライム。つるつるしてそう。タップされると喜ぶが、しつこいと怒って逃げる。',
-    monW: 61, monH: 61,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: SL_SPRITES,
+    sprites: makeSprites('ev_slime1'),
   },
   {
     id: 'hiyoko', name: 'ひよこ',
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'ちっちゃくてふわふわのひよこ。ぴよぴよ鳴く。',
-    monW: 71, monH: 71,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: HY_SPRITES,
+    sprites: makeSprites('ev_hiyoko1'),
   },
   {
     id: 'obake', name: 'おばけ',
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: 'ふわふわ漂う謎のおばけ。ドクロンとは友達らしい。',
-    monW: 71, monH: 71,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: OB_SPRITES,
+    sprites: makeSprites('ev_obake1'),
   },
   {
     id: 'yukigitsune', name: 'ゆきぎつね',
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '雪のように白い神秘の狐。現れると幸運が訪れるとか。',
-    monW: 80, monH: 80,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: YF_SPRITES,
+    sprites: makeSprites('ev_yukigitsune1'),
   },
   {
     id: 'shibainu', name: 'しばいぬ',
     pixels: [], palette: {},
     rarity: 'super',
     desc: '元気いっぱいのしば犬。メモが増えるほど喜んでくれる。',
-    monW: 74, monH: 74,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: SB_SPRITES,
+    sprites: makeSprites('ev_shibainu1'),
   },
   {
     id: 'magician', name: 'マジシャン',
@@ -866,9 +842,9 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'ultra',
     desc: '漆黒のドラゴン。めったに姿を現さないが、一度懐くと絶対的な忠誠を誓う。',
-    monW: 76, monH: 76,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: DR_SPRITES,
+    sprites: makeSprites('ev_dragon1'),
   },
   {
     id: 'pylar', name: 'パイラーくん',
@@ -892,9 +868,9 @@ const MEMOMON_DEFS: MemoMonDef[] = [
     pixels: [], palette: {},
     rarity: 'super',
     desc: 'ゴマ模様がチャームポイントのまんまるアザラシ。眠るのが大好きで、メモ画面でうとうとしているところをよく目撃される。',
-    monW: 71, monH: 71,
+    monW: 86, monH: 86,
     spriteFacing: 'l',
-    sprites: GM_SPRITES,
+    sprites: makeSprites('ev_gomachan1'),
   },
 ];
 // 3 段階で進化する系統。段階が上がるほどレア度も上がる
@@ -908,6 +884,26 @@ EVO_LINES.forEach(line => line.stages.forEach(s => MEMOMON_DEFS.push({
 const EVO_BASE_ID: Record<string, string> = Object.fromEntries(
   EVO_LINES.flatMap(line => line.stages.map(s => [s.id, line.stages[0].id])),
 );
+
+// 基本メモモン 8 体は、元絵に 2・3 段階目も描かれていたので進化する系統にした。
+// 1 段階目は既存の定義のまま（id・レア度・おくりものの画像・好き嫌いを引き継ぐ）。
+// 絵は元絵から作り直したもの（ev_<key>1）へ差し替えてある。手持ちの子の id が
+// 変わらないので、すでに持っているメモモンもそのまま進化できる。
+EVO_BASIC_LINES.forEach(line => {
+  const base = MEMOMON_DEFS.find(d => d.id === line.key);
+  if (base) {
+    base.evoStage = 1;
+    base.evolvesTo = line.stages[0].id;
+    base.lineKey = line.key;
+  }
+  line.stages.forEach(s => MEMOMON_DEFS.push({
+    id: s.id, name: s.name, pixels: [], palette: {}, rarity: EVO_RARITY[s.stage], desc: s.desc,
+    monW: 86, monH: 86, spriteFacing: 'l', sprites: makeSprites(s.sprite),
+    evoStage: s.stage, evolvesTo: s.evolvesTo, lineKey: line.key,
+  }));
+  // 2・3 段階目もガチャの重複判定では 1 段階目（＝基本メモモン）として扱う
+  line.stages.forEach(s => { EVO_BASE_ID[s.id] = line.key; });
+});
 
 // ─────────────────────────────────────────────────────────────
 // Foods & feeding system
@@ -939,6 +935,8 @@ const MEMOMON_FOOD_PREFS: Record<string, { fav: string[]; dis: string[] }> = {
   gomachan:    { fav: ['sushi', 'cake'],  dis: ['cookie'] },
 };
 EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_FOOD_PREFS[s.id] = { fav: line.fav, dis: line.dis }; }));
+// 基本メモモンから進化した子は、1 段階目の好き嫌いを受け継ぐ
+EVO_BASIC_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_FOOD_PREFS[s.id] = MEMOMON_FOOD_PREFS[line.key]; }));
 
 // Rare collectible items dropped by each memomon at affection MAX.
 // One unique item per memomon. Tapping shows the comment.
@@ -960,6 +958,9 @@ const MEMOMON_ITEMS: MemoMonItem[] = [
 ];
 // 進化系のおくりものを、個体ごとの定義から流し込む
 EVO_LINES.forEach(line => line.stages.forEach(s => {
+  MEMOMON_ITEMS.push({ id: `${s.id}_gift`, defId: s.id, name: s.gift.name, emoji: s.gift.emoji, comment: s.gift.comment });
+}));
+EVO_BASIC_LINES.forEach(line => line.stages.forEach(s => {
   MEMOMON_ITEMS.push({ id: `${s.id}_gift`, defId: s.id, name: s.gift.name, emoji: s.gift.emoji, comment: s.gift.comment });
 }));
 const ITEM_BY_DEFID: Record<string, MemoMonItem> = Object.fromEntries(MEMOMON_ITEMS.map(i => [i.defId, i]));
@@ -6221,6 +6222,14 @@ const MEMOMON_LINES: Record<string, { chat: string[]; tip: string[] }> = {
 EVO_LINES.forEach(line => line.stages.forEach(s => {
   MEMOMON_LINES[s.id] = { chat: s.chat, tip: [...s.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
 }));
+// 基本メモモンから進化する 8 体。1 段階目には進化のヒントを足し、2・3 段階目を入れる
+EVO_BASIC_LINES.forEach(line => {
+  const base = MEMOMON_LINES[line.key];
+  if (base) MEMOMON_LINES[line.key] = { chat: base.chat, tip: [...base.tip, EVO_TIP] };
+  line.stages.forEach(s => {
+    MEMOMON_LINES[s.id] = { chat: s.chat, tip: [...s.tip, ...(s.evolvesTo ? [EVO_TIP] : [])] };
+  });
+});
 
 function pickMemoMonLine(defId: string): string | null {
   const lines = MEMOMON_LINES[defId];
@@ -6316,6 +6325,7 @@ const MEMOMON_REACTIONS: Record<string, Record<ReactionKind, string[]>> = {
   },
 };
 EVO_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_REACTIONS[s.id] = s.reactions; }));
+EVO_BASIC_LINES.forEach(line => line.stages.forEach(s => { MEMOMON_REACTIONS[s.id] = s.reactions; }));
 
 function pickReaction(defId: string, kind: ReactionKind): string | null {
   const r = MEMOMON_REACTIONS[defId];

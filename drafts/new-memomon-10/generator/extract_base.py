@@ -25,6 +25,10 @@ LINES = [
     ('mizukusa', 8, 1), ('mikeneko', 8, 2), ('knight', 8, 3),
     ('mogura', 9, 0), ('kumo', 9, 1), ('saboten', 9, 2), ('onpu', 9, 3), ('kabocha', 9, 4),
     ('kujira', 10, 3), ('takarabako', 10, 4),
+    # 基本メモモン 8 体。シートに 3 段階そろっているので、進化する系統として取り込む。
+    # 1 段階目の id は既存の基本メモモンと同じにして、手持ちのデータを引き継げるようにする
+    ('kuroneko', 1, 0), ('shibainu', 1, 2), ('dragon', 1, 4), ('hiyoko', 2, 1),
+    ('slime', 3, 4), ('obake', 4, 4), ('gomachan', 5, 2), ('yukigitsune', 6, 1),
 ]
 
 
