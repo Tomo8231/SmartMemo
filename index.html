@@ -14,6 +14,15 @@
   <link rel="apple-touch-icon" href="icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <script>
+    // 前回表示していたメモモンのスプライトを、JS バンドルの読み込みを待たずに取りに行く。
+    // 覚えているのは App 側（preloadMonSprites）。失敗しても表示が少し遅れるだけ。
+    try {
+      JSON.parse(localStorage.getItem('smartmemoBoot:monSprites') || '[]').forEach(function (u) {
+        if (typeof u === 'string' && u.indexOf('./sprites/') === 0) { var i = new Image(); i.src = u; }
+      });
+    } catch (e) {}
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DotGothic16&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
