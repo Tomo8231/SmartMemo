@@ -143,7 +143,7 @@ type TodoSet = { id: string; name: string; items: TodoSetItem[]; createdAt: numb
 //   patch: バグ修正 / minor: 機能追加 / major: 破壊的変更
 //   PWA (vite-plugin-pwa) がビルドごとにキャッシュを自動更新する
 // ─────────────────────────────────────────────────────────────
-const APP_VERSION = '1.55.0';
+const APP_VERSION = '1.55.1';
 
 // ─────────────────────────────────────────────────────────────
 // localStorage helpers
@@ -6900,6 +6900,44 @@ function PlaygroundModal({ memoMons, coins, infinite, activeMonUid, initialUid, 
   );
 }
 
+// 起動直後にメモモンが遅れて出てくるのは、スプライト PNG の取得が JS バンドルの
+// 読み込み・実行を待ってから始まるため。表示中のメモモンの絵を覚えておき、
+// 次回起動時は index.html のインラインスクリプトが JS より先に取得を始める。
+const MON_PRELOAD_KEY = 'smartmemoBoot:monSprites';
+const preloadedSprites = new Set<string>();
+let lastSavedPreload = '';
+function preloadMonSprites(defIds: string[]) {
+  const first: string[] = [];
+  const rest: string[] = [];
+  defIds.forEach(id => {
+    const def = MEMOMON_DEFS.find(d => d.id === id);
+    if (!def) return;
+    if (!def.sprites) { first.push(MEMOMON_IMGS[def.id]); return; }
+    // 起動直後に出る可能性のある sleep / sit / walk を優先して控える
+    (['sleep', 'sit', 'walk'] as const).forEach(a => {
+      const frames = def.sprites?.[a]?.frames ?? [];
+      if (frames[0]) first.push(frames[0]);
+      rest.push(...frames.slice(1));
+    });
+    (['happy', 'surprise', 'dislike'] as const).forEach(a => rest.push(...(def.sprites?.[a]?.frames ?? [])));
+  });
+  const urls = [...first, ...rest].filter(u => u && !u.startsWith('data:'));
+  // mons は親の再描画ごとに新しい配列で来るので、中身が変わったときだけ書く
+  const saved = JSON.stringify(urls.slice(0, 18 * defIds.length));
+  if (saved !== lastSavedPreload) {
+    lastSavedPreload = saved;
+    try { localStorage.setItem(MON_PRELOAD_KEY, saved); } catch { /* 容量不足でも動作には影響しない */ }
+  }
+  // コマ送りで初めて使う絵の読み込み待ちで絵が欠けないよう、全コマを先に温めておく
+  urls.forEach(u => {
+    if (preloadedSprites.has(u)) return;
+    preloadedSprites.add(u);
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = u;
+  });
+}
+
 function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, cheer, onTapReward, onFulfillRequest }: { mons: MemoMonInstance[]; scale: number; initSleep: boolean; speechEnabled: boolean; soundEnabled: boolean; cheer?: { n: number; text?: string }; onTapReward: () => void; onFulfillRequest?: (uid: string) => void }) {
   const scaleRef    = useRef(scale);
   scaleRef.current  = scale;
@@ -6997,6 +7035,7 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, che
       if (!mons.find(m => m.uid === uid)) delete liveRef.current[uid];
     });
     setMonIds(mons.map(m => m.uid));
+    preloadMonSprites(mons.map(m => m.defId));
   }, [mons]);
 
   useEffect(() => {
@@ -7019,7 +7058,10 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, che
         const bubble = bubbleRefs.current[m.uid];
         if (bubble) {
           const expired = m.speech && Date.now() > m.speech.until;
-          if (expired || !speechEnabledRef.current) m.speech = undefined;
+          if (expired || !speechEnabledRef.current || !m.speech?.text) m.speech = undefined;
+          // 台詞を入れた時点で吹き出しの要素がまだ無いこともある（レイヤーの作り直し直後など）。
+          // 中身は毎フレームここで合わせ、空のまま吹き出しだけが出ないようにする
+          if (m.speech && bubble.textContent !== m.speech.text) bubble.textContent = m.speech.text;
           // おねだり中は吹き出しと重なるので、おねだりを優先して表示する
           const hide = !m.speech || offscreen || !!pendingReq;
           if (hide) {
@@ -7234,8 +7276,12 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, che
   // cheer.n が増えるたびに 1 回だけ発火する。
   const cheerN = cheer?.n ?? 0;
   const cheerText = cheer?.text;
+  // タブを切り替えるとこのレイヤーは作り直される。そのとき前回の cheer を
+  // もう一度再生しないよう、マウント時点の n は「処理済み」として扱う
+  const cheerSeenRef = useRef(cheerN);
   useEffect(() => {
-    if (!cheerN) return;
+    if (!cheerN || cheerN === cheerSeenRef.current) return;
+    cheerSeenRef.current = cheerN;
     const now = Date.now();
     Object.values(liveRef.current).forEach(m => {
       const def = MEMOMON_DEFS.find(d => d.id === m.defId);
@@ -7250,8 +7296,6 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, che
       m.stateUntil = now + 1800;
       if (cheerText && speechEnabledRef.current) {
         m.speech = { text: cheerText, until: now + 3000 };
-        const bubble = bubbleRefs.current[m.uid];
-        if (bubble) bubble.textContent = cheerText;
       }
     });
   }, [cheerN]);
@@ -7288,11 +7332,6 @@ function MemoMonLayer({ mons, scale, initSleep, speechEnabled, soundEnabled, che
         const line = pickMemoMonLine(def.id);
         if (line) {
           m.speech = { text: line, until: Date.now() + 4000 };
-          const bubble = bubbleRefs.current[m.uid];
-          if (bubble) {
-            bubble.textContent = line;
-            bubble.style.display = 'block';
-          }
         }
       }
     }
